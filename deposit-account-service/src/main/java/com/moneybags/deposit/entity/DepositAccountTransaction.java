@@ -31,7 +31,7 @@ public class DepositAccountTransaction {
     private PaymentOperationType operationType;
     @Column(name = "AMOUNT", precision = 19, scale = 4, nullable = false)
     private BigDecimal amount;
-    @Column(name = "CURRENCY_CODE", length = 3, nullable = false)
+    @Column(name = "CURRENCY_CODE", length = 3, columnDefinition = "CHAR(3)", nullable = false)
     private String currencyCode;
     @Column(name = "BALANCE_BEFORE", precision = 19, scale = 4, nullable = false)
     private BigDecimal balanceBefore;

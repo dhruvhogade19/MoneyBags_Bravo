@@ -34,7 +34,7 @@ public class FundReservation {
     private String requestorCustomerId;
     @Column(name = "AMOUNT", precision = 19, scale = 4, nullable = false)
     private BigDecimal amount;
-    @Column(name = "CURRENCY_CODE", length = 3, nullable = false)
+    @Column(name = "CURRENCY_CODE", length = 3, columnDefinition = "CHAR(3)", nullable = false)
     private String currencyCode;
     @Enumerated(EnumType.STRING)
     @Column(name = "STATUS", length = 16, nullable = false)
