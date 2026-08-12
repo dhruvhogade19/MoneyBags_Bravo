@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/internal/deposit-accounts")
+@RequestMapping("/api/internal/deposit-accounts")
 public class InternalDepositAccountController {
     private final DepositAccountApplicationService service;
 

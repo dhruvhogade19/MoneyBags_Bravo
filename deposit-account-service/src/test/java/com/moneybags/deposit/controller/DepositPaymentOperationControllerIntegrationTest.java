@@ -48,7 +48,7 @@ class DepositPaymentOperationControllerIntegrationTest {
     @Test
     void bookTransferReservationAndSettlementAreAtomicAndIdempotent() throws Exception {
         String paymentId = "PAY-BOOK-" + UUID.randomUUID();
-        MvcResult reserved = mockMvc.perform(post("/api/v1/internal/deposit-payment-operations/book-transfers/reservations")
+        MvcResult reserved = mockMvc.perform(post("/api/internal/deposit-payment-operations/book-transfers/reservations")
                         .header("Idempotency-Key", paymentId + "-reserve")
                         .header("X-Correlation-Id", paymentId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -58,7 +58,7 @@ class DepositPaymentOperationControllerIntegrationTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("ACTIVE")).andReturn();
         String reservationId = json(reserved).path("reservationId").asText();
 
-        mockMvc.perform(post("/api/v1/internal/deposit-payment-operations/book-transfers/{paymentId}/settle", paymentId)
+        mockMvc.perform(post("/api/internal/deposit-payment-operations/book-transfers/{paymentId}/settle", paymentId)
                         .header("Idempotency-Key", paymentId + "-settle")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reservationId\":\"" + reservationId + "\"}"))
@@ -75,7 +75,7 @@ class DepositPaymentOperationControllerIntegrationTest {
     @Test
     void cardRepaymentCanBeReservedAndReleasedSafely() throws Exception {
         String paymentId = "PAY-CARD-" + UUID.randomUUID();
-        MvcResult reserved = mockMvc.perform(post("/api/v1/internal/deposit-payment-operations/credit-card-repayments/reservations")
+        MvcResult reserved = mockMvc.perform(post("/api/internal/deposit-payment-operations/credit-card-repayments/reservations")
                         .header("Idempotency-Key", paymentId + "-reserve")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"paymentId\":\"" + paymentId + "\",\"requestorCustomerId\":\"CIF-PAYER\"," +
@@ -84,12 +84,12 @@ class DepositPaymentOperationControllerIntegrationTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("ACTIVE")).andReturn();
         String reservationId = json(reserved).path("reservationId").asText();
 
-        mockMvc.perform(post("/api/v1/internal/deposit-payment-operations/reservations/{id}/release", reservationId)
+        mockMvc.perform(post("/api/internal/deposit-payment-operations/reservations/{id}/release", reservationId)
                         .header("Idempotency-Key", paymentId + "-release")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"paymentId\":\"" + paymentId + "\",\"reasonCode\":\"ACCOUNTING_REJECTED\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("RELEASED"));
-        mockMvc.perform(get("/api/v1/internal/deposit-payment-operations/{paymentId}", paymentId))
+        mockMvc.perform(get("/api/internal/deposit-payment-operations/{paymentId}", paymentId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("RELEASED"));
 
         DepositAccount source = accountRepository.findDetailedById(sourceId).orElseThrow();

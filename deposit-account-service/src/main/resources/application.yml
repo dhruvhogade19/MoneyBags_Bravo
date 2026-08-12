@@ -39,6 +39,7 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
+    contexts: ${LIQUIBASE_CONTEXTS:testdata}
 eureka:
   client:
     enabled: ${EUREKA_ENABLED:true}

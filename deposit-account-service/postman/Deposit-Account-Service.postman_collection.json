@@ -1,59 +1,272 @@
 {
   "info": {
-    "name": "Moneybags Deposit Account Service",
+    "name": "Moneybags Deposit Account Service - Complete API Test",
+    "description": "Run the complete collection in order. Liquibase testdata context provides the stable source and target accounts. Security is disabled by default for local development.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {"key": "baseUrl", "value": "http://localhost:8080"},
-    {"key": "sourceAccountId", "value": "replace-source-account-id"},
-    {"key": "targetAccountId", "value": "replace-target-account-id"},
-    {"key": "paymentId", "value": "PAY-POSTMAN-001"},
-    {"key": "reservationId", "value": ""}
+    {"key": "serviceUrl", "value": "http://localhost:8086"},
+    {"key": "sourceAccountId", "value": "seed-sav-source-001"},
+    {"key": "targetAccountId", "value": "seed-cur-target-001"},
+    {"key": "blockedAccountId", "value": "seed-sav-blocked-001"},
+    {"key": "dormantAccountId", "value": "seed-cur-dormant-001"},
+    {"key": "runId", "value": "manual"},
+    {"key": "openedAccountId", "value": ""},
+    {"key": "accountEtag", "value": ""},
+    {"key": "holderCustomerId", "value": ""},
+    {"key": "mandateId", "value": ""},
+    {"key": "bookPaymentId", "value": ""},
+    {"key": "bookReservationId", "value": ""},
+    {"key": "cardCapturePaymentId", "value": ""},
+    {"key": "cardCaptureReservationId", "value": ""},
+    {"key": "cardReleasePaymentId", "value": ""},
+    {"key": "cardReleaseReservationId", "value": ""},
+    {"key": "validFrom", "value": ""},
+    {"key": "validTo", "value": ""}
   ],
   "item": [
     {
-      "name": "Open Savings Account",
-      "request": {
-        "method": "POST",
-        "header": [
-          {"key": "Content-Type", "value": "application/json"},
-          {"key": "Idempotency-Key", "value": "postman-open-001"},
-          {"key": "X-Correlation-Id", "value": "postman-open-001"}
-        ],
-        "url": "{{baseUrl}}/api/v1/deposit-accounts",
-        "body": {"mode": "raw", "raw": "{\n  \"customerIds\": [\"CIF-1001\"],\n  \"primaryCustomerId\": \"CIF-1001\",\n  \"productId\": \"SAV-001\",\n  \"productVersion\": 1,\n  \"currency\": \"INR\",\n  \"openingAmount\": 0,\n  \"servicingBranchId\": \"BR-001\",\n  \"operatingInstruction\": \"SINGLE\",\n  \"nominees\": [],\n  \"channel\": \"BRANCH\"\n}"}
-      }
+      "name": "00 - Startup",
+      "item": [
+        {
+          "name": "Health and initialize run variables",
+          "event": [
+            {"listen": "prerequest", "script": {"exec": [
+              "const runId = Date.now().toString();",
+              "pm.collectionVariables.set('runId', runId);",
+              "pm.collectionVariables.set('holderCustomerId', 'CIF-JOINT-' + runId);",
+              "pm.collectionVariables.set('bookPaymentId', 'BOOK-' + runId);",
+              "pm.collectionVariables.set('cardCapturePaymentId', 'CARD-CAP-' + runId);",
+              "pm.collectionVariables.set('cardReleasePaymentId', 'CARD-REL-' + runId);",
+              "pm.collectionVariables.set('validFrom', new Date(Date.now() + 60000).toISOString());",
+              "pm.collectionVariables.set('validTo', new Date(Date.now() + 86400000).toISOString());"
+            ]}},
+            {"listen": "test", "script": {"exec": [
+              "pm.test('Service and database are UP', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('UP'); });"
+            ]}}
+          ],
+          "request": {"method": "GET", "url": "{{serviceUrl}}/actuator/health"}
+        }
+      ]
     },
     {
-      "name": "Reserve Book Transfer",
-      "event": [{"listen": "test", "script": {"exec": ["pm.test('Created', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('reservationId', pm.response.json().reservationId);"]}}],
-      "request": {
-        "method": "POST",
-        "header": [
-          {"key": "Content-Type", "value": "application/json"},
-          {"key": "Idempotency-Key", "value": "{{paymentId}}-reserve"},
-          {"key": "X-Correlation-Id", "value": "{{paymentId}}"}
-        ],
-        "url": "{{baseUrl}}/api/v1/internal/deposit-payment-operations/book-transfers/reservations",
-        "body": {"mode": "raw", "raw": "{\n  \"paymentId\": \"{{paymentId}}\",\n  \"requestorCustomerId\": \"CIF-1001\",\n  \"sourceAccountId\": \"{{sourceAccountId}}\",\n  \"targetAccountId\": \"{{targetAccountId}}\",\n  \"amount\": 100,\n  \"currencyCode\": \"INR\"\n}"}
-      }
+      "name": "01 - Public account APIs",
+      "item": [
+        {
+          "name": "Check opening eligibility",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Eligible', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().eligible).to.eql(true); });"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Correlation-Id", "value": "postman-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/eligibility-check",
+            "body": {"mode": "raw", "raw": "{\n  \"customerId\": \"CIF-POSTMAN-{{runId}}\",\n  \"productId\": \"SAV-001\",\n  \"productVersion\": 1,\n  \"currency\": \"INR\",\n  \"openingAmount\": 0\n}"}
+          }
+        },
+        {
+          "name": "Open savings account",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Account created', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.collectionVariables.set('openedAccountId', body.accountId);",
+            "pm.collectionVariables.set('accountEtag', pm.response.headers.get('ETag'));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "open-{{runId}}"}, {"key": "X-Correlation-Id", "value": "open-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts",
+            "body": {"mode": "raw", "raw": "{\n  \"customerIds\": [\"CIF-POSTMAN-{{runId}}\"],\n  \"primaryCustomerId\": \"CIF-POSTMAN-{{runId}}\",\n  \"productId\": \"SAV-001\",\n  \"productVersion\": 1,\n  \"currency\": \"INR\",\n  \"openingAmount\": 0,\n  \"servicingBranchId\": \"BR-001\",\n  \"operatingInstruction\": \"SINGLE\",\n  \"nominees\": [],\n  \"channel\": \"BRANCH\",\n  \"externalReference\": \"POSTMAN-{{runId}}\"\n}"}
+          }
+        },
+        {
+          "name": "Get account detail",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Account returned', () => pm.response.to.have.status(200));", "pm.collectionVariables.set('accountEtag', pm.response.headers.get('ETag'));"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}"}
+        },
+        {
+          "name": "Search accounts by customer",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Paged result returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().content.length).to.be.above(0); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts?customerId=CIF-POSTMAN-{{runId}}&page=0&size=10"}
+        },
+        {
+          "name": "Get balance",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('INR balance returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().currency).to.eql('INR'); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/balance"}
+        },
+        {
+          "name": "Get status history",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Opening history returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().length).to.be.above(0); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/status-history"}
+        },
+        {
+          "name": "Add joint holder",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Holder added', () => pm.response.to.have.status(201));"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "holder-add-{{runId}}"}, {"key": "X-Correlation-Id", "value": "holder-add-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/holders",
+            "body": {"mode": "raw", "raw": "{\n  \"customerId\": \"{{holderCustomerId}}\",\n  \"role\": \"JOINT\",\n  \"authorizationType\": \"EITHER_OR_SURVIVOR\",\n  \"ownershipPercentage\": 50\n}"}
+          }
+        },
+        {
+          "name": "Remove joint holder",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Holder removed', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Idempotency-Key", "value": "holder-remove-{{runId}}"}, {"key": "X-Correlation-Id", "value": "holder-remove-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/holders/{{holderCustomerId}}"
+          }
+        },
+        {
+          "name": "Replace nominees",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Nominees total 100%', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().length).to.eql(2); });"]}}],
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "nominees-{{runId}}"}, {"key": "X-Correlation-Id", "value": "nominees-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/nominees",
+            "body": {"mode": "raw", "raw": "[\n  {\"customerReference\": \"NOM-001\", \"name\": \"Asha Postman\", \"relationshipCode\": \"SPOUSE\", \"allocationPercentage\": 60},\n  {\"customerReference\": \"NOM-002\", \"name\": \"Ravi Postman\", \"relationshipCode\": \"CHILD\", \"allocationPercentage\": 40}\n]"}
+          }
+        },
+        {
+          "name": "Upsert daily debit limit",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Limit saved', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().type).to.eql('DAILY_DEBIT'); });"]}}],
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "limit-{{runId}}"}, {"key": "X-Correlation-Id", "value": "limit-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/limits/DAILY_DEBIT",
+            "body": {"mode": "raw", "raw": "{\n  \"limitType\": \"DAILY_DEBIT\",\n  \"amount\": 50000,\n  \"currency\": \"INR\",\n  \"effectiveFrom\": \"{{validFrom}}\",\n  \"effectiveTo\": \"{{validTo}}\"\n}"}
+          }
+        },
+        {
+          "name": "Add mandate",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Mandate created', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('mandateId', pm.response.json().mandateId);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "mandate-add-{{runId}}"}, {"key": "X-Correlation-Id", "value": "mandate-add-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/mandates",
+            "body": {"mode": "raw", "raw": "{\n  \"authorizedCustomerId\": \"CIF-MANDATE-{{runId}}\",\n  \"mandateType\": \"LIMITED\",\n  \"validFrom\": \"{{validFrom}}\",\n  \"validTo\": \"{{validTo}}\"\n}"}
+          }
+        },
+        {
+          "name": "Revoke mandate",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Mandate revoked', () => pm.response.to.have.status(204));"]}}],
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Idempotency-Key", "value": "mandate-revoke-{{runId}}"}, {"key": "X-Correlation-Id", "value": "mandate-revoke-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/mandates/{{mandateId}}"
+          }
+        },
+        {
+          "name": "Activate opened account",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Account activated', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('ACTIVE'); });", "pm.collectionVariables.set('accountEtag', pm.response.headers.get('ETag'));"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "activate-{{runId}}"}, {"key": "X-Correlation-Id", "value": "activate-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/commands/activate",
+            "body": {"mode": "raw", "raw": "{\n  \"reasonCode\": \"KYC_APPROVED\",\n  \"reasonText\": \"Activated by Postman integration test\"\n}"}
+          }
+        }
+      ]
     },
     {
-      "name": "Settle Book Transfer",
-      "request": {
-        "method": "POST",
-        "header": [
-          {"key": "Content-Type", "value": "application/json"},
-          {"key": "Idempotency-Key", "value": "{{paymentId}}-settle"},
-          {"key": "X-Correlation-Id", "value": "{{paymentId}}"}
-        ],
-        "url": "{{baseUrl}}/api/v1/internal/deposit-payment-operations/book-transfers/{{paymentId}}/settle",
-        "body": {"mode": "raw", "raw": "{\n  \"reservationId\": \"{{reservationId}}\"\n}"}
-      }
+      "name": "02 - Internal account API",
+      "item": [
+        {
+          "name": "Get payment eligibility",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Debit and credit allowed', () => { pm.response.to.have.status(200); const b = pm.response.json(); pm.expect(b.debitAllowed).to.eql(true); pm.expect(b.creditAllowed).to.eql(true); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/internal/deposit-accounts/{{sourceAccountId}}/eligibility"}
+        }
+      ]
     },
     {
-      "name": "Get Payment Operation",
-      "request": {"method": "GET", "url": "{{baseUrl}}/api/v1/internal/deposit-payment-operations/{{paymentId}}"}
+      "name": "03 - Payment operation APIs",
+      "item": [
+        {
+          "name": "Reserve book transfer",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Book transfer reserved', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('bookReservationId', pm.response.json().reservationId);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "{{bookPaymentId}}-reserve"}, {"key": "X-Correlation-Id", "value": "{{bookPaymentId}}"}],
+            "url": "{{baseUrl}}/api/internal/deposit-payment-operations/book-transfers/reservations",
+            "body": {"mode": "raw", "raw": "{\n  \"paymentId\": \"{{bookPaymentId}}\",\n  \"requestorCustomerId\": \"CIF-1001\",\n  \"sourceAccountId\": \"{{sourceAccountId}}\",\n  \"targetAccountId\": \"{{targetAccountId}}\",\n  \"amount\": 100,\n  \"currencyCode\": \"INR\"\n}"}
+          }
+        },
+        {
+          "name": "Settle book transfer",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Book transfer settled', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('SETTLED'); });"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "{{bookPaymentId}}-settle"}, {"key": "X-Correlation-Id", "value": "{{bookPaymentId}}"}],
+            "url": "{{baseUrl}}/api/internal/deposit-payment-operations/book-transfers/{{bookPaymentId}}/settle",
+            "body": {"mode": "raw", "raw": "{\n  \"reservationId\": \"{{bookReservationId}}\"\n}"}
+          }
+        },
+        {
+          "name": "Get payment operation",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Settled operation returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().paymentId).to.eql(pm.collectionVariables.get('bookPaymentId')); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/internal/deposit-payment-operations/{{bookPaymentId}}"}
+        },
+        {
+          "name": "Reserve card repayment for capture",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Card repayment reserved', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('cardCaptureReservationId', pm.response.json().reservationId);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "{{cardCapturePaymentId}}-reserve"}, {"key": "X-Correlation-Id", "value": "{{cardCapturePaymentId}}"}],
+            "url": "{{baseUrl}}/api/internal/deposit-payment-operations/credit-card-repayments/reservations",
+            "body": {"mode": "raw", "raw": "{\n  \"paymentId\": \"{{cardCapturePaymentId}}\",\n  \"requestorCustomerId\": \"CIF-1001\",\n  \"sourceAccountId\": \"{{sourceAccountId}}\",\n  \"creditCardAccountId\": \"CARD-ACCOUNT-001\",\n  \"amount\": 75,\n  \"currencyCode\": \"INR\"\n}"}
+          }
+        },
+        {
+          "name": "Capture card repayment",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Card repayment captured', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('CAPTURED'); });"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "{{cardCapturePaymentId}}-capture"}, {"key": "X-Correlation-Id", "value": "{{cardCapturePaymentId}}"}],
+            "url": "{{baseUrl}}/api/internal/deposit-payment-operations/credit-card-repayments/{{cardCapturePaymentId}}/capture",
+            "body": {"mode": "raw", "raw": "{\n  \"reservationId\": \"{{cardCaptureReservationId}}\"\n}"}
+          }
+        },
+        {
+          "name": "Reserve card repayment for release",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Second card repayment reserved', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('cardReleaseReservationId', pm.response.json().reservationId);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "{{cardReleasePaymentId}}-reserve"}, {"key": "X-Correlation-Id", "value": "{{cardReleasePaymentId}}"}],
+            "url": "{{baseUrl}}/api/internal/deposit-payment-operations/credit-card-repayments/reservations",
+            "body": {"mode": "raw", "raw": "{\n  \"paymentId\": \"{{cardReleasePaymentId}}\",\n  \"requestorCustomerId\": \"CIF-1001\",\n  \"sourceAccountId\": \"{{sourceAccountId}}\",\n  \"creditCardAccountId\": \"CARD-ACCOUNT-002\",\n  \"amount\": 50,\n  \"currencyCode\": \"INR\"\n}"}
+          }
+        },
+        {
+          "name": "Release reservation",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Reservation released', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('RELEASED'); });"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "{{cardReleasePaymentId}}-release"}, {"key": "X-Correlation-Id", "value": "{{cardReleasePaymentId}}"}],
+            "url": "{{baseUrl}}/api/internal/deposit-payment-operations/reservations/{{cardReleaseReservationId}}/release",
+            "body": {"mode": "raw", "raw": "{\n  \"paymentId\": \"{{cardReleasePaymentId}}\",\n  \"reasonCode\": \"POSTMAN_TEST_RELEASE\"\n}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Seeded state examples",
+      "item": [
+        {
+          "name": "Search blocked accounts",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Blocked seed is present', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().content.some(a => a.accountId === pm.collectionVariables.get('blockedAccountId'))).to.eql(true); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts?status=BLOCKED&page=0&size=25"}
+        },
+        {
+          "name": "Dormant account eligibility",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Dormant account disallows payments', () => { pm.response.to.have.status(200); const b = pm.response.json(); pm.expect(b.debitAllowed).to.eql(false); pm.expect(b.creditAllowed).to.eql(false); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/internal/deposit-accounts/{{dormantAccountId}}/eligibility"}
+        },
+        {
+          "name": "Verify source balance after payments",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('No blocked funds remain', () => { pm.response.to.have.status(200); pm.expect(Number(pm.response.json().blocked)).to.eql(0); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/{{sourceAccountId}}/balance"}
+        }
+      ]
     }
   ]
 }

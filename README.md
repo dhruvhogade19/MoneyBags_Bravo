@@ -73,7 +73,7 @@ Or start them from IntelliJ in this order:
 Useful URLs:
 
 - Eureka: `http://localhost:8761`
-- Gateway API: `http://localhost:8080/api/v1/deposit-accounts`
+- Gateway API: `http://localhost:8080/api/deposit-accounts`
 - Service Swagger UI: `http://localhost:8086/swagger-ui.html`
 - Health: `http://localhost:8086/actuator/health`
 
@@ -117,26 +117,26 @@ Store that key in the deployment secret manager; rotating it requires a governed
 
 | Method and path | Purpose |
 |---|---|
-| `POST /api/v1/deposit-accounts` | Open an account; requires `Idempotency-Key` |
-| `POST /api/v1/deposit-accounts/eligibility-check` | Validate CIF/KYC/product without writing |
-| `GET /api/v1/deposit-accounts/{id}` | Detailed masked account view |
-| `GET /api/v1/deposit-accounts?customerId=&status=` | Paged account search |
-| `GET /api/v1/deposit-accounts/{id}/balance` | Accounting-fed balance projection |
-| `POST /api/v1/deposit-accounts/{id}/holders` | Add an eligible holder |
-| `DELETE /api/v1/deposit-accounts/{id}/holders/{customerId}` | Remove a non-primary holder |
-| `PUT /api/v1/deposit-accounts/{id}/nominees` | Replace nominee instructions |
-| `PUT /api/v1/deposit-accounts/{id}/limits/{type}` | Create/update an account limit |
-| `POST /api/v1/deposit-accounts/{id}/mandates` | Add an authorized mandate |
-| `DELETE /api/v1/deposit-accounts/{id}/mandates/{mandateId}` | Revoke a mandate |
-| `POST /api/v1/deposit-accounts/{id}/commands/{command}` | Lifecycle transition |
-| `GET /api/v1/deposit-accounts/{id}/status-history` | Immutable lifecycle history |
-| `GET /api/v1/internal/deposit-accounts/{id}/eligibility` | Peer-service debit/credit eligibility |
-| `POST /api/v1/internal/deposit-payment-operations/book-transfers/reservations` | Reserve source funds for a book transfer |
-| `POST /api/v1/internal/deposit-payment-operations/book-transfers/{paymentId}/settlement` | Atomically debit source and credit target |
-| `POST /api/v1/internal/deposit-payment-operations/card-repayments/reservations` | Reserve funds for a card repayment |
-| `POST /api/v1/internal/deposit-payment-operations/card-repayments/{paymentId}/capture` | Capture a reserved card-repayment debit |
-| `POST /api/v1/internal/deposit-payment-operations/{paymentId}/release` | Release an active reservation |
-| `GET /api/v1/internal/deposit-payment-operations/{paymentId}` | Read payment-operation status and transaction IDs |
+| `POST /api/deposit-accounts` | Open an account; requires `Idempotency-Key` |
+| `POST /api/deposit-accounts/eligibility-check` | Validate CIF/KYC/product without writing |
+| `GET /api/deposit-accounts/{id}` | Detailed masked account view |
+| `GET /api/deposit-accounts?customerId=&status=` | Paged account search |
+| `GET /api/deposit-accounts/{id}/balance` | Accounting-fed balance projection |
+| `POST /api/deposit-accounts/{id}/holders` | Add an eligible holder |
+| `DELETE /api/deposit-accounts/{id}/holders/{customerId}` | Remove a non-primary holder |
+| `PUT /api/deposit-accounts/{id}/nominees` | Replace nominee instructions |
+| `PUT /api/deposit-accounts/{id}/limits/{type}` | Create/update an account limit |
+| `POST /api/deposit-accounts/{id}/mandates` | Add an authorized mandate |
+| `DELETE /api/deposit-accounts/{id}/mandates/{mandateId}` | Revoke a mandate |
+| `POST /api/deposit-accounts/{id}/commands/{command}` | Lifecycle transition |
+| `GET /api/deposit-accounts/{id}/status-history` | Immutable lifecycle history |
+| `GET /api/internal/deposit-accounts/{id}/eligibility` | Peer-service debit/credit eligibility |
+| `POST /api/internal/deposit-payment-operations/book-transfers/reservations` | Reserve source funds for a book transfer |
+| `POST /api/internal/deposit-payment-operations/book-transfers/{paymentId}/settlement` | Atomically debit source and credit target |
+| `POST /api/internal/deposit-payment-operations/card-repayments/reservations` | Reserve funds for a card repayment |
+| `POST /api/internal/deposit-payment-operations/card-repayments/{paymentId}/capture` | Capture a reserved card-repayment debit |
+| `POST /api/internal/deposit-payment-operations/{paymentId}/release` | Release an active reservation |
+| `GET /api/internal/deposit-payment-operations/{paymentId}` | Read payment-operation status and transaction IDs |
 
 Supported lifecycle commands: `activate`, `block`, `unblock`, `freeze`, `release-freeze`, `mark-dormant`, `reactivate`, `request-close`, and `confirm-close`.
 
@@ -162,7 +162,7 @@ $body = @{
   externalReference = "origination-72819"
 } | ConvertTo-Json
 
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/v1/deposit-accounts" `
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/deposit-accounts" `
   -Headers $headers -Body $body
 ```
 

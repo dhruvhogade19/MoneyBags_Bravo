@@ -10,7 +10,7 @@ spring:
         - id: deposit-account-service
           uri: lb://deposit-account-service
           predicates:
-            - Path=/api/v1/deposit-accounts/**,/api/v1/internal/deposit-accounts/**,/api/v1/internal/deposit-payment-operations/**
+            - Path=/api/deposit-accounts/**,/api/internal/deposit-accounts/**,/api/internal/deposit-payment-operations/**
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
       globalcors:

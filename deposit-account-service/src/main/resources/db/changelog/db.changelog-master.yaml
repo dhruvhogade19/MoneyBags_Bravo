@@ -60,3 +60,15 @@ databaseChangeLog:
             path: db/changelog/changes/004-repair-missing-audit-log.sql
             splitStatements: true
             stripComments: true
+
+  # Deterministic local accounts used by Swagger and Postman. Disable this in
+  # non-development environments with LIQUIBASE_CONTEXTS=schema.
+  - changeSet:
+      id: 005-seed-postman-test-data
+      author: moneybags
+      context: testdata
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/005-seed-postman-test-data.sql
+            splitStatements: true
+            stripComments: true
