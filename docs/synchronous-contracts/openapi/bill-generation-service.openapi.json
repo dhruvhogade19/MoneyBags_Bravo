@@ -1,0 +1,685 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Moneybags Bill Generation Service API",
+    "version": "1.0.0",
+    "description": "Generates immutable credit-card bills from product rules, card snapshots, and authoritative financial activity, then exposes bill summaries to statements and payments."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "API Gateway - public routes only"
+    },
+    {
+      "url": "http://localhost:8092",
+      "description": "Direct service URL"
+    }
+  ],
+  "paths": {
+    "/internal/v1/bills/generate": {
+      "post": {
+        "tags": [
+          "Bill Generation Service"
+        ],
+        "summary": "Generate a bill for an account and period",
+        "operationId": "postInternalV1BillsGenerate",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "eod-reconciliation-service"
+        ],
+        "x-calls": [
+          "product-master-service:GET:/api/v1/products/{productCode}/pricing",
+          "credit-card-service:GET:/internal/v1/credit-card-accounts/{accountId}",
+          "credit-card-service:GET:/internal/v1/credit-card-accounts/{accountId}/interest-rate",
+          "accounting-service:GET:/internal/v1/ledger-entries",
+          "accounting-service:POST:/internal/v1/bill-postings"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillGenerationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bills/{billId}": {
+      "get": {
+        "tags": [
+          "Bill Generation Service"
+        ],
+        "summary": "Get a bill",
+        "operationId": "getApiV1BillsByBillid",
+        "parameters": [
+          {
+            "name": "billId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/bills": {
+      "get": {
+        "tags": [
+          "Bill Generation Service"
+        ],
+        "summary": "Find bills by account and billing period",
+        "operationId": "getInternalV1Bills",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "billingPeriod",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "statement-service",
+          "payments-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/bills/{billId}/summary": {
+      "get": {
+        "tags": [
+          "Bill Generation Service"
+        ],
+        "summary": "Get a statement-safe bill summary",
+        "operationId": "getInternalV1BillsByBillidSummary",
+        "parameters": [
+          {
+            "name": "billId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "statement-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillSummaryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/bills/eod/close": {
+      "post": {
+        "tags": [
+          "Bill Generation Service"
+        ],
+        "summary": "Complete or classify daily bill generation",
+        "operationId": "postInternalV1BillsEodClose",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "eod-reconciliation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillCloseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillCloseRequest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "BillCloseRequest": {
+        "type": "object",
+        "required": [
+          "eodRunId",
+          "businessDate",
+          "commandReference"
+        ],
+        "properties": {
+          "eodRunId": {
+            "type": "string"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "commandReference": {
+            "type": "string"
+          }
+        }
+      },
+      "BillCloseResponse": {
+        "type": "object",
+        "required": [
+          "billsProcessed",
+          "failedCount",
+          "pendingBillReferences"
+        ],
+        "properties": {
+          "billsProcessed": {
+            "type": "integer"
+          },
+          "failedCount": {
+            "type": "integer"
+          },
+          "pendingBillReferences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BillGenerationRequest": {
+        "type": "object",
+        "required": [
+          "accountId",
+          "billingPeriod",
+          "businessDate"
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "billingPeriod": {
+            "type": "string"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "BillPage": {
+        "type": "object",
+        "required": [
+          "content",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "BillResponse": {
+        "type": "object",
+        "required": [
+          "billId",
+          "accountId",
+          "billingPeriod",
+          "status",
+          "totalAmountDue",
+          "minimumAmountDue",
+          "paymentDueDate",
+          "lines"
+        ],
+        "properties": {
+          "billId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "billingPeriod": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "previousBalance": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "totalAmountDue": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "minimumAmountDue": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "paymentDueDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "BillSummaryResponse": {
+        "type": "object",
+        "required": [
+          "billId",
+          "accountId",
+          "billingPeriod",
+          "totalAmountDue",
+          "minimumAmountDue",
+          "paymentDueDate"
+        ],
+        "properties": {
+          "billId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "billingPeriod": {
+            "type": "string"
+          },
+          "totalAmountDue": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "minimumAmountDue": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "paymentDueDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "ProblemDetail": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "correlationId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "fieldErrors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

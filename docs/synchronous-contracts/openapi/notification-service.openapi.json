@@ -1,0 +1,431 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Moneybags Notification Service API",
+    "version": "1.0.0",
+    "description": "Creates and delivers templated email/SMS/in-app notifications for peer services and exposes a customer notification inbox."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "API Gateway - public routes only"
+    },
+    {
+      "url": "http://localhost:8090",
+      "description": "Direct service URL"
+    }
+  ],
+  "paths": {
+    "/internal/v1/notifications": {
+      "post": {
+        "tags": [
+          "Notification Service"
+        ],
+        "summary": "Create and attempt a notification",
+        "operationId": "postInternalV1Notifications",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "kyc-service",
+          "deposit-account-service",
+          "payments-service",
+          "bill-generation-service",
+          "statement-service",
+          "eod-reconciliation-service"
+        ],
+        "x-calls": [
+          "cif-service:GET:/internal/v1/cifs/{cifId}/customer-contact-details"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "tags": [
+          "Notification Service"
+        ],
+        "summary": "List notifications for the authenticated CIF",
+        "operationId": "getApiV1Notifications",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cifId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/{notificationId}": {
+      "get": {
+        "tags": [
+          "Notification Service"
+        ],
+        "summary": "Get notification status and safe content",
+        "operationId": "getApiV1NotificationsByNotificationid",
+        "parameters": [
+          {
+            "name": "notificationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "NotificationPage": {
+        "type": "object",
+        "required": [
+          "content",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "NotificationRequest": {
+        "type": "object",
+        "required": [
+          "notificationType",
+          "cifId",
+          "referenceType",
+          "referenceId",
+          "templateCode",
+          "templateData"
+        ],
+        "properties": {
+          "notificationType": {
+            "type": "string"
+          },
+          "cifId": {
+            "type": "string"
+          },
+          "referenceType": {
+            "type": "string"
+          },
+          "referenceId": {
+            "type": "string"
+          },
+          "templateCode": {
+            "type": "string"
+          },
+          "templateData": {
+            "type": "object"
+          },
+          "requestedChannels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "NotificationResponse": {
+        "type": "object",
+        "required": [
+          "notificationId",
+          "status",
+          "deliveryAttempts"
+        ],
+        "properties": {
+          "notificationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "deliveryAttempts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ProblemDetail": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "correlationId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "fieldErrors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

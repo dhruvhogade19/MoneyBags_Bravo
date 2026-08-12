@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: db/migration/V1__create_deposit_account_schema.sql
+  - include:
+      file: db/migration/V2__remove_kafka_outbox.sql
+  - include:
+      file: db/changelog/changes/003-add-payment-operations.sql

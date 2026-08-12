@@ -1,0 +1,3194 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Moneybags Accounting Service API",
+    "version": "1.0.0",
+    "description": "Maintains the authoritative double-entry record, accounting rules, GL accounts, subledger mappings, journals, trial balances, financial reconciliation, and accounting periods."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "API Gateway - public routes only"
+    },
+    {
+      "url": "http://localhost:8089",
+      "description": "Direct service URL"
+    }
+  ],
+  "paths": {
+    "/internal/v1/payment-postings/settlements": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Post a settled payment fact",
+        "operationId": "postInternalV1PaymentPostingsSettlements",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "payments-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentSettlementPostingRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/payment-postings/refunds": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Post a completed refund fact",
+        "operationId": "postInternalV1PaymentPostingsRefunds",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "payments-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentRefundPostingRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/payment-postings/by-reference/{externalReference}": {
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Resolve an uncertain posting outcome",
+        "operationId": "getInternalV1PaymentPostingsByReferenceByExternalreference",
+        "parameters": [
+          {
+            "name": "externalReference",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "payments-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostingOutcomeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/account-balances/{accountReference}": {
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Get an authoritative journal-derived account balance",
+        "operationId": "getInternalV1AccountBalancesByAccountreference",
+        "parameters": [
+          {
+            "name": "accountReference",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "deposit-account-service",
+          "bill-generation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountBalanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/ledger-entries": {
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "List journal lines for an account and date range",
+        "operationId": "getInternalV1LedgerEntries",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "accountReference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "bill-generation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerEntryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/bill-postings": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Post bill fees and interest as an immutable journal",
+        "operationId": "postInternalV1BillPostings",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "bill-generation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillAccountingPostingRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/journals/{journalNumber}/reversals": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Create an immutable opposite journal",
+        "operationId": "postInternalV1JournalsByJournalnumberReversals",
+        "parameters": [
+          {
+            "name": "journalNumber",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "payments-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JournalReversalRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/journals/{journalNumber}": {
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Get a journal and lines",
+        "operationId": "getApiV1JournalsByJournalnumber",
+        "parameters": [
+          {
+            "name": "journalNumber",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/journals": {
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Search journals",
+        "operationId": "getApiV1Journals",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "businessDate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "sourceService",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/gl-accounts": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Create a GL account",
+        "operationId": "postApiV1GlAccounts",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlAccountRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "List GL accounts",
+        "operationId": "getApiV1GlAccounts",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlAccountPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/gl-accounts/{glCode}": {
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Get a GL account",
+        "operationId": "getApiV1GlAccountsByGlcode",
+        "parameters": [
+          {
+            "name": "glCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/gl-accounts/{glCode}/status": {
+      "patch": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Activate or deactivate a GL account",
+        "operationId": "patchApiV1GlAccountsByGlcodeStatus",
+        "parameters": [
+          {
+            "name": "glCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChangeRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounting-rules": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Create an effective-dated rule version",
+        "operationId": "postApiV1AccountingRules",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "effectiveOn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountingRuleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountingRuleRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "List accounting-rule versions",
+        "operationId": "getApiV1AccountingRules",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "effectiveOn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountingRulePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/subledger-mappings": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Create a subledger-to-GL mapping",
+        "operationId": "postApiV1SubledgerMappings",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "effectiveOn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubledgerMappingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubledgerMappingRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "List subledger mappings",
+        "operationId": "getApiV1SubledgerMappings",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "effectiveOn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubledgerMappingPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/trial-balances": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Generate and persist a trial balance",
+        "operationId": "postInternalV1TrialBalances",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "eod-reconciliation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrialBalanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrialBalanceRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trial-balances/{runId}": {
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Get a persisted trial balance",
+        "operationId": "getApiV1TrialBalancesByRunid",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrialBalanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/eod/reconciliation/runs": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Run Payments-to-Accounting financial reconciliation",
+        "operationId": "postInternalV1EodReconciliationRuns",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "eod-reconciliation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialReconciliationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialReconciliationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reconciliation/runs/{runId}": {
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Get financial reconciliation and exceptions",
+        "operationId": "getApiV1ReconciliationRunsByRunid",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialReconciliationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/reconciliation/runs/{runId}/items/{itemId}/resolution": {
+      "patch": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Resolve a financial reconciliation item",
+        "operationId": "patchApiV1ReconciliationRunsByRunidItemsByItemidResolution",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinancialReconciliationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconciliationResolutionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/accounting-periods/{businessDate}/open": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Open an accounting period",
+        "operationId": "postInternalV1AccountingPeriodsByBusinessdateOpen",
+        "parameters": [
+          {
+            "name": "businessDate",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "eod-reconciliation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountingPeriodResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountingPeriodCommand"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/accounting-periods/{businessDate}/close": {
+      "post": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Close an accounting period",
+        "operationId": "postInternalV1AccountingPeriodsByBusinessdateClose",
+        "parameters": [
+          {
+            "name": "businessDate",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "eod-reconciliation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountingPeriodResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountingPeriodCommand"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounting-periods/{businessDate}": {
+      "get": {
+        "tags": [
+          "Accounting Service"
+        ],
+        "summary": "Get accounting-period status",
+        "operationId": "getApiV1AccountingPeriodsByBusinessdate",
+        "parameters": [
+          {
+            "name": "businessDate",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountingPeriodResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "AccountBalanceResponse": {
+        "type": "object",
+        "required": [
+          "accountReference",
+          "ledgerBalance",
+          "currency",
+          "asOf"
+        ],
+        "properties": {
+          "accountReference": {
+            "type": "string"
+          },
+          "ledgerBalance": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AccountingPeriodCommand": {
+        "type": "object",
+        "required": [
+          "eodRunId",
+          "actorId"
+        ],
+        "properties": {
+          "eodRunId": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          }
+        }
+      },
+      "AccountingPeriodResponse": {
+        "type": "object",
+        "required": [
+          "businessDate",
+          "status"
+        ],
+        "properties": {
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string"
+          },
+          "openedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "openedBy": {
+            "type": "string"
+          },
+          "closedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "closedBy": {
+            "type": "string"
+          }
+        }
+      },
+      "AccountingRulePage": {
+        "type": "object",
+        "required": [
+          "content",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "AccountingRuleRequest": {
+        "type": "object",
+        "required": [
+          "ruleCode",
+          "eventType",
+          "componentType",
+          "currency",
+          "version",
+          "debitMappingCode",
+          "creditMappingCode",
+          "effectiveFrom"
+        ],
+        "properties": {
+          "ruleCode": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "componentType": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "debitMappingCode": {
+            "type": "string"
+          },
+          "creditMappingCode": {
+            "type": "string"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "effectiveTo": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "AccountingRuleResponse": {
+        "type": "object",
+        "required": [
+          "ruleCode",
+          "eventType",
+          "version",
+          "status"
+        ],
+        "properties": {
+          "ruleCode": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "effectiveTo": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "BillAccountingPostingRequest": {
+        "type": "object",
+        "required": [
+          "billId",
+          "accountId",
+          "businessDate",
+          "currency",
+          "components"
+        ],
+        "properties": {
+          "billId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "FinancialReconciliationRequest": {
+        "type": "object",
+        "required": [
+          "eodRunId",
+          "businessDate",
+          "currency",
+          "expectedJournalCount",
+          "expectedTotalDebit"
+        ],
+        "properties": {
+          "eodRunId": {
+            "type": "string"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "expectedJournalCount": {
+            "type": "integer"
+          },
+          "expectedTotalDebit": {
+            "type": "number",
+            "format": "decimal"
+          }
+        }
+      },
+      "FinancialReconciliationResponse": {
+        "type": "object",
+        "required": [
+          "runId",
+          "businessDate",
+          "status",
+          "differenceCount",
+          "items"
+        ],
+        "properties": {
+          "runId": {
+            "type": "integer"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string"
+          },
+          "differenceCount": {
+            "type": "integer"
+          },
+          "totalDifference": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "GlAccountPage": {
+        "type": "object",
+        "required": [
+          "content",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "GlAccountRequest": {
+        "type": "object",
+        "required": [
+          "glCode",
+          "name",
+          "accountType",
+          "normalBalance",
+          "currency"
+        ],
+        "properties": {
+          "glCode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "accountType": {
+            "type": "string"
+          },
+          "normalBalance": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "parentGlCode": {
+            "type": "string"
+          }
+        }
+      },
+      "GlAccountResponse": {
+        "type": "object",
+        "required": [
+          "glCode",
+          "name",
+          "accountType",
+          "normalBalance",
+          "currency",
+          "status",
+          "version"
+        ],
+        "properties": {
+          "glCode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "accountType": {
+            "type": "string"
+          },
+          "normalBalance": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "JournalPage": {
+        "type": "object",
+        "required": [
+          "content",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "JournalResponse": {
+        "type": "object",
+        "required": [
+          "journalNumber",
+          "externalReference",
+          "status",
+          "businessDate",
+          "currency",
+          "totalDebit",
+          "totalCredit",
+          "lines"
+        ],
+        "properties": {
+          "journalNumber": {
+            "type": "string"
+          },
+          "externalReference": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "totalDebit": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "totalCredit": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "reversesJournalNumber": {
+            "type": "string"
+          }
+        }
+      },
+      "JournalReversalRequest": {
+        "type": "object",
+        "required": [
+          "businessDate",
+          "occurredAt",
+          "reason"
+        ],
+        "properties": {
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "LedgerEntryPage": {
+        "type": "object",
+        "required": [
+          "content",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "PaymentRefundPostingRequest": {
+        "type": "object",
+        "required": [
+          "refundId",
+          "paymentId",
+          "amount",
+          "currency",
+          "occurredAt",
+          "businessDate"
+        ],
+        "properties": {
+          "refundId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "paymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "PaymentSettlementPostingRequest": {
+        "type": "object",
+        "required": [
+          "paymentId",
+          "paymentType",
+          "source",
+          "destination",
+          "amount",
+          "currency",
+          "occurredAt",
+          "businessDate"
+        ],
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "paymentType": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "destination": {
+            "type": "object"
+          },
+          "amount": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "PostingOutcomeResponse": {
+        "type": "object",
+        "required": [
+          "externalReference",
+          "outcome"
+        ],
+        "properties": {
+          "externalReference": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "journalNumber": {
+            "type": "string"
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ProblemDetail": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "correlationId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "fieldErrors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ReconciliationResolutionRequest": {
+        "type": "object",
+        "required": [
+          "resolution",
+          "accepted"
+        ],
+        "properties": {
+          "resolution": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "StatusChangeRequest": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "SubledgerMappingPage": {
+        "type": "object",
+        "required": [
+          "content",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "SubledgerMappingRequest": {
+        "type": "object",
+        "required": [
+          "mappingCode",
+          "glCode",
+          "currency",
+          "effectiveFrom"
+        ],
+        "properties": {
+          "mappingCode": {
+            "type": "string"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "glCode": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "effectiveTo": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "SubledgerMappingResponse": {
+        "type": "object",
+        "required": [
+          "mappingCode",
+          "glCode",
+          "currency",
+          "status"
+        ],
+        "properties": {
+          "mappingCode": {
+            "type": "string"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "glCode": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "TrialBalanceRequest": {
+        "type": "object",
+        "required": [
+          "businessDate",
+          "currency",
+          "generatedBy"
+        ],
+        "properties": {
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "generatedBy": {
+            "type": "string"
+          }
+        }
+      },
+      "TrialBalanceResponse": {
+        "type": "object",
+        "required": [
+          "runId",
+          "businessDate",
+          "currency",
+          "totalDebit",
+          "totalCredit",
+          "balanced",
+          "lines"
+        ],
+        "properties": {
+          "runId": {
+            "type": "integer"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "totalDebit": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "totalCredit": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "balanced": {
+            "type": "boolean"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  }
+}

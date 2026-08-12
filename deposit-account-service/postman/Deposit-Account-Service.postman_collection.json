@@ -1,0 +1,59 @@
+{
+  "info": {
+    "name": "Moneybags Deposit Account Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8080"},
+    {"key": "sourceAccountId", "value": "replace-source-account-id"},
+    {"key": "targetAccountId", "value": "replace-target-account-id"},
+    {"key": "paymentId", "value": "PAY-POSTMAN-001"},
+    {"key": "reservationId", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "Open Savings Account",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"},
+          {"key": "Idempotency-Key", "value": "postman-open-001"},
+          {"key": "X-Correlation-Id", "value": "postman-open-001"}
+        ],
+        "url": "{{baseUrl}}/api/v1/deposit-accounts",
+        "body": {"mode": "raw", "raw": "{\n  \"customerIds\": [\"CIF-1001\"],\n  \"primaryCustomerId\": \"CIF-1001\",\n  \"productId\": \"SAV-001\",\n  \"productVersion\": 1,\n  \"currency\": \"INR\",\n  \"openingAmount\": 0,\n  \"servicingBranchId\": \"BR-001\",\n  \"operatingInstruction\": \"SINGLE\",\n  \"nominees\": [],\n  \"channel\": \"BRANCH\"\n}"}
+      }
+    },
+    {
+      "name": "Reserve Book Transfer",
+      "event": [{"listen": "test", "script": {"exec": ["pm.test('Created', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('reservationId', pm.response.json().reservationId);"]}}],
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"},
+          {"key": "Idempotency-Key", "value": "{{paymentId}}-reserve"},
+          {"key": "X-Correlation-Id", "value": "{{paymentId}}"}
+        ],
+        "url": "{{baseUrl}}/api/v1/internal/deposit-payment-operations/book-transfers/reservations",
+        "body": {"mode": "raw", "raw": "{\n  \"paymentId\": \"{{paymentId}}\",\n  \"requestorCustomerId\": \"CIF-1001\",\n  \"sourceAccountId\": \"{{sourceAccountId}}\",\n  \"targetAccountId\": \"{{targetAccountId}}\",\n  \"amount\": 100,\n  \"currencyCode\": \"INR\"\n}"}
+      }
+    },
+    {
+      "name": "Settle Book Transfer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"},
+          {"key": "Idempotency-Key", "value": "{{paymentId}}-settle"},
+          {"key": "X-Correlation-Id", "value": "{{paymentId}}"}
+        ],
+        "url": "{{baseUrl}}/api/v1/internal/deposit-payment-operations/book-transfers/{{paymentId}}/settle",
+        "body": {"mode": "raw", "raw": "{\n  \"reservationId\": \"{{reservationId}}\"\n}"}
+      }
+    },
+    {
+      "name": "Get Payment Operation",
+      "request": {"method": "GET", "url": "{{baseUrl}}/api/v1/internal/deposit-payment-operations/{{paymentId}}"}
+    }
+  ]
+}

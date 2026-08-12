@@ -1,0 +1,1163 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Moneybags CIF / Customer Service API",
+    "version": "1.0.0",
+    "description": "Creates and maintains the bank customer record, contact data, customer classification, and the synchronized KYC status used by downstream account-opening services."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "API Gateway - public routes only"
+    },
+    {
+      "url": "http://localhost:8081",
+      "description": "Direct service URL"
+    }
+  ],
+  "paths": {
+    "/api/v1/cifs": {
+      "post": {
+        "tags": [
+          "CIF / Customer Service"
+        ],
+        "summary": "Create a customer and initiate KYC",
+        "operationId": "postApiV1Cifs",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kycStatus",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [
+          "kyc-service:POST:/api/v1/kycs"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CifResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCifRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "CIF / Customer Service"
+        ],
+        "summary": "Search customers",
+        "operationId": "getApiV1Cifs",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kycStatus",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CifPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/cifs/{cifId}": {
+      "get": {
+        "tags": [
+          "CIF / Customer Service"
+        ],
+        "summary": "Get a customer",
+        "operationId": "getApiV1CifsByCifid",
+        "parameters": [
+          {
+            "name": "cifId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CifResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "CIF / Customer Service"
+        ],
+        "summary": "Update allowed customer fields",
+        "operationId": "patchApiV1CifsByCifid",
+        "parameters": [
+          {
+            "name": "cifId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CifResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCifRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/cifs/{cifId}/kyc-status": {
+      "patch": {
+        "tags": [
+          "CIF / Customer Service"
+        ],
+        "summary": "Apply the final KYC status",
+        "operationId": "patchInternalV1CifsByCifidKycStatus",
+        "parameters": [
+          {
+            "name": "cifId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "kyc-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CifResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KycStatusUpdateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/cifs/{cifId}/deposit-creation-details": {
+      "get": {
+        "tags": [
+          "CIF / Customer Service"
+        ],
+        "summary": "Provide customer and KYC eligibility for deposit opening",
+        "operationId": "getInternalV1CifsByCifidDepositCreationDetails",
+        "parameters": [
+          {
+            "name": "cifId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "deposit-account-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositCreationDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/cifs/{cifId}/credit-card-application-details": {
+      "get": {
+        "tags": [
+          "CIF / Customer Service"
+        ],
+        "summary": "Provide customer and KYC eligibility for card application",
+        "operationId": "getInternalV1CifsByCifidCreditCardApplicationDetails",
+        "parameters": [
+          {
+            "name": "cifId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "credit-card-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardApplicationDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/cifs/{cifId}/customer-contact-details": {
+      "get": {
+        "tags": [
+          "CIF / Customer Service"
+        ],
+        "summary": "Provide notification-safe contact data",
+        "operationId": "getInternalV1CifsByCifidCustomerContactDetails",
+        "parameters": [
+          {
+            "name": "cifId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "notification-service",
+          "statement-service",
+          "bill-generation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerContactDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/cifs/{cifId}/ownership": {
+      "get": {
+        "tags": [
+          "CIF / Customer Service"
+        ],
+        "summary": "Confirm ownership of a referenced account",
+        "operationId": "getInternalV1CifsByCifidOwnership",
+        "parameters": [
+          {
+            "name": "cifId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "payments-service",
+          "statement-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnershipResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "CifPage": {
+        "type": "object",
+        "required": [
+          "content",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "CifResponse": {
+        "type": "object",
+        "required": [
+          "cifId",
+          "status",
+          "kycStatus",
+          "version"
+        ],
+        "properties": {
+          "cifId": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date"
+          },
+          "customerType": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "kycStatus": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "CreateCifRequest": {
+        "type": "object",
+        "required": [
+          "firstName",
+          "lastName",
+          "dateOfBirth",
+          "email",
+          "phone",
+          "address",
+          "employmentType",
+          "pan",
+          "aadhaar"
+        ],
+        "properties": {
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "object"
+          },
+          "employmentType": {
+            "type": "string"
+          },
+          "salary": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "pan": {
+            "type": "string"
+          },
+          "aadhaar": {
+            "type": "string"
+          }
+        }
+      },
+      "CreditCardApplicationDetails": {
+        "type": "object",
+        "required": [
+          "cifId",
+          "dateOfBirth",
+          "monthlyIncome",
+          "customerType",
+          "kycStatus",
+          "active"
+        ],
+        "properties": {
+          "cifId": {
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date"
+          },
+          "monthlyIncome": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "customerType": {
+            "type": "string"
+          },
+          "kycStatus": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CustomerContactDetails": {
+        "type": "object",
+        "required": [
+          "cifId",
+          "email",
+          "phone",
+          "preferredChannel"
+        ],
+        "properties": {
+          "cifId": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "preferredChannel": {
+            "type": "string"
+          }
+        }
+      },
+      "DepositCreationDetails": {
+        "type": "object",
+        "required": [
+          "cifId",
+          "dateOfBirth",
+          "customerType",
+          "kycStatus",
+          "active"
+        ],
+        "properties": {
+          "cifId": {
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date"
+          },
+          "customerType": {
+            "type": "string"
+          },
+          "kycStatus": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "KycStatusUpdateRequest": {
+        "type": "object",
+        "required": [
+          "kycId",
+          "status",
+          "decidedAt"
+        ],
+        "properties": {
+          "kycId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OwnershipResponse": {
+        "type": "object",
+        "required": [
+          "cifId",
+          "accountId",
+          "owned"
+        ],
+        "properties": {
+          "cifId": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "owned": {
+            "type": "boolean"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "ProblemDetail": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "correlationId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "fieldErrors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UpdateCifRequest": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "object"
+          },
+          "employmentType": {
+            "type": "string"
+          },
+          "salary": {
+            "type": "number",
+            "format": "decimal"
+          }
+        }
+      }
+    }
+  }
+}

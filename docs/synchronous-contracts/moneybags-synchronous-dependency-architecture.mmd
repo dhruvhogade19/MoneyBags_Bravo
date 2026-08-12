@@ -1,0 +1,36 @@
+flowchart LR
+  GW[API Gateway :8080] --> ID[Identity and Access :8082]
+  GW --> CIF[CIF :8081]
+  GW --> PM[Product Master :8084]
+  GW --> DA[Deposit Account :8086]
+  GW --> CC[Credit Card :8085]
+  GW --> PAY[Payments :8087]
+  GW --> ST[Statements :8088]
+  GW --> ACC[Accounting :8089]
+  GW --> EOD[EOD/Reconciliation :8091]
+  CIF --> KYC[KYC :8083]
+  KYC --> CIF
+  KYC --> N[Notifications :8090]
+  DA --> CIF
+  DA --> PM
+  CC --> CIF
+  CC --> PM
+  PAY --> DA
+  PAY --> CC
+  PAY --> ACC
+  PAY --> N
+  BILL[Bill Generation :8092] --> PM
+  BILL --> CC
+  BILL --> ACC
+  ST --> CIF
+  ST --> DA
+  ST --> CC
+  ST --> PAY
+  ST --> BILL
+  EOD --> PAY
+  EOD --> DA
+  EOD --> CC
+  EOD --> BILL
+  EOD --> ACC
+  EOD --> ST
+  EOD --> N

@@ -1,0 +1,18 @@
+{
+  "contract": {
+    "status": "PASS",
+    "serviceCount": 12,
+    "endpointCount": 128,
+    "schemaCount": 132,
+    "resolvedDependencyCallCount": 39,
+    "errors": [],
+    "warnings": []
+  },
+  "docxStructure": {
+    "status": "PASS",
+    "paragraphCount": 142,
+    "tableCount": 58,
+    "sectionCount": 1,
+    "tableGeometryErrors": []
+  }
+}
