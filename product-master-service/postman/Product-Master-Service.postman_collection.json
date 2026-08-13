@@ -1,0 +1,37 @@
+{
+  "info": {
+    "name": "Moneybags Product Master Service",
+    "description": "Smoke tests for the compatible Product Master API, including FD and compact credit-card catalogue reads.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" }
+  ],
+  "item": [
+    {
+      "name": "List active credit cards (full)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/products/category/CREDIT_CARD/active" }
+    },
+    {
+      "name": "List active credit cards (minimal)",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/products/category/CREDIT_CARD/active/minimal" }
+    },
+    {
+      "name": "Get regular fixed deposit",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/products/FD-REG-001" }
+    },
+    {
+      "name": "Validate fixed-deposit opening",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"openingAmount\": 100000,\n  \"tenureMonths\": 12,\n  \"tenureUnit\": \"MONTH\",\n  \"customerCategory\": \"REGULAR\",\n  \"age\": 30,\n  \"customerType\": \"INDIVIDUAL\",\n  \"kycCompleted\": true\n}" },
+        "url": "{{baseUrl}}/api/products/FD-REG-001/validate-account-opening"
+      }
+    },
+    {
+      "name": "Quote fixed-deposit rate",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/products/FD-REG-001/rate-quote?quoteDate=2026-08-12&principal=100000&tenureMonths=12" }
+    }
+  ]
+}

@@ -2,11 +2,17 @@ server:
   port: 8080
 
 spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: api-gateway
   cloud:
     gateway:
       routes:
+        - id: product-master-service
+          uri: lb://product-master-service
+          predicates:
+            - Path=/api/products/**,/api/benchmarks/**
         - id: deposit-account-service
           uri: lb://deposit-account-service
           predicates:
