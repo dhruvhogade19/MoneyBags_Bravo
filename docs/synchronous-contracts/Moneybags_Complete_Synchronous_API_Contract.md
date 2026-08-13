@@ -79,7 +79,7 @@ flowchart LR
 |---|---|---|
 | `/api/products/**` | `/api/v1/products/**` | All public business APIs are versioned. |
 | `/api/benchmarks/**` | `/api/v1/benchmarks/**` | Product reference APIs use the same version prefix. |
-| `/api/v1/internal/deposit-accounts/**` | `/internal/v1/deposit-accounts/**` | Peer APIs are direct-service routes and are never gateway-public. |
+| `/api/internal/deposit-accounts/**` | `/internal/v1/deposit-accounts/**` | Peer APIs are direct-service routes and are never gateway-public. |
 | `/api/v1/cifs/{cifId}/deposit-creation-details` | `/internal/v1/cifs/{cifId}/deposit-creation-details` | CIF eligibility snapshots are trusted peer contracts. |
 | `/api/v1/cifs/{cifId}/credit-card-details` | `/internal/v1/cifs/{cifId}/credit-card-application-details` | Name states the exact consumer use case. |
 | `/api/v1/cifs/{cifId}/customer-contact-details` | `/internal/v1/cifs/{cifId}/customer-contact-details` | PII-bearing contact data is peer-only. |
@@ -288,19 +288,19 @@ Opens and manages deposit accounts, holders, nominees, mandates, limits, lifecyc
 
 | Visibility | Method | Canonical path | Purpose | Request -> response |
 |---|---|---|---|---|
-| public | `POST` | `/api/v1/deposit-accounts` | Open a deposit account | `OpenDepositAccountRequest -> DepositAccountResponse` |
-| public | `POST` | `/api/v1/deposit-accounts/eligibility-check` | Validate opening without persistence | `DepositEligibilityRequest -> EligibilityDecision` |
-| public | `GET` | `/api/v1/deposit-accounts/{accountId}` | Get account details | `- -> DepositAccountResponse` |
-| public | `GET` | `/api/v1/deposit-accounts` | Search accounts | `- -> DepositAccountPage` |
-| public | `GET` | `/api/v1/deposit-accounts/{accountId}/balance` | Get the current balance projection | `- -> DepositBalanceResponse` |
-| public | `GET` | `/api/v1/deposit-accounts/{accountId}/status-history` | Get immutable lifecycle history | `- -> AccountStatusHistoryPage` |
-| public | `POST` | `/api/v1/deposit-accounts/{accountId}/holders` | Add an eligible holder | `HolderRequest -> DepositAccountResponse` |
-| public | `DELETE` | `/api/v1/deposit-accounts/{accountId}/holders/{cifId}` | Remove a non-primary holder | `- -> NoContent` |
-| public | `PUT` | `/api/v1/deposit-accounts/{accountId}/nominees` | Replace nominee instructions | `NomineeListRequest -> NomineePage` |
-| public | `PUT` | `/api/v1/deposit-accounts/{accountId}/limits/{limitType}` | Upsert an account limit | `AccountLimitRequest -> AccountLimitResponse` |
-| public | `POST` | `/api/v1/deposit-accounts/{accountId}/mandates` | Add an account mandate | `MandateRequest -> MandateResponse` |
-| public | `DELETE` | `/api/v1/deposit-accounts/{accountId}/mandates/{mandateId}` | Revoke a mandate | `- -> NoContent` |
-| public | `POST` | `/api/v1/deposit-accounts/{accountId}/commands/{command}` | Execute a guarded lifecycle transition | `AccountStatusCommand -> DepositAccountResponse` |
+| public | `POST` | `/api/deposit-accounts` | Open a deposit account | `OpenDepositAccountRequest -> DepositAccountResponse` |
+| public | `POST` | `/api/deposit-accounts/eligibility-check` | Validate opening without persistence | `DepositEligibilityRequest -> EligibilityDecision` |
+| public | `GET` | `/api/deposit-accounts/{accountId}` | Get account details | `- -> DepositAccountResponse` |
+| public | `GET` | `/api/deposit-accounts` | Search accounts | `- -> DepositAccountPage` |
+| public | `GET` | `/api/deposit-accounts/{accountId}/balance` | Get the current balance projection | `- -> DepositBalanceResponse` |
+| public | `GET` | `/api/deposit-accounts/{accountId}/status-history` | Get immutable lifecycle history | `- -> AccountStatusHistoryPage` |
+| public | `POST` | `/api/deposit-accounts/{accountId}/holders` | Add an eligible holder | `HolderRequest -> DepositAccountResponse` |
+| public | `DELETE` | `/api/deposit-accounts/{accountId}/holders/{cifId}` | Remove a non-primary holder | `- -> NoContent` |
+| public | `PUT` | `/api/deposit-accounts/{accountId}/nominees` | Replace nominee instructions | `NomineeListRequest -> NomineePage` |
+| public | `PUT` | `/api/deposit-accounts/{accountId}/limits/{limitType}` | Upsert an account limit | `AccountLimitRequest -> AccountLimitResponse` |
+| public | `POST` | `/api/deposit-accounts/{accountId}/mandates` | Add an account mandate | `MandateRequest -> MandateResponse` |
+| public | `DELETE` | `/api/deposit-accounts/{accountId}/mandates/{mandateId}` | Revoke a mandate | `- -> NoContent` |
+| public | `POST` | `/api/deposit-accounts/{accountId}/commands/{command}` | Execute a guarded lifecycle transition | `AccountStatusCommand -> DepositAccountResponse` |
 | internal | `GET` | `/internal/v1/deposit-accounts/{accountId}/eligibility` | Validate ownership, status, currency, limits, and balances | `- -> DepositAccountEligibility` |
 | internal | `GET` | `/internal/v1/deposit-accounts/{accountId}` | Get a peer-safe deposit account snapshot | `- -> DepositAccountResponse` |
 | internal | `POST` | `/internal/v1/deposit-accounts/{accountId}/reservations` | Reserve funds for a payment | `FundReservationRequest -> FundReservationResponse` |

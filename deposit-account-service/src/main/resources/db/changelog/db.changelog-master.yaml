@@ -1,7 +1,74 @@
 databaseChangeLog:
-  - include:
-      file: db/migration/V1__create_deposit_account_schema.sql
-  - include:
-      file: db/migration/V2__remove_kafka_outbox.sql
-  - include:
-      file: db/changelog/changes/003-add-payment-operations.sql
+  # Fresh schema: execute the baseline. Existing pre-Liquibase schema: adopt it
+  # without recreating DEPOSIT_ACCOUNT; Hibernate validation then confirms that
+  # the remaining baseline objects are compatible.
+  - changeSet:
+      id: 001-create-deposit-account-schema
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: DEPOSIT_ACCOUNT
+      changes:
+        - sqlFile:
+            path: db/migration/V1__create_deposit_account_schema.sql
+            splitStatements: true
+            stripComments: true
+
+  # Kafka/outbox is not used. Drop the old table only when it exists.
+  - changeSet:
+      id: 002-remove-kafka-outbox
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: OUTBOX_EVENT
+      changes:
+        - sqlFile:
+            path: db/migration/V2__remove_kafka_outbox.sql
+            splitStatements: true
+            stripComments: true
+
+  # Apply payment operations only when they have not already been installed.
+  - changeSet:
+      id: 003-add-payment-operations
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: FUND_RESERVATION
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/003-add-payment-operations.sql
+            splitStatements: true
+            stripComments: true
+
+  # Some legacy schemas contain DEPOSIT_ACCOUNT but were created before the
+  # audit table was introduced. Repair only that missing object.
+  - changeSet:
+      id: 004-repair-missing-audit-log
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: AUDIT_LOG
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/004-repair-missing-audit-log.sql
+            splitStatements: true
+            stripComments: true
+
+  # Deterministic local accounts used by Swagger and Postman. Disable this in
+  # non-development environments with LIQUIBASE_CONTEXTS=schema.
+  - changeSet:
+      id: 005-seed-postman-test-data
+      author: moneybags
+      context: testdata
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/005-seed-postman-test-data.sql
+            splitStatements: true
+            stripComments: true

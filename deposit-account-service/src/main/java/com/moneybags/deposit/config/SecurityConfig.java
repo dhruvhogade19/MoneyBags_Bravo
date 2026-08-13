@@ -19,11 +19,11 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/deposit-accounts/**").hasAuthority("SCOPE_account:read")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/deposit-accounts").hasAuthority("SCOPE_account:open")
-                        .requestMatchers("/api/v1/internal/deposit-payment-operations/**")
+                        .requestMatchers(HttpMethod.GET, "/api/deposit-accounts/**").hasAuthority("SCOPE_account:read")
+                        .requestMatchers(HttpMethod.POST, "/api/deposit-accounts").hasAuthority("SCOPE_account:open")
+                        .requestMatchers("/api/internal/deposit-payment-operations/**")
                             .hasAuthority("SCOPE_deposit-payment:write")
-                        .requestMatchers("/api/v1/internal/**").hasAuthority("SCOPE_account:service")
+                        .requestMatchers("/api/internal/**").hasAuthority("SCOPE_account:service")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> {}))
                 .build();

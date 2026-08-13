@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/v1/deposit-accounts")
+@RequestMapping("/api/deposit-accounts")
 public class DepositAccountController {
     private final DepositAccountApplicationService service;
     private final IdempotentMutationExecutor idempotency;
@@ -40,7 +40,7 @@ public class DepositAccountController {
                                                    @Valid @RequestBody OpenDepositAccountRequest request,
                                                    Authentication authentication) {
         AccountDetailView result = service.open(request, idempotencyKey, actor(authentication), correlationId());
-        return ResponseEntity.created(URI.create("/api/v1/deposit-accounts/" + result.accountId()))
+        return ResponseEntity.created(URI.create("/api/deposit-accounts/" + result.accountId()))
                 .eTag(etag(result.version())).body(result);
     }
 

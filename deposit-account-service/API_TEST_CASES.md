@@ -34,7 +34,7 @@ These cases cover the implemented public and internal HTTP APIs. Automated cover
 With the service running on port 8086:
 
 ```http
-POST /api/v1/deposit-accounts
+POST /api/deposit-accounts
 Content-Type: application/json
 Idempotency-Key: manual-open-001
 X-Correlation-Id: manual-correlation-001
@@ -57,3 +57,31 @@ X-Correlation-Id: manual-correlation-001
 ```
 
 Expected status: `201 Created`. The response contains a masked account number and an `ETag` header.
+
+## Postman seed data
+
+Liquibase change set `005-seed-postman-test-data` creates deterministic local fixtures when the
+`testdata` context is enabled (the local default):
+
+| Account ID | Customer | State | Ledger / available | Intended test use |
+|---|---|---|---:|---|
+| `seed-sav-source-001` | `CIF-1001` | ACTIVE | INR 25,000 | Debit source, reads and internal eligibility |
+| `seed-cur-target-001` | `CIF-2001` | ACTIVE | INR 10,000 | Book-transfer credit target |
+| `seed-sav-pending-001` | `CIF-3001` | PENDING_ACTIVATION | INR 0 | Manual activation testing |
+| `seed-sav-blocked-001` | `CIF-4001` | BLOCKED | INR 1,000 | Status filtering and credit-only eligibility |
+| `seed-cur-dormant-001` | `CIF-5001` | DORMANT | INR 500 | Debit/credit rejection example |
+
+Import `postman/Deposit-Account-Service.postman_collection.json` and run the entire collection in
+order. The first request creates a unique run ID; later requests automatically capture account,
+ETag, mandate and reservation identifiers. No Postman environment is required. The collection uses
+the gateway at `http://localhost:8080` and calls health directly at `http://localhost:8086`.
+
+Restart the service after adding the migration so Liquibase installs the fixtures:
+
+```powershell
+.\stop-all.ps1
+.\run-all.ps1
+```
+
+For a non-development environment, exclude fixtures by setting `LIQUIBASE_CONTEXTS=schema` before
+starting the service.

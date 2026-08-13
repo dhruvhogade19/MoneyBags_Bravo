@@ -16,7 +16,7 @@
     }
   ],
   "paths": {
-    "/api/v1/deposit-accounts": {
+    "/api/deposit-accounts": {
       "post": {
         "tags": [
           "Deposit Account Service"
@@ -240,7 +240,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/eligibility-check": {
+    "/api/deposit-accounts/eligibility-check": {
       "post": {
         "tags": [
           "Deposit Account Service"
@@ -326,7 +326,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/{accountId}": {
+    "/api/deposit-accounts/{accountId}": {
       "get": {
         "tags": [
           "Deposit Account Service"
@@ -402,7 +402,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/{accountId}/balance": {
+    "/api/deposit-accounts/{accountId}/balance": {
       "get": {
         "tags": [
           "Deposit Account Service"
@@ -478,7 +478,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/{accountId}/status-history": {
+    "/api/deposit-accounts/{accountId}/status-history": {
       "get": {
         "tags": [
           "Deposit Account Service"
@@ -554,7 +554,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/{accountId}/holders": {
+    "/api/deposit-accounts/{accountId}/holders": {
       "post": {
         "tags": [
           "Deposit Account Service"
@@ -656,7 +656,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/{accountId}/holders/{cifId}": {
+    "/api/deposit-accounts/{accountId}/holders/{cifId}": {
       "delete": {
         "tags": [
           "Deposit Account Service"
@@ -749,7 +749,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/{accountId}/nominees": {
+    "/api/deposit-accounts/{accountId}/nominees": {
       "put": {
         "tags": [
           "Deposit Account Service"
@@ -851,7 +851,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/{accountId}/limits/{limitType}": {
+    "/api/deposit-accounts/{accountId}/limits/{limitType}": {
       "put": {
         "tags": [
           "Deposit Account Service"
@@ -961,7 +961,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/{accountId}/mandates": {
+    "/api/deposit-accounts/{accountId}/mandates": {
       "post": {
         "tags": [
           "Deposit Account Service"
@@ -1063,7 +1063,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/{accountId}/mandates/{mandateId}": {
+    "/api/deposit-accounts/{accountId}/mandates/{mandateId}": {
       "delete": {
         "tags": [
           "Deposit Account Service"
@@ -1156,7 +1156,7 @@
         }
       }
     },
-    "/api/v1/deposit-accounts/{accountId}/commands/{command}": {
+    "/api/deposit-accounts/{accountId}/commands/{command}": {
       "post": {
         "tags": [
           "Deposit Account Service"

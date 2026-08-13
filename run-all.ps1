@@ -56,7 +56,17 @@ foreach ($service in $services) {
 
 $processes | ConvertTo-Json | Set-Content -LiteralPath $pidFile
 Write-Host "Waiting for services to open their ports..." -ForegroundColor Cyan
-Start-Sleep -Seconds 12
+$startupDeadline = (Get-Date).AddSeconds(60)
+do {
+    $waitingFor = @($services | Where-Object {
+        $null -eq (Get-NetTCPConnection -State Listen -LocalPort $_.Port -ErrorAction SilentlyContinue |
+            Select-Object -First 1)
+    })
+    if ($waitingFor.Count -eq 0) {
+        break
+    }
+    Start-Sleep -Seconds 2
+} while ((Get-Date) -lt $startupDeadline)
 
 $status = foreach ($service in $services) {
     $listener = Get-NetTCPConnection -State Listen -LocalPort $service.Port -ErrorAction SilentlyContinue |

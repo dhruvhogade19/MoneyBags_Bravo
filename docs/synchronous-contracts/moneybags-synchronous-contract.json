@@ -731,7 +731,7 @@
       "endpoints": [
         {
           "method": "POST",
-          "path": "/api/v1/deposit-accounts",
+          "path": "/api/deposit-accounts",
           "visibility": "public",
           "purpose": "Open a deposit account",
           "request": "OpenDepositAccountRequest",
@@ -748,7 +748,7 @@
         },
         {
           "method": "POST",
-          "path": "/api/v1/deposit-accounts/eligibility-check",
+          "path": "/api/deposit-accounts/eligibility-check",
           "visibility": "public",
           "purpose": "Validate opening without persistence",
           "request": "DepositEligibilityRequest",
@@ -761,7 +761,7 @@
         },
         {
           "method": "GET",
-          "path": "/api/v1/deposit-accounts/{accountId}",
+          "path": "/api/deposit-accounts/{accountId}",
           "visibility": "public",
           "purpose": "Get account details",
           "request": null,
@@ -774,7 +774,7 @@
         },
         {
           "method": "GET",
-          "path": "/api/v1/deposit-accounts",
+          "path": "/api/deposit-accounts",
           "visibility": "public",
           "purpose": "Search accounts",
           "request": null,
@@ -787,7 +787,7 @@
         },
         {
           "method": "GET",
-          "path": "/api/v1/deposit-accounts/{accountId}/balance",
+          "path": "/api/deposit-accounts/{accountId}/balance",
           "visibility": "public",
           "purpose": "Get the current balance projection",
           "request": null,
@@ -800,7 +800,7 @@
         },
         {
           "method": "GET",
-          "path": "/api/v1/deposit-accounts/{accountId}/status-history",
+          "path": "/api/deposit-accounts/{accountId}/status-history",
           "visibility": "public",
           "purpose": "Get immutable lifecycle history",
           "request": null,
@@ -813,7 +813,7 @@
         },
         {
           "method": "POST",
-          "path": "/api/v1/deposit-accounts/{accountId}/holders",
+          "path": "/api/deposit-accounts/{accountId}/holders",
           "visibility": "public",
           "purpose": "Add an eligible holder",
           "request": "HolderRequest",
@@ -826,7 +826,7 @@
         },
         {
           "method": "DELETE",
-          "path": "/api/v1/deposit-accounts/{accountId}/holders/{cifId}",
+          "path": "/api/deposit-accounts/{accountId}/holders/{cifId}",
           "visibility": "public",
           "purpose": "Remove a non-primary holder",
           "request": null,
@@ -839,7 +839,7 @@
         },
         {
           "method": "PUT",
-          "path": "/api/v1/deposit-accounts/{accountId}/nominees",
+          "path": "/api/deposit-accounts/{accountId}/nominees",
           "visibility": "public",
           "purpose": "Replace nominee instructions",
           "request": "NomineeListRequest",
@@ -852,7 +852,7 @@
         },
         {
           "method": "PUT",
-          "path": "/api/v1/deposit-accounts/{accountId}/limits/{limitType}",
+          "path": "/api/deposit-accounts/{accountId}/limits/{limitType}",
           "visibility": "public",
           "purpose": "Upsert an account limit",
           "request": "AccountLimitRequest",
@@ -865,7 +865,7 @@
         },
         {
           "method": "POST",
-          "path": "/api/v1/deposit-accounts/{accountId}/mandates",
+          "path": "/api/deposit-accounts/{accountId}/mandates",
           "visibility": "public",
           "purpose": "Add an account mandate",
           "request": "MandateRequest",
@@ -878,7 +878,7 @@
         },
         {
           "method": "DELETE",
-          "path": "/api/v1/deposit-accounts/{accountId}/mandates/{mandateId}",
+          "path": "/api/deposit-accounts/{accountId}/mandates/{mandateId}",
           "visibility": "public",
           "purpose": "Revoke a mandate",
           "request": null,
@@ -891,7 +891,7 @@
         },
         {
           "method": "POST",
-          "path": "/api/v1/deposit-accounts/{accountId}/commands/{command}",
+          "path": "/api/deposit-accounts/{accountId}/commands/{command}",
           "visibility": "public",
           "purpose": "Execute a guarded lifecycle transition",
           "request": "AccountStatusCommand",
@@ -6073,7 +6073,7 @@
       "reason": "Product reference APIs use the same version prefix."
     },
     {
-      "source": "/api/v1/internal/deposit-accounts/**",
+      "source": "/api/internal/deposit-accounts/**",
       "canonical": "/internal/v1/deposit-accounts/**",
       "reason": "Peer APIs are direct-service routes and are never gateway-public."
     },

@@ -29,23 +29,23 @@ class DepositAccountControllerIntegrationTest {
 
     @Test
     void openingEligibilityReadingAndSearchEndpointsWork() throws Exception {
-        mockMvc.perform(post("/api/v1/deposit-accounts/eligibility-check")
+        mockMvc.perform(post("/api/deposit-accounts/eligibility-check")
                         .contentType(MediaType.APPLICATION_JSON).content(eligibilityJson()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.eligible").value(true))
                 .andExpect(jsonPath("$.decisionCode").value("ELIGIBLE"));
 
         String accountId = open("api-open-read-1", "CIF-API-READ", "EXT-READ-1");
-        mockMvc.perform(get("/api/v1/deposit-accounts/{id}", accountId))
+        mockMvc.perform(get("/api/deposit-accounts/{id}", accountId))
                 .andExpect(status().isOk()).andExpect(header().string("ETag", org.hamcrest.Matchers.notNullValue()))
                 .andExpect(jsonPath("$.accountId").value(accountId))
                 .andExpect(jsonPath("$.status").value("PENDING_ACTIVATION"));
-        mockMvc.perform(get("/api/v1/deposit-accounts/{id}/balance", accountId))
+        mockMvc.perform(get("/api/deposit-accounts/{id}/balance", accountId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.currency").value("INR"))
                 .andExpect(jsonPath("$.available").value(0));
-        mockMvc.perform(get("/api/v1/deposit-accounts/{id}/status-history", accountId))
+        mockMvc.perform(get("/api/deposit-accounts/{id}/status-history", accountId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].toStatus").value("PENDING_ACTIVATION"));
-        mockMvc.perform(get("/api/v1/deposit-accounts").param("customerId", "CIF-API-READ")
+        mockMvc.perform(get("/api/deposit-accounts").param("customerId", "CIF-API-READ")
                         .param("status", "PENDING_ACTIVATION").param("page", "0").param("size", "10"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].accountId").value(accountId));
     }
@@ -60,15 +60,15 @@ class DepositAccountControllerIntegrationTest {
     @Test
     void openingIsIdempotentAndInvalidOpeningRequestsAreRejected() throws Exception {
         String first = open("api-idempotency-1", "CIF-IDEMP", "EXT-IDEMP-1");
-        MvcResult replay = mockMvc.perform(post("/api/v1/deposit-accounts").header("Idempotency-Key", "api-idempotency-1")
+        MvcResult replay = mockMvc.perform(post("/api/deposit-accounts").header("Idempotency-Key", "api-idempotency-1")
                         .contentType(MediaType.APPLICATION_JSON).content(openJson("CIF-IDEMP", "EXT-IDEMP-1")))
                 .andExpect(status().isCreated()).andReturn();
         assertThat(json(replay).path("accountId").asText()).isEqualTo(first);
 
-        mockMvc.perform(post("/api/v1/deposit-accounts").header("Idempotency-Key", "api-idempotency-1")
+        mockMvc.perform(post("/api/deposit-accounts").header("Idempotency-Key", "api-idempotency-1")
                         .contentType(MediaType.APPLICATION_JSON).content(openJson("CIF-IDEMP", "EXT-CHANGED")))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
-        mockMvc.perform(post("/api/v1/deposit-accounts").header("Idempotency-Key", "missing-primary-1")
+        mockMvc.perform(post("/api/deposit-accounts").header("Idempotency-Key", "missing-primary-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(openJsonWithCustomers("CIF-OTHER", "CIF-MISSING", "EXT-INVALID")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("PRIMARY_HOLDER_MISSING"));
@@ -77,48 +77,48 @@ class DepositAccountControllerIntegrationTest {
     @Test
     void holderNomineeLimitAndMandateEndpointsWorkAndValidateBusinessRules() throws Exception {
         String accountId = open("api-maintenance-1", "CIF-MAINT", "EXT-MAINT-1");
-        mockMvc.perform(post("/api/v1/deposit-accounts/{id}/holders", accountId).header("Idempotency-Key", "holder-1")
+        mockMvc.perform(post("/api/deposit-accounts/{id}/holders", accountId).header("Idempotency-Key", "holder-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":\"CIF-JOINT\",\"role\":\"JOINT\",\"authorizationType\":\"JOINT_HOLDER\",\"ownershipPercentage\":50}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.holders.length()").value(2));
-        mockMvc.perform(post("/api/v1/deposit-accounts/{id}/holders", accountId).header("Idempotency-Key", "holder-1")
+        mockMvc.perform(post("/api/deposit-accounts/{id}/holders", accountId).header("Idempotency-Key", "holder-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":\"CIF-JOINT\",\"role\":\"JOINT\",\"authorizationType\":\"JOINT_HOLDER\",\"ownershipPercentage\":50}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.holders.length()").value(2));
-        mockMvc.perform(post("/api/v1/deposit-accounts/{id}/holders", accountId).header("Idempotency-Key", "holder-1")
+        mockMvc.perform(post("/api/deposit-accounts/{id}/holders", accountId).header("Idempotency-Key", "holder-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":\"CIF-DIFFERENT\",\"role\":\"JOINT\",\"authorizationType\":\"JOINT_HOLDER\",\"ownershipPercentage\":50}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
-        mockMvc.perform(delete("/api/v1/deposit-accounts/{id}/holders/{customerId}", accountId, "CIF-JOINT")
+        mockMvc.perform(delete("/api/deposit-accounts/{id}/holders/{customerId}", accountId, "CIF-JOINT")
                         .header("Idempotency-Key", "remove-holder-1"))
                 .andExpect(status().isNoContent());
-        mockMvc.perform(delete("/api/v1/deposit-accounts/{id}/holders/{customerId}", accountId, "CIF-MAINT")
+        mockMvc.perform(delete("/api/deposit-accounts/{id}/holders/{customerId}", accountId, "CIF-MAINT")
                         .header("Idempotency-Key", "remove-primary-1"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PRIMARY_HOLDER_REQUIRED"));
 
-        mockMvc.perform(put("/api/v1/deposit-accounts/{id}/nominees", accountId).header("Idempotency-Key", "nominees-1")
+        mockMvc.perform(put("/api/deposit-accounts/{id}/nominees", accountId).header("Idempotency-Key", "nominees-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("[{\"name\":\"Nominee One\",\"relationshipCode\":\"SPOUSE\",\"allocationPercentage\":100}]") )
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].allocationPercentage").value(100));
-        mockMvc.perform(put("/api/v1/deposit-accounts/{id}/nominees", accountId).header("Idempotency-Key", "nominees-invalid-1")
+        mockMvc.perform(put("/api/deposit-accounts/{id}/nominees", accountId).header("Idempotency-Key", "nominees-invalid-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("[{\"name\":\"Nominee One\",\"relationshipCode\":\"SPOUSE\",\"allocationPercentage\":60}]") )
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_NOMINEE_ALLOCATION"));
 
-        mockMvc.perform(put("/api/v1/deposit-accounts/{id}/limits/DAILY_DEBIT", accountId).header("Idempotency-Key", "limit-1")
+        mockMvc.perform(put("/api/deposit-accounts/{id}/limits/DAILY_DEBIT", accountId).header("Idempotency-Key", "limit-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"limitType\":\"DAILY_DEBIT\",\"amount\":50000,\"currency\":\"INR\",\"effectiveFrom\":\"2026-08-10T00:00:00Z\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.type").value("DAILY_DEBIT"));
-        mockMvc.perform(put("/api/v1/deposit-accounts/{id}/limits/DAILY_DEBIT", accountId).header("Idempotency-Key", "limit-mismatch-1")
+        mockMvc.perform(put("/api/deposit-accounts/{id}/limits/DAILY_DEBIT", accountId).header("Idempotency-Key", "limit-mismatch-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"limitType\":\"DAILY_CREDIT\",\"amount\":50000,\"currency\":\"INR\",\"effectiveFrom\":\"2026-08-10T00:00:00Z\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("LIMIT_TYPE_MISMATCH"));
 
-        MvcResult mandate = mockMvc.perform(post("/api/v1/deposit-accounts/{id}/mandates", accountId).header("Idempotency-Key", "mandate-1")
+        MvcResult mandate = mockMvc.perform(post("/api/deposit-accounts/{id}/mandates", accountId).header("Idempotency-Key", "mandate-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"authorizedCustomerId\":\"CIF-MANDATE\",\"mandateType\":\"OPERATE\",\"validFrom\":\"2026-08-10T00:00:00Z\"}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("ACTIVE")).andReturn();
-        mockMvc.perform(delete("/api/v1/deposit-accounts/{id}/mandates/{mandateId}", accountId,
+        mockMvc.perform(delete("/api/deposit-accounts/{id}/mandates/{mandateId}", accountId,
                         json(mandate).path("mandateId").asText()).header("Idempotency-Key", "revoke-mandate-1"))
                 .andExpect(status().isNoContent());
     }
@@ -126,25 +126,25 @@ class DepositAccountControllerIntegrationTest {
     @Test
     void lifecycleAndInternalEligibilityEndpointsWork() throws Exception {
         String accountId = open("api-lifecycle-1", "CIF-LIFECYCLE", "EXT-LIFE-1");
-        mockMvc.perform(post("/api/v1/deposit-accounts/{id}/commands/activate", accountId).header("Idempotency-Key", "activate-1")
+        mockMvc.perform(post("/api/deposit-accounts/{id}/commands/activate", accountId).header("Idempotency-Key", "activate-1")
                         .contentType(MediaType.APPLICATION_JSON).content(commandJson("OPENING_APPROVED")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
-        mockMvc.perform(get("/api/v1/internal/deposit-accounts/{id}/eligibility", accountId))
+        mockMvc.perform(get("/api/internal/deposit-accounts/{id}/eligibility", accountId))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.debitAllowed").value(true))
                 .andExpect(jsonPath("$.creditAllowed").value(true));
-        mockMvc.perform(post("/api/v1/deposit-accounts/{id}/commands/block", accountId).header("Idempotency-Key", "block-1")
+        mockMvc.perform(post("/api/deposit-accounts/{id}/commands/block", accountId).header("Idempotency-Key", "block-1")
                         .header("If-Match", "\"999999\"").contentType(MediaType.APPLICATION_JSON).content(commandJson("RISK_REVIEW")))
                 .andExpect(status().isPreconditionFailed()).andExpect(jsonPath("$.code").value("STALE_ACCOUNT_VERSION"));
-        mockMvc.perform(post("/api/v1/deposit-accounts/{id}/commands/block", accountId).header("Idempotency-Key", "block-2")
+        mockMvc.perform(post("/api/deposit-accounts/{id}/commands/block", accountId).header("Idempotency-Key", "block-2")
                         .contentType(MediaType.APPLICATION_JSON).content(commandJson("RISK_REVIEW")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("BLOCKED"));
-        mockMvc.perform(post("/api/v1/deposit-accounts/{id}/commands/unknown", accountId).header("Idempotency-Key", "unknown-1")
+        mockMvc.perform(post("/api/deposit-accounts/{id}/commands/unknown", accountId).header("Idempotency-Key", "unknown-1")
                         .contentType(MediaType.APPLICATION_JSON).content(commandJson("TEST")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("UNKNOWN_COMMAND"));
     }
 
     private String open(String key, String customerId, String externalReference) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/v1/deposit-accounts").header("Idempotency-Key", key)
+        MvcResult result = mockMvc.perform(post("/api/deposit-accounts").header("Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON).content(openJson(customerId, externalReference)))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.accountId").isNotEmpty()).andReturn();
         return json(result).path("accountId").asText();

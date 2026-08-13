@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/v1/internal/deposit-payment-operations")
+@RequestMapping("/api/internal/deposit-payment-operations")
 public class DepositPaymentOperationController {
     private final PaymentOperationService service;
 
