@@ -42,5 +42,8 @@
         <module>api-gateway</module>
         <module>deposit-account-service</module>
         <module>product-master-service</module>
+        <module>credit-card-service</module>
+        <module>kyc-service</module>
+        <module>notification-service</module>
     </modules>
 </project>
