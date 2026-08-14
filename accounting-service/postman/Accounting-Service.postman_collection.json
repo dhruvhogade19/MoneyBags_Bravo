@@ -1,0 +1,410 @@
+{
+  "info": {
+    "_postman_id": "8d86d7f8-4cc8-4c4a-9f15-6b5c3f814808",
+    "name": "Moneybags Accounting Service",
+    "description": "Sequential integration workflow for Accounting revision 2.3. Run Lifecycle first, then posting folders, then EOD. With security enabled, set bearerToken to a JWT containing the required Accounting scopes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{bearerToken}}", "type": "string" }]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.collectionVariables.set('correlationId', pm.variables.replaceIn('{{$guid}}'));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "accountingBaseUrl", "value": "http://localhost:8088" },
+    { "key": "gatewayBaseUrl", "value": "http://localhost:8080" },
+    { "key": "bearerToken", "value": "" },
+    { "key": "businessDate", "value": "2026-08-14" },
+    { "key": "eodBusinessDate", "value": "2026-08-15" },
+    { "key": "sourceDeposit", "value": "DEP-POSTMAN-1001" },
+    { "key": "destinationDeposit", "value": "DEP-POSTMAN-2001" },
+    { "key": "closeCandidateDeposit", "value": "DEP-POSTMAN-CLOSE-01" },
+    { "key": "cardAccount", "value": "CC-POSTMAN-5001" },
+    { "key": "fixedDeposit", "value": "FD-POSTMAN-7001" },
+    { "key": "paymentId", "value": "PAY-POSTMAN-1001" },
+    { "key": "repaymentId", "value": "PAY-POSTMAN-2001" },
+    { "key": "refundId", "value": "REF-POSTMAN-1001" },
+    { "key": "billId", "value": "BILL-POSTMAN-1001" },
+    { "key": "bookTransferJournalNumber", "value": "" },
+    { "key": "repaymentJournalNumber", "value": "" },
+    { "key": "lastJournalNumber", "value": "" },
+    { "key": "trialRunId", "value": "" },
+    { "key": "reconRunId", "value": "" },
+    { "key": "reconItemId", "value": "" },
+    { "key": "glVersion", "value": "0" }
+  ],
+  "item": [
+    {
+      "name": "00 Health",
+      "item": [
+        {
+          "name": "Health",
+          "request": { "method": "GET", "url": "{{accountingBaseUrl}}/actuator/health" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('service is healthy', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "01 Account lifecycle",
+      "item": [
+        {
+          "name": "Open source Deposit",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "DEPOSIT:{{sourceDeposit}}:OPEN" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/account-lifecycle-events",
+            "body": { "mode": "raw", "raw": "{\n  \"eventReference\": \"DEPOSIT:{{sourceDeposit}}:OPEN\",\n  \"eventType\": \"DEPOSIT_ACCOUNT_OPENED\",\n  \"accountType\": \"DEPOSIT_ACCOUNT\",\n  \"accountReference\": \"{{sourceDeposit}}\",\n  \"productCode\": \"SAVINGS-STANDARD\",\n  \"currencyCode\": \"INR\",\n  \"businessDate\": \"{{businessDate}}\",\n  \"occurredAt\": \"{{businessDate}}T09:00:00Z\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('opened or replayed', () => pm.expect([200,201]).to.include(pm.response.code));"] } }]
+        },
+        {
+          "name": "Open destination Deposit",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "DEPOSIT:{{destinationDeposit}}:OPEN" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/account-lifecycle-events",
+            "body": { "mode": "raw", "raw": "{\"eventReference\":\"DEPOSIT:{{destinationDeposit}}:OPEN\",\"eventType\":\"DEPOSIT_ACCOUNT_OPENED\",\"accountType\":\"DEPOSIT_ACCOUNT\",\"accountReference\":\"{{destinationDeposit}}\",\"productCode\":\"SAVINGS-STANDARD\",\"currencyCode\":\"INR\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T09:00:00Z\"}" }
+          }
+        },
+        {
+          "name": "Open Credit Card",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "CARD:{{cardAccount}}:OPEN" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/account-lifecycle-events",
+            "body": { "mode": "raw", "raw": "{\"eventReference\":\"CARD:{{cardAccount}}:OPEN\",\"eventType\":\"CREDIT_CARD_ACCOUNT_OPENED\",\"accountType\":\"CREDIT_CARD_ACCOUNT\",\"accountReference\":\"{{cardAccount}}\",\"productCode\":\"CARD-STANDARD\",\"currencyCode\":\"INR\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T09:00:00Z\"}" }
+          }
+        },
+        {
+          "name": "Open Fixed Deposit subledger",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "DEPOSIT:{{fixedDeposit}}:OPEN" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/account-lifecycle-events",
+            "body": { "mode": "raw", "raw": "{\"eventReference\":\"DEPOSIT:{{fixedDeposit}}:OPEN\",\"eventType\":\"DEPOSIT_ACCOUNT_OPENED\",\"accountType\":\"DEPOSIT_ACCOUNT\",\"accountReference\":\"{{fixedDeposit}}\",\"productCode\":\"FD-12M-STANDARD\",\"currencyCode\":\"INR\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T09:00:00Z\"}" }
+          }
+        },
+        {
+          "name": "Open zero-balance closure candidate",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "DEPOSIT:{{closeCandidateDeposit}}:OPEN" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/account-lifecycle-events",
+            "body": { "mode": "raw", "raw": "{\"eventReference\":\"DEPOSIT:{{closeCandidateDeposit}}:OPEN\",\"eventType\":\"DEPOSIT_ACCOUNT_OPENED\",\"accountType\":\"DEPOSIT_ACCOUNT\",\"accountReference\":\"{{closeCandidateDeposit}}\",\"productCode\":\"SAVINGS-STANDARD\",\"currencyCode\":\"INR\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T09:00:00Z\"}" }
+          }
+        },
+        {
+          "name": "Check zero-balance closure candidate",
+          "request": { "method": "GET", "url": "{{accountingBaseUrl}}/internal/v1/account-clearances/DEPOSIT_ACCOUNT/{{closeCandidateDeposit}}?currencyCode=INR" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Accounting is clear', () => pm.expect(pm.response.json().accountingCleared).to.eql(true));"] } }]
+        },
+        {
+          "name": "Close zero-balance Deposit",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "DEPOSIT:{{closeCandidateDeposit}}:CLOSE" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/account-lifecycle-events",
+            "body": { "mode": "raw", "raw": "{\"eventReference\":\"DEPOSIT:{{closeCandidateDeposit}}:CLOSE\",\"eventType\":\"DEPOSIT_ACCOUNT_CLOSED\",\"accountType\":\"DEPOSIT_ACCOUNT\",\"accountReference\":\"{{closeCandidateDeposit}}\",\"currencyCode\":\"INR\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T09:30:00Z\",\"reasonCode\":\"CUSTOMER_REQUEST\"}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Payments",
+      "item": [
+        {
+          "name": "Post book transfer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "PAYMENT:{{paymentId}}:ACCOUNTING" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/payment-postings/settlements",
+            "body": { "mode": "raw", "raw": "{\"paymentId\":\"{{paymentId}}\",\"paymentType\":\"BOOK_TRANSFER\",\"source\":{\"instrumentType\":\"DEPOSIT_ACCOUNT\",\"accountId\":\"{{sourceDeposit}}\"},\"destination\":{\"instrumentType\":\"DEPOSIT_ACCOUNT\",\"accountId\":\"{{destinationDeposit}}\"},\"amount\":5000.0000,\"currencyCode\":\"INR\",\"occurredAt\":\"{{businessDate}}T10:30:00Z\",\"businessDate\":\"{{businessDate}}\",\"reference\":\"Postman transfer\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('balanced journal posted', () => { const j=pm.response.json(); pm.expect(j.totalDebit).to.eql(j.totalCredit); });", "pm.collectionVariables.set('bookTransferJournalNumber', pm.response.json().journalNumber);", "pm.collectionVariables.set('lastJournalNumber', pm.response.json().journalNumber);"] } }]
+        },
+        {
+          "name": "Resolve payment by reference",
+          "request": { "method": "GET", "url": "{{accountingBaseUrl}}/internal/v1/payment-postings/by-reference/PAYMENT:{{paymentId}}:ACCOUNTING" }
+        },
+        {
+          "name": "Post Credit Card repayment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "PAYMENT:{{repaymentId}}:ACCOUNTING" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/payment-postings/settlements",
+            "body": { "mode": "raw", "raw": "{\"paymentId\":\"{{repaymentId}}\",\"paymentType\":\"CREDIT_CARD_REPAYMENT\",\"source\":{\"instrumentType\":\"DEPOSIT_ACCOUNT\",\"accountId\":\"{{sourceDeposit}}\"},\"destination\":{\"instrumentType\":\"CREDIT_CARD_ACCOUNT\",\"accountId\":\"{{cardAccount}}\"},\"amount\":1000.0000,\"currencyCode\":\"INR\",\"occurredAt\":\"{{businessDate}}T11:00:00Z\",\"businessDate\":\"{{businessDate}}\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.collectionVariables.set('repaymentJournalNumber', pm.response.json().journalNumber);"] } }]
+        },
+        {
+          "name": "Post partial refund",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "REFUND:{{refundId}}:ACCOUNTING" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/payment-postings/refunds",
+            "body": { "mode": "raw", "raw": "{\"refundId\":\"{{refundId}}\",\"paymentId\":\"{{paymentId}}\",\"originalJournalNumber\":\"{{bookTransferJournalNumber}}\",\"amount\":500.0000,\"currencyCode\":\"INR\",\"occurredAt\":\"{{businessDate}}T11:15:00Z\",\"businessDate\":\"{{businessDate}}\",\"reason\":\"Postman partial refund\"}" }
+          }
+        },
+        {
+          "name": "Reverse repayment journal",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "REVERSAL:{{repaymentId}}" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" },
+              { "key": "X-Source-Service", "value": "PAYMENTS-SERVICE" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/journals/{{repaymentJournalNumber}}/reversals",
+            "body": { "mode": "raw", "raw": "{\"paymentId\":\"{{repaymentId}}\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T11:20:00Z\",\"reason\":\"Downstream projection failed\"}" }
+          }
+        },
+        {
+          "name": "Merchant payment - create merchant payable",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "PAYMENT:MERCHANT-POSTMAN:ACCOUNTING" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/payment-postings/settlements",
+            "body": { "mode": "raw", "raw": "{\"paymentId\":\"PAY-MERCHANT-POSTMAN\",\"paymentType\":\"CREDIT_CARD_MERCHANT_PAYMENT\",\"source\":{\"instrumentType\":\"CREDIT_CARD_ACCOUNT\",\"accountId\":\"{{cardAccount}}\"},\"destination\":{\"instrumentType\":\"MERCHANT\",\"merchantId\":\"MERCHANT-9001\"},\"amount\":200.0000,\"currencyCode\":\"INR\",\"occurredAt\":\"{{businessDate}}T11:30:00Z\",\"businessDate\":\"{{businessDate}}\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('merchant journal posted', () => pm.expect([200, 201]).to.include(pm.response.code));", "const body = pm.response.json();", "pm.test('merchant payable rule applied', () => {", "  pm.expect(body.eventType).to.eql('CREDIT_CARD_MERCHANT_PAYMENT');", "  pm.expect(body.lines[0].glCode).to.eql('CREDIT_CARD_RECEIVABLE');", "  pm.expect(body.lines[1].glCode).to.eql('MERCHANT_PAYABLE');", "});"] } }]
+        }
+      ]
+    },
+    {
+      "name": "03 Bill Generation",
+      "item": [
+        {
+          "name": "Post bill charges",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "BILL:{{billId}}:ACCOUNTING" },
+              { "key": "X-Correlation-Id", "value": "{{correlationId}}" }
+            ],
+            "url": "{{accountingBaseUrl}}/internal/v1/bill-postings",
+            "body": { "mode": "raw", "raw": "{\"billId\":\"{{billId}}\",\"accountId\":\"{{cardAccount}}\",\"productCode\":\"CARD-STANDARD\",\"billingPeriodStart\":\"2026-08-01\",\"billingPeriodEnd\":\"{{businessDate}}\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T18:00:00Z\",\"currencyCode\":\"INR\",\"components\":[{\"componentType\":\"INTEREST\",\"amount\":650.0000},{\"componentType\":\"LATE_FEE\",\"amount\":100.0000},{\"componentType\":\"TAX\",\"amount\":18.0000}]}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.collectionVariables.set('lastJournalNumber', pm.response.json().journalNumber);"] } }]
+        },
+        {
+          "name": "Read card ledger activity",
+          "request": { "method": "GET", "url": "{{accountingBaseUrl}}/internal/v1/ledger-entries?accountReference={{cardAccount}}&from=2026-08-01&to={{businessDate}}&page=0&size=50" }
+        }
+      ]
+    },
+    {
+      "name": "04 Fixed Deposit",
+      "item": [
+        {
+          "name": "Post FD funding alias",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "FD:{{fixedDeposit}}:FUNDING" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/internal/v1/fixed-deposit-postings/fundings",
+            "body": { "mode": "raw", "raw": "{\"postingReference\":\"FD:{{fixedDeposit}}:FUNDING\",\"fixedDepositAccountId\":\"{{fixedDeposit}}\",\"productCode\":\"FD-12M-STANDARD\",\"currencyCode\":\"INR\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T12:00:00Z\",\"fundingAccountId\":\"{{sourceDeposit}}\",\"components\":[{\"componentType\":\"PRINCIPAL\",\"amount\":10000.0000}],\"narration\":\"FD funding\"}" }
+          }
+        },
+        {
+          "name": "Post FD interest accrual generic",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "FD:{{fixedDeposit}}:ACCRUAL:{{businessDate}}" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/internal/v1/fixed-deposit-postings",
+            "body": { "mode": "raw", "raw": "{\"postingReference\":\"FD:{{fixedDeposit}}:ACCRUAL:{{businessDate}}\",\"postingType\":\"INTEREST_ACCRUAL\",\"fixedDepositAccountId\":\"{{fixedDeposit}}\",\"productCode\":\"FD-12M-STANDARD\",\"currencyCode\":\"INR\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T18:00:00Z\",\"components\":[{\"componentType\":\"INTEREST\",\"amount\":650.0000}],\"narration\":\"Monthly accrual\"}" }
+          }
+        },
+        {
+          "name": "Resolve FD posting by reference",
+          "request": { "method": "GET", "url": "{{accountingBaseUrl}}/internal/v1/fixed-deposit-postings/by-reference/FD:{{fixedDeposit}}:ACCRUAL:{{businessDate}}" }
+        },
+        {
+          "name": "Post FD interest payout alias",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "FD:{{fixedDeposit}}:INTEREST-PAYOUT" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/internal/v1/fixed-deposit-postings/interest-payouts",
+            "body": { "mode": "raw", "raw": "{\"postingReference\":\"FD:{{fixedDeposit}}:INTEREST-PAYOUT\",\"fixedDepositAccountId\":\"{{fixedDeposit}}\",\"productCode\":\"FD-12M-STANDARD\",\"currencyCode\":\"INR\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T18:05:00Z\",\"payoutAccountId\":\"{{destinationDeposit}}\",\"payoutMode\":\"TO_DEPOSIT_ACCOUNT\",\"components\":[{\"componentType\":\"INTEREST\",\"amount\":650.0000}]}" }
+          }
+        },
+        {
+          "name": "Post FD maturity payout alias",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "FD:{{fixedDeposit}}:MATURITY" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/internal/v1/fixed-deposit-postings/maturity-payouts",
+            "body": { "mode": "raw", "raw": "{\"postingReference\":\"FD:{{fixedDeposit}}:MATURITY\",\"fixedDepositAccountId\":\"{{fixedDeposit}}\",\"productCode\":\"FD-12M-STANDARD\",\"currencyCode\":\"INR\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T18:10:00Z\",\"payoutAccountId\":\"{{destinationDeposit}}\",\"components\":[{\"componentType\":\"PRINCIPAL\",\"amount\":10000.0000},{\"componentType\":\"INTEREST\",\"amount\":0.0000}]}" }
+          }
+        },
+        {
+          "name": "Post FD premature closure alias example",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "FD:FD-POSTMAN-PREMATURE:PREMATURE" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/internal/v1/fixed-deposit-postings/premature-closures",
+            "body": { "mode": "raw", "raw": "{\"postingReference\":\"FD:FD-POSTMAN-PREMATURE:PREMATURE\",\"fixedDepositAccountId\":\"{{fixedDeposit}}\",\"productCode\":\"FD-12M-STANDARD\",\"currencyCode\":\"INR\",\"businessDate\":\"{{businessDate}}\",\"occurredAt\":\"{{businessDate}}T18:15:00Z\",\"payoutAccountId\":\"{{destinationDeposit}}\",\"components\":[{\"componentType\":\"PRINCIPAL\",\"amount\":1000.0000},{\"componentType\":\"ELIGIBLE_INTEREST\",\"amount\":100.0000},{\"componentType\":\"INTEREST_ADJUSTMENT\",\"amount\":20.0000},{\"componentType\":\"PENALTY\",\"amount\":25.0000},{\"componentType\":\"TAX\",\"amount\":5.0000},{\"componentType\":\"NET_PAYOUT\",\"amount\":1070.0000}]}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Inquiry and configuration",
+      "item": [
+        { "name": "Get journal", "request": { "method": "GET", "url": "{{accountingBaseUrl}}/api/v1/journals/{{lastJournalNumber}}" } },
+        { "name": "Search journals", "request": { "method": "GET", "url": "{{accountingBaseUrl}}/api/v1/journals?businessDate={{businessDate}}&page=0&size=50" } },
+        { "name": "Get destination balance", "request": { "method": "GET", "url": "{{accountingBaseUrl}}/internal/v1/account-balances/{{destinationDeposit}}" } },
+        { "name": "List GL accounts", "request": { "method": "GET", "url": "{{accountingBaseUrl}}/api/v1/gl-accounts?page=0&size=50" } },
+        {
+          "name": "Create Postman GL account",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "GL:POSTMAN_SUSPENSE:CREATE" },{ "key": "X-Actor-Id", "value": "POSTMAN-ADMIN" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/api/v1/gl-accounts",
+            "body": { "mode": "raw", "raw": "{\"glCode\":\"POSTMAN_SUSPENSE\",\"name\":\"Postman suspense account\",\"accountType\":\"ASSET\",\"normalBalance\":\"DEBIT\",\"currencyCode\":\"INR\"}" }
+          }
+        },
+        {
+          "name": "Get Postman GL account",
+          "request": { "method": "GET", "url": "{{accountingBaseUrl}}/api/v1/gl-accounts/POSTMAN_SUSPENSE" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.collectionVariables.set('glVersion', pm.response.json().version);"] } }]
+        },
+        {
+          "name": "Deactivate Postman GL account",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "If-Match", "value": "{{glVersion}}" },{ "key": "Idempotency-Key", "value": "GL:POSTMAN_SUSPENSE:INACTIVE" },{ "key": "X-Actor-Id", "value": "POSTMAN-ADMIN" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/api/v1/gl-accounts/POSTMAN_SUSPENSE/status",
+            "body": { "mode": "raw", "raw": "{\"status\":\"INACTIVE\"}" }
+          }
+        },
+        {
+          "name": "Create Postman subledger mapping",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "MAPPING:POSTMAN_DEPOSIT:CREATE" },{ "key": "X-Actor-Id", "value": "POSTMAN-ADMIN" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/api/v1/subledger-mappings",
+            "body": { "mode": "raw", "raw": "{\"mappingCode\":\"POSTMAN_DEPOSIT\",\"glCode\":\"CUSTOMER_DEPOSIT_LIABILITY\",\"currencyCode\":\"INR\",\"effectiveFrom\":\"2026-01-01\"}" }
+          }
+        },
+        {
+          "name": "Create Postman Accounting rule",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "RULE:POSTMAN_TEST_V1:CREATE" },{ "key": "X-Actor-Id", "value": "POSTMAN-ADMIN" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/api/v1/accounting-rules",
+            "body": { "mode": "raw", "raw": "{\"ruleCode\":\"POSTMAN_TEST_V1\",\"eventType\":\"POSTMAN_EVENT\",\"componentType\":\"PRINCIPAL\",\"currencyCode\":\"INR\",\"version\":1,\"debitMappingCode\":\"POSTMAN_DEPOSIT\",\"creditMappingCode\":\"POSTMAN_DEPOSIT\",\"effectiveFrom\":\"2026-01-01\"}" }
+          }
+        },
+        { "name": "List Accounting rules", "request": { "method": "GET", "url": "{{accountingBaseUrl}}/api/v1/accounting-rules?page=0&size=50" } },
+        { "name": "List subledger mappings", "request": { "method": "GET", "url": "{{accountingBaseUrl}}/api/v1/subledger-mappings?page=0&size=50" } }
+      ]
+    },
+    {
+      "name": "06 EOD controls",
+      "item": [
+        {
+          "name": "Open Accounting period",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "EOD:{{eodBusinessDate}}:OPEN" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/internal/v1/accounting-periods/{{eodBusinessDate}}/open",
+            "body": { "mode": "raw", "raw": "{\"eodRunId\":\"EOD-POSTMAN-{{eodBusinessDate}}\",\"stepCode\":\"ACCOUNTING_OPEN\",\"commandReference\":\"EOD:{{eodBusinessDate}}:OPEN\",\"actorId\":\"EOD-SERVICE\"}" }
+          }
+        },
+        {
+          "name": "Generate zero-activity trial balance",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "EOD:{{eodBusinessDate}}:TRIAL" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/internal/v1/trial-balances",
+            "body": { "mode": "raw", "raw": "{\"businessDate\":\"{{eodBusinessDate}}\",\"currencyCode\":\"INR\",\"generatedBy\":\"EOD-SERVICE\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.collectionVariables.set('trialRunId', pm.response.json().runId);", "pm.test('trial balance is balanced', () => pm.expect(pm.response.json().balanced).to.eql(true));"] } }]
+        },
+        { "name": "Get trial balance", "request": { "method": "GET", "url": "{{accountingBaseUrl}}/api/v1/trial-balances/{{trialRunId}}" } },
+        {
+          "name": "Run reconciliation with one deliberate count exception",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "EOD:{{eodBusinessDate}}:RECON" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/internal/v1/eod/reconciliation/runs",
+            "body": { "mode": "raw", "raw": "{\"eodRunId\":\"EOD-POSTMAN-{{eodBusinessDate}}\",\"stepCode\":\"PAYMENTS_RECON\",\"commandReference\":\"EOD:{{eodBusinessDate}}:RECON\",\"businessDate\":\"{{eodBusinessDate}}\",\"reconciledService\":\"PAYMENTS-SERVICE\",\"currencyCode\":\"INR\",\"expectedJournalCount\":1,\"expectedTotalDebit\":0.0000}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["const r=pm.response.json(); pm.collectionVariables.set('reconRunId', r.runId); pm.collectionVariables.set('reconItemId', r.items[0].itemId);"] } }]
+        },
+        { "name": "Get reconciliation", "request": { "method": "GET", "url": "{{accountingBaseUrl}}/api/v1/reconciliation/runs/{{reconRunId}}" } },
+        {
+          "name": "Accept reconciliation exception",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "EOD:{{eodBusinessDate}}:RECON:ACCEPT" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/api/v1/reconciliation/runs/{{reconRunId}}/items/{{reconItemId}}/resolution",
+            "body": { "mode": "raw", "raw": "{\"status\":\"ACCEPTED\",\"resolution\":\"Expected control total intentionally differs in Postman test\",\"actorId\":\"POSTMAN-OPERATOR\"}" }
+          }
+        },
+        {
+          "name": "Close Accounting period",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" },{ "key": "Idempotency-Key", "value": "EOD:{{eodBusinessDate}}:CLOSE" },{ "key": "X-Correlation-Id", "value": "{{correlationId}}" }],
+            "url": "{{accountingBaseUrl}}/internal/v1/accounting-periods/{{eodBusinessDate}}/close",
+            "body": { "mode": "raw", "raw": "{\"eodRunId\":\"EOD-POSTMAN-{{eodBusinessDate}}\",\"stepCode\":\"ACCOUNTING_CLOSE\",\"commandReference\":\"EOD:{{eodBusinessDate}}:CLOSE\",\"actorId\":\"EOD-SERVICE\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('period closed', () => pm.expect(pm.response.json().status).to.eql('CLOSED'));"] } }]
+        },
+        { "name": "Get Accounting period", "request": { "method": "GET", "url": "{{accountingBaseUrl}}/api/v1/accounting-periods/{{eodBusinessDate}}" } }
+      ]
+    }
+  ]
+}
