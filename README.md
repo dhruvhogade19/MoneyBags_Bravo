@@ -34,13 +34,15 @@ username: moneybags_deposit
 password: moneybags_deposit
 ```
 
-Create a dedicated Oracle user/schema, then provide the connection settings below. Liquibase creates the service tables when the application starts:
+Create a dedicated Oracle user/schema, then put the connection settings in `.env` at the project root. Liquibase creates the service tables when the application starts:
 
-```powershell
-$env:DB_URL = "jdbc:oracle:thin:@//db-host:1521/SERVICE_NAME"
-$env:DB_USERNAME = "moneybags_deposit"
-$env:DB_PASSWORD = "use-a-secret-manager"
+```dotenv
+DB_URL=jdbc:oracle:thin:@//db-host:1521/SERVICE_NAME
+DB_USERNAME=moneybags_deposit
+DB_PASSWORD=use-a-secret-manager
 ```
+
+`run-all.ps1` loads this ignored file into its process before starting the services.
 
 Do not grant other microservices direct access to this schema.
 
