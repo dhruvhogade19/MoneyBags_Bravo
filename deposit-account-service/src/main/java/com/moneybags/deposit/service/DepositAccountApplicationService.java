@@ -125,7 +125,11 @@ public class DepositAccountApplicationService {
             account.addHolder(new AccountHolder(UUID.randomUUID().toString(), customerId, role,
                     role == HolderRole.PRIMARY ? request.operatingInstruction().name() : "JOINT_HOLDER", null));
         }
-        account.setBalanceProjection(AccountBalance.initial(request.currency(), UUID.randomUUID().toString()));
+        AccountBalance openingBalance = AccountBalance.initial(request.currency(), UUID.randomUUID().toString());
+        if (request.openingAmount().signum() > 0) {
+            openingBalance.credit(request.openingAmount(), "INITIAL_FUNDING-" + accountId);
+        }
+        account.setBalanceProjection(openingBalance);
         accountRepository.save(account);
 
         if (request.nominees() != null) {
@@ -382,10 +386,6 @@ public class DepositAccountApplicationService {
     }
 
     private void validateOpeningRequest(OpenDepositAccountRequest request) {
-        if (request.openingAmount().compareTo(BigDecimal.ZERO) != 0) {
-            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "INITIAL_FUNDING_DEFERRED",
-                    "Initial funding is not supported in the basic release; openingAmount must be zero");
-        }
         if (!request.customerIds().contains(request.primaryCustomerId())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "PRIMARY_HOLDER_MISSING",
                     "primaryCustomerId must be included in customerIds");

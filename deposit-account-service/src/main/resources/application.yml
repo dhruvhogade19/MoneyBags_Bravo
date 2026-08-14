@@ -40,6 +40,15 @@ eureka:
     prefer-ip-address: true
 
 moneybags:
+  http:
+    connect-timeout: ${UPSTREAM_CONNECT_TIMEOUT:2s}
+    read-timeout: ${UPSTREAM_READ_TIMEOUT:5s}
+  clients:
+    cif:
+      base-url: ${CIF_URL:http://cif-service}
+    product-master:
+      base-url: ${PRODUCT_MASTER_URL:http://product-master-service}
+      access-token: ${PRODUCT_MASTER_ACCESS_TOKEN:}
   security:
     enabled: ${SECURITY_ENABLED:false}
     pii-key-base64: ${MONEYBAGS_PII_KEY_BASE64:}
@@ -61,6 +70,25 @@ resilience4j:
         minimum-number-of-calls: 5
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
+      productMaster:
+        sliding-window-size: 20
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+      cifService:
+        sliding-window-size: 20
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+  retry:
+    instances:
+      productMaster:
+        max-attempts: 2
+        wait-duration: 200ms
+        retry-exceptions:
+          - org.springframework.web.client.RestClientException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
 
 management:
   endpoints:

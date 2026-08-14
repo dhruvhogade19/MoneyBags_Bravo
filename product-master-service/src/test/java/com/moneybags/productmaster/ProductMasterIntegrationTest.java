@@ -117,6 +117,60 @@ class ProductMasterIntegrationTest {
     }
 
     @Test
+    void versionedAndInternalDepositContractsResolveOneApplicableRateSlab() throws Exception {
+        mockMvc.perform(get("/api/v1/products/FD-REG-001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.productCode").value("FD-REG-001"))
+                .andExpect(jsonPath("$.version").value(1));
+
+        mockMvc.perform(post("/internal/v1/products/FD-REG-001/validate-account-opening")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"openingAmount":100000,"currency":"INR","productVersion":1,
+                                 "tenureMonths":12,"tenureUnit":"MONTH","interestPayoutFrequency":"AT_MATURITY",
+                                 "customerCategory":"REGULAR","age":30,"customerType":"INDIVIDUAL",
+                                 "kycVerified":true,"valueDate":"2026-08-14"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(true))
+                .andExpect(jsonPath("$.productCode").value("FD-REG-001"))
+                .andExpect(jsonPath("$.productVersion").value(1))
+                .andExpect(jsonPath("$.appliedRuleVersion").value(1))
+                .andExpect(jsonPath("$.subtype").value("FIXED_DEPOSIT"))
+                .andExpect(jsonPath("$.applicableInterestRateSlab.slabCode")
+                        .value("FD-12M-TO-24M-REGULAR"))
+                .andExpect(jsonPath("$.applicableInterestRateSlab.annualInterestRate").value(6.75));
+
+        mockMvc.perform(post("/internal/v1/products/FD-REG-001/validate-account-opening")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"openingAmount":100000,"currency":"INR","productVersion":1,
+                                 "tenureMonths":12,"tenureUnit":"MONTH","interestPayoutFrequency":"AT_MATURITY",
+                                 "customerCategory":"SENIOR_CITIZEN","age":65,"customerType":"INDIVIDUAL",
+                                 "kycVerified":true,"valueDate":"2026-08-14"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(true))
+                .andExpect(jsonPath("$.applicableInterestRateSlab.slabCode")
+                        .value("FD-12M-TO-24M-SENIOR"))
+                .andExpect(jsonPath("$.applicableInterestRateSlab.annualInterestRate").value(7.25));
+    }
+
+    @Test
+    void internalDepositContractRejectsCurrencyAndVersionMismatches() throws Exception {
+        mockMvc.perform(post("/internal/v1/products/SAV-REG-001/validate-account-opening")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"openingAmount":2000,"currency":"USD","productVersion":2,
+                                 "age":30,"customerType":"INDIVIDUAL","kycVerified":true}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(false))
+                .andExpect(jsonPath("$.validationMessages[0]").value("Product version does not match the requested version"))
+                .andExpect(jsonPath("$.validationMessages[1]").value("Product currency does not match the requested currency"));
+    }
+
+    @Test
     void treasuryBenchmarkCanBePublishedAndFetched() throws Exception {
         mockMvc.perform(post("/api/benchmarks")
                         .contentType(MediaType.APPLICATION_JSON)

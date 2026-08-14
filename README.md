@@ -95,10 +95,15 @@ $env:SECURITY_ENABLED = "true"
 $env:STUB_UPSTREAM_CLIENTS = "false"
 $env:SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI = "https://identity.example/issuer"
 $env:CIF_URL = "https://cif.internal"
-$env:PRODUCT_URL = "http://localhost:8084"
+$env:PRODUCT_MASTER_URL = "http://product-master-service"
+$env:PRODUCT_MASTER_ACCESS_TOKEN = "service-token-from-secret-manager"
 ```
 
-Spring RestClient propagates the correlation ID for upstream calls. Configure OAuth2 client support separately if upstream endpoints require bearer-token propagation.
+Spring RestClient propagates the correlation ID for upstream calls. Product Master validation uses
+`POST /internal/v1/products/{productCode}/validate-account-opening`; its access token must come from the
+deployment secret manager when Product Master security is enabled.
+For FD pricing, Deposit uses `customerCategory` from CIF when present; until CIF publishes that optional field,
+it derives `SENIOR_CITIZEN` at age 60 or above and `REGULAR` otherwise from the trusted date of birth.
 
 Nominee names are encrypted with AES-256-GCM. Configure a 32-byte Base64 key before sending nominee data:
 
@@ -184,6 +189,16 @@ deposit-account-service/src/main/resources/db/changelog/db.changelog-master.yaml
 
 Never use `ddl-auto=update` against Oracle. Runtime configuration uses `ddl-auto=validate`; all schema changes must be forward Liquibase changesets.
 
-The runnable Postman collection is at `deposit-account-service/postman/Deposit-Account-Service.postman_collection.json`.
+Postman collections:
+
+- `deposit-account-service/postman/Deposit-Account-Service.postman_collection.json` covers the Deposit Account API.
+- `deposit-account-service/postman/Deposit-Product-Master-Integration.postman_collection.json` verifies the live Deposit Account -> Product Master integration, including savings eligibility/opening, FD slab resolution/booking, persisted product snapshots, and negative decisions.
+
+Run the integration collection in folder order with `STUB_UPSTREAM_CLIENTS=false`. Discovery, Gateway, Product
+Master, Deposit Account, CIF, and Oracle must be available. For local processes, set `PRODUCT_MASTER_URL` and
+`CIF_URL` to their reachable localhost URLs. The collection defaults to Product Master on port `8083`, Deposit
+Account on `8086`, Gateway on `8080`, and CIF on `8081`; override its collection variables if your ports differ.
+Bearer-token variables may remain empty while security is disabled. Each successful run creates a savings
+account and books an INR 1,000 fixed deposit from `seed-sav-source-001`, so reruns mutate seeded account state.
 
 The complete current endpoint catalog, request/response JSON templates, service-wise dependencies, and production contract gaps are documented in [`docs/Deposit_Account_Service_API_and_Dependencies.md`](docs/Deposit_Account_Service_API_and_Dependencies.md).

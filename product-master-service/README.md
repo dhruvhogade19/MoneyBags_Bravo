@@ -4,11 +4,11 @@ Product Master owns the reusable product catalogue only. It does not open accoun
 
 ## Run and test
 
-Copy the root `.env.example` to `.env` and supply the shared Oracle connection. From the repository root, `./run-all.ps1` now starts Product Master on port `8083` and the gateway exposes it at `http://localhost:8080/api/products`.
+Copy the root `.env.example` to `.env` and supply the shared Oracle connection. From the repository root, `./run-all.ps1` starts Product Master on port `8083`. The versioned gateway catalogue is available at `http://localhost:8080/api/v1/products`; `/api/products` remains as a compatibility alias.
 
 - Swagger UI (direct): `http://localhost:8083/swagger-ui.html`
 - OpenAPI JSON (direct): `http://localhost:8083/v3/api-docs`
-- Gateway catalogue: `http://localhost:8080/api/products/category/CREDIT_CARD/active`
+- Gateway catalogue: `http://localhost:8080/api/v1/products/category/CREDIT_CARD/active`
 - Postman collection: `postman/Product-Master-Service.postman_collection.json`
 
 The root `.env` is optional and ignored by Git. Services locate it whether their working directory is the repository root or the individual service module. `MONEYBAGS_DB_URL`, `MONEYBAGS_DB_USERNAME`, and `MONEYBAGS_DB_PASSWORD` are read by stateful services. Legacy service-specific database variables remain supported as fallbacks.
@@ -41,6 +41,21 @@ Boolean product fields use Oracle-compatible `NUMBER(1)` storage (`1` = true, `0
 - Credit cards: `CC-PLAT-001`, `CC-GOLD-001`
 
 All public product responses retain `version: 1`. Product and policy versioning is intentionally not implemented.
+
+## Deposit Account integration
+
+Deposit Account Service calls Product Master directly through Eureka, not through the public gateway:
+
+- `GET /api/v1/products/{productCode}` reads a versioned product definition.
+- `POST /internal/v1/products/{productCode}/validate-account-opening` validates CASA or FD opening terms.
+
+The validation response includes product identity, applicable amount and interest rules, and exactly one
+resolved fixed-deposit rate slab when the request is eligible. Product Master therefore owns rate-slab,
+effective-date, currency, fixed-version, tenure, payout-frequency, and customer-category decisions. Deposit
+persists the resolved decision as its booking snapshot and does not recalculate catalogue selection rules.
+
+When `SECURITY_ENABLED=true`, internal validation requires `SCOPE_product:validate`, catalogue reads require
+`SCOPE_product:read`, and catalogue changes require `SCOPE_product:admin`.
 
 Liquibase retires the old `PRODUCT_INTEREST_RULE` and `PRODUCT` tables after seeding the replacement catalogue. The cleanup changesets use table-exists preconditions: on a clean production database they are marked as already run; on a legacy schema they run in dependency order.
 

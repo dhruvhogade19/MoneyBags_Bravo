@@ -3,9 +3,23 @@ databaseChangeLog:
       file: db/changelog/changes/001-create-product-catalog.sql
   - include:
       file: db/changelog/changes/002-create-catalog-rules.sql
-  - include:
-      file: db/changelog/changes/003-create-benchmark-rate.sql
+  - changeSet:
+      id: product-003-adopt-benchmark-rate
+      author: moneybags
+      validCheckSum: "9:71e7d0420a6a3013ff5517e1051b661d"
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: BENCHMARK_RATE
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/003-create-benchmark-rate.sql
+            splitStatements: true
+            stripComments: true
   - include:
       file: db/changelog/changes/004-seed-product-catalog.sql
   - include:
       file: db/changelog/changes/005-drop-legacy-product-tables.sql
+  - include:
+      file: db/changelog/changes/006-add-senior-fixed-deposit-eligibility.sql
