@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:billing;MODE=Oracle;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=true
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  # H2 Oracle mode represents Oracle DATE as TIMESTAMP; Liquibase remains the
+  # schema authority and production keeps Hibernate validation enabled.
+  jpa.hibernate.ddl-auto: none
+  liquibase.contexts: testdata
+eureka.client.enabled: false
+moneybags.security.enabled: false
