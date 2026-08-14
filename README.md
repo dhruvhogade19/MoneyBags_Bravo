@@ -9,10 +9,11 @@ Spring Boot services for the Moneybags banking platform. Each service owns its O
 | `discovery-server` | 8761 | Eureka service registry |
 | `api-gateway` | 8080 | Gateway routes for Product Master and Deposit Account APIs |
 | `product-master-service` | 8083 | Deposit and credit-card product catalogue, eligibility and fixed-deposit pricing rules |
+| `payments-service` | 8085 | Book transfers, card purchases and repayments, fixed-deposit funding/payout orchestration, EOD and recovery |
 | `deposit-account-service` | 8086 | CASA and fixed-deposit lifecycle, payment reservations, balance projections and notification outbox |
 | `accounting-service` | 8088 | Accounting journals, posting rules and financial ledger operations |
 
-The workspace currently contains the five services above. CIF, KYC, Payments, Statements, Reconciliation and Notification Service remain peer bounded contexts outside this repository. Deposit uses stubbed CIF/Product Master validation by default; production mode resolves configured peers through Spring `RestClient` and Eureka. Accounting is started by `run-all.ps1`; it is currently built independently rather than included in the root Maven reactor.
+Payments is included in the Maven reactor and coordinates peer services through synchronous REST calls. Deposit uses stubbed CIF/Product Master validation by default; production mode resolves configured peers through Spring `RestClient` and Eureka. Accounting is started by `run-all.ps1`; it is currently built independently rather than included in the root Maven reactor.
 
 ## Technology
 
@@ -73,14 +74,16 @@ Or start them from IntelliJ in this order:
 1. `DiscoveryServerApplication`
 2. `ProductMasterServiceApplication`
 3. `DepositAccountServiceApplication`
-4. `AccountingServiceApplication`
-5. `ApiGatewayApplication`
+4. `PaymentsServiceApplication`
+5. `AccountingServiceApplication`
+6. `ApiGatewayApplication`
 
 Useful URLs:
 
 - Eureka: `http://localhost:8761`
 - Gateway API: `http://localhost:8080/api/deposit-accounts`
 - Product Master Swagger UI: `http://localhost:8083/swagger-ui.html`
+- Payments Swagger UI: `http://localhost:8085/swagger-ui/index.html`
 - Service Swagger UI: `http://localhost:8086/swagger-ui.html`
 - Accounting Swagger UI: `http://localhost:8088/swagger-ui.html`
 - Health: `http://localhost:8086/actuator/health`

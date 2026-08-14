@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-payments-schema
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: PAYMENT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001-create-payments-schema.sql
+            splitStatements: true
+            stripComments: true

@@ -45,5 +45,6 @@
         <module>credit-card-service</module>
         <module>kyc-service</module>
         <module>notification-service</module>
+        <module>payments-service</module>
     </modules>
 </project>

@@ -3,6 +3,7 @@ $pidFile = Join-Path (Join-Path $projectRoot "logs") "moneybags-pids.json"
 $servicePorts = @(
     @{ Name = "discovery-server"; Port = 8761 },
     @{ Name = "product-master-service"; Port = 8083 },
+    @{ Name = "payments-service"; Port = 8085 },
     @{ Name = "deposit-account-service"; Port = 8086 },
     @{ Name = "accounting-service"; Port = 8088 },
     @{ Name = "api-gateway"; Port = 8080 }

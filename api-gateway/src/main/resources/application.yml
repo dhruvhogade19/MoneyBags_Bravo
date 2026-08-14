@@ -19,6 +19,10 @@ spring:
               uri: lb://deposit-account-service
               predicates:
                 - Path=/api/deposit-accounts/**,/api/internal/deposit-accounts/**,/api/internal/deposit-payment-operations/**
+            - id: payments-service
+              uri: lb://payments-service
+              predicates:
+                - Path=/api/v1/payments/**
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
           globalcors:
