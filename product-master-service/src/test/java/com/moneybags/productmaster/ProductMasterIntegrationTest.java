@@ -104,6 +104,16 @@ class ProductMasterIntegrationTest {
                 .andExpect(jsonPath("$[0].interestRate").value(36.0))
                 .andExpect(jsonPath("$[0].eligibility.minimumMonthlyIncome").value(15000.0))
                 .andExpect(jsonPath("$[0].messages[0]").value("KYC verification is required"));
+
+        mockMvc.perform(get("/api/products/CC-PLAT-001/minimal"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.productCode").value("CC-PLAT-001"))
+                .andExpect(jsonPath("$.interestRate").value(42.0))
+                .andExpect(jsonPath("$.eligibility.minimumMonthlyIncome").value(25000.0))
+                .andExpect(jsonPath("$.messages[0]").value("KYC verification is required"));
+
+        mockMvc.perform(get("/api/products/FD-REG-001/minimal"))
+                .andExpect(status().isUnprocessableEntity());
     }
 
     @Test
@@ -129,6 +139,7 @@ class ProductMasterIntegrationTest {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.info.title").value("Moneybags Product Master API"))
-                .andExpect(jsonPath("$.paths['/api/products/category/CREDIT_CARD/active/minimal']").exists());
+                .andExpect(jsonPath("$.paths['/api/products/category/CREDIT_CARD/active/minimal']").exists())
+                .andExpect(jsonPath("$.paths['/api/products/{productCode}/minimal']").exists());
     }
 }

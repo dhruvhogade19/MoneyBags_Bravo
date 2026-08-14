@@ -83,6 +83,12 @@ public class ProductController {
         return service.minimalCreditCards();
     }
 
+    @GetMapping("/{productCode}/minimal")
+    @Operation(summary = "Get one compact credit-card product")
+    public MinimalCreditCardProductResponse creditCardMinimal(@PathVariable String productCode) {
+        return service.minimalCreditCard(productCode);
+    }
+
     @GetMapping("/{productCode}/eligibility")
     public List<EligibilityRuleDto> eligibility(@PathVariable String productCode) {
         return service.eligibility(productCode);

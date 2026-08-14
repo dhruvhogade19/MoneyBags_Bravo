@@ -46,7 +46,7 @@ Liquibase retires the old `PRODUCT_INTEREST_RULE` and `PRODUCT` tables after see
 
 ## New compact card catalogue
 
-`GET /api/products/category/CREDIT_CARD/active/minimal` returns only product code, name, annual interest rate, the active eligibility rule, and concise customer-facing messages. The full credit-card endpoint remains unchanged.
+`GET /api/products/category/CREDIT_CARD/active/minimal` returns the compact active card catalogue. `GET /api/products/{productCode}/minimal` returns the same compact shape for one credit-card code. Both return only product code, name, annual interest rate, the active eligibility rule, and concise customer-facing messages. The individual minimal route returns `400` for deposit products; the full product endpoint remains unchanged.
 
 ## Fixed-deposit calculations
 

@@ -106,13 +106,29 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public List<MinimalCreditCardProductResponse> minimalCreditCards() {
-        return active(Category.CREDIT_CARD).stream().map(product -> {
-            EligibilityRuleDto rule = product.eligibilityRules().stream().filter(EligibilityRuleDto::active).findFirst().orElse(null);
-            List<String> messages = new ArrayList<>();
-            if (rule != null && rule.kycRequired()) messages.add("KYC verification is required");
-            if (product.creditCardRule() != null) { messages.add("Interest-free period: " + product.creditCardRule().interestFreeDays() + " days"); messages.add("Minimum payment: " + product.creditCardRule().minimumPaymentPercentage() + "% or " + product.currencyCode() + " " + product.creditCardRule().minimumPaymentAmount() + ", whichever is higher"); }
-            return new MinimalCreditCardProductResponse(product.productCode(), product.productName(), product.interestRule() == null ? null : product.interestRule().annualInterestRate(), rule, messages);
-        }).toList();
+        return active(Category.CREDIT_CARD).stream().map(this::minimalCreditCard).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public MinimalCreditCardProductResponse minimalCreditCard(String productCode) {
+        ProductResponse product = get(productCode);
+        if (product.category() != Category.CREDIT_CARD) {
+            fail("The minimal product view is available only for credit-card products");
+        }
+        return minimalCreditCard(product);
+    }
+
+    private MinimalCreditCardProductResponse minimalCreditCard(ProductResponse product) {
+        EligibilityRuleDto rule = product.eligibilityRules().stream().filter(EligibilityRuleDto::active).findFirst().orElse(null);
+        List<String> messages = new ArrayList<>();
+        if (rule != null && rule.kycRequired()) messages.add("KYC verification is required");
+        if (product.creditCardRule() != null) {
+            messages.add("Interest-free period: " + product.creditCardRule().interestFreeDays() + " days");
+            messages.add("Minimum payment: " + product.creditCardRule().minimumPaymentPercentage() + "% or "
+                    + product.currencyCode() + " " + product.creditCardRule().minimumPaymentAmount() + ", whichever is higher");
+        }
+        return new MinimalCreditCardProductResponse(product.productCode(), product.productName(),
+                product.interestRule() == null ? null : product.interestRule().annualInterestRate(), rule, messages);
     }
 
     InterestRuleDto addInterestPolicy(String productCode, InterestRuleDto request) {
