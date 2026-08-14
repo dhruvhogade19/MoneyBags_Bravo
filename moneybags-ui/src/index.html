@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en" data-mb-theme="light" data-mb-palette="pip">
+  <head>
+    <title>MoneyBag | Banking, thoughtfully organised</title>
+    <meta http-equiv="x-ua-compatible" content="IE=edge" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="viewport-fit=cover, initial-scale=1.0" />
+    <meta name="theme-color" content="#faf7f1" />
+    <link rel="icon" type="image/x-icon" href="css/images/JET-Favicon-Red-32x32.png" />
+
+    <script>
+      (function () {
+        try {
+          var savedTheme = localStorage.getItem('moneybags-theme');
+          var systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          var theme = savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : systemTheme;
+          document.documentElement.dataset.mbTheme = theme;
+          document.documentElement.style.colorScheme = theme;
+        } catch (error) {
+          document.documentElement.dataset.mbTheme = 'light';
+        }
+      }());
+    </script>
+
+    <!-- injector:theme -->
+    <!-- endinjector -->
+    <link rel="stylesheet" href="css/app.css" type="text/css" />
+    <link rel="stylesheet" href="css/theme-presets.css" type="text/css" />
+  </head>
+  <body class="mb-body">
+    <div id="globalBody">
+      <div class="mb-app-shell">
+        <a class="mb-skip-link" href="#main-content">Skip to content</a>
+
+        <header class="mb-header" role="banner">
+          <div class="mb-container mb-header-inner">
+            <button class="mb-brand" type="button" data-bind="click: function () { navigate('landing'); }" aria-label="MoneyBag home">
+              <span class="mb-brand-mark" aria-hidden="true">✦</span>
+              <span class="mb-brand-name">MoneyBag</span>
+            </button>
+
+            <nav class="mb-desktop-nav" aria-label="Primary navigation">
+              <button type="button" data-bind="click: function () { navigate('landing'); }, css: { 'is-active': currentPath() === 'landing' }">Home</button>
+              <button type="button" data-bind="click: function () { navigate('products'); }, css: { 'is-active': currentPath() === 'products' }">Products</button>
+              <button type="button" data-bind="click: function () { navigate('security'); }, css: { 'is-active': currentPath() === 'security' }">Security</button>
+              <button type="button" data-bind="click: function () { navigate('about'); }, css: { 'is-active': currentPath() === 'about' }">About</button>
+            </nav>
+
+            <div class="mb-header-actions">
+              <button class="mb-theme-toggle" type="button"
+                      data-bind="click: toggleTheme, attr: { 'aria-label': themeToggleLabel, 'aria-pressed': isDarkMode }">
+                <span class="mb-theme-icon" aria-hidden="true" data-bind="text: themeIcon"></span>
+                <span data-bind="text: themeToggleText"></span>
+              </button>
+              <button class="mb-button mb-button-quiet mb-secondary-action" type="button" data-bind="click: function () { navigate('customer-dashboard'); }">Sign in</button>
+              <button class="mb-button mb-button-primary mb-primary-action" type="button" data-bind="click: function () { navigate('customer-accounts'); }">Open account</button>
+              <button class="mb-menu-button" type="button" data-bind="click: toggleMobileMenu, attr: { 'aria-expanded': mobileMenuOpen }" aria-label="Toggle navigation">
+                <span></span><span></span><span></span>
+              </button>
+            </div>
+          </div>
+
+          <nav class="mb-mobile-nav" aria-label="Mobile navigation" data-bind="css: { 'is-open': mobileMenuOpen }">
+            <button type="button" data-bind="click: function () { navigate('landing'); }">Home</button>
+            <button type="button" data-bind="click: function () { navigate('products'); }">Products</button>
+            <button type="button" data-bind="click: function () { navigate('security'); }">Security</button>
+            <button type="button" data-bind="click: function () { navigate('customer-dashboard'); }">Customer space</button>
+            <button type="button" data-bind="click: function () { navigate('banker-dashboard'); }">Banker workspace</button>
+          </nav>
+        </header>
+
+        <main id="main-content" class="mb-main" role="main">
+          <oj-module config="[[moduleAdapter.koObservableConfig]]"></oj-module>
+        </main>
+
+        <footer class="mb-footer" role="contentinfo">
+          <div class="mb-container mb-footer-inner">
+            <div>
+              <div class="mb-footer-brand"><span class="mb-brand-mark" aria-hidden="true">✦</span> MoneyBag</div>
+              <p>Banking, thoughtfully organised.</p>
+            </div>
+            <div class="mb-footer-links">
+              <button type="button" data-bind="click: function () { navigate('security'); }">Security</button>
+              <button type="button" data-bind="click: function () { navigate('about'); }">About us</button>
+              <button type="button" data-bind="click: function () { navigate('banker-dashboard'); }">Banker sign in</button>
+            </div>
+            <p class="mb-footer-copy">&copy; <span data-bind="text: year"></span> MoneyBag. UI prototype.</p>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <!-- injector:scripts -->
+    <!-- endinjector -->
+  </body>
+</html>

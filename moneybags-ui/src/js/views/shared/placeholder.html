@@ -1,0 +1,27 @@
+<section class="mb-placeholder-page">
+  <div class="mb-container">
+    <div class="mb-placeholder-hero">
+      <div>
+        <p class="mb-eyebrow" data-bind="text: eyebrow"></p>
+        <h1 data-bind="text: title"></h1>
+        <p class="mb-hero-lead" data-bind="text: description"></p>
+        <div class="mb-hero-actions">
+          <button class="mb-button mb-button-primary" type="button" data-bind="click: function () { navigate(nextPath); }"><span data-bind="text: nextLabel"></span> <span aria-hidden="true">→</span></button>
+          <button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('landing'); }">Back home</button>
+        </div>
+      </div>
+      <aside class="mb-placeholder-route" aria-label="Page status">
+        <span class="mb-placeholder-route-mark" aria-hidden="true">✦</span>
+        <p>Planned workspace</p>
+        <strong data-bind="text: routeName"></strong>
+        <small>Ready for the service contract and page-specific actions.</small>
+      </aside>
+    </div>
+
+    <div class="mb-empty-grid">
+      <article class="mb-empty-card"><span aria-hidden="true">01</span><h2>Focused overview</h2><p>Summary widgets will surface only the information needed for this task.</p></article>
+      <article class="mb-empty-card"><span aria-hidden="true">02</span><h2>Clear next action</h2><p>Each feature will have one obvious, safe action rather than a crowded toolbar.</p></article>
+      <article class="mb-empty-card"><span aria-hidden="true">03</span><h2>Auditable by design</h2><p>Customer and banker workflows will reflect the contract and role permissions.</p></article>
+    </div>
+  </div>
+</section>

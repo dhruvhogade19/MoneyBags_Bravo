@@ -1,0 +1,60 @@
+/**
+ * Optional palette overlays.
+ *
+ * Keep component/page styling in app.css semantic variables. A new palette
+ * belongs here, where it can override the same variables without touching a
+ * feature view. The default palette is `moneybag` (defined in app.css).
+ */
+
+/*
+ * Pip-inspired palette from the supplied reference: coral actions, plum
+ * surfaces, and a nearly-black berry background. Try it by changing the
+ * data-mb-palette attribute on <html> to "pip".
+ */
+html[data-mb-palette="pip"][data-mb-theme="light"] {
+  --mb-bg: #fff5ef;
+  --mb-surface: #fffaf7;
+  --mb-surface-muted: #ffe3da;
+  --mb-surface-raised: #ffffff;
+  --mb-surface-inverse: #ff9776;
+  --mb-text: #2c1d25;
+  --mb-text-muted: #72535e;
+  --mb-text-subtle: #9d7a81;
+  --mb-text-inverse: #2c1d25;
+  --mb-accent: #ff7f72;
+  --mb-accent-strong: #b34146;
+  --mb-accent-soft: #ffd7cd;
+  --mb-on-accent: #2c1d25;
+  --mb-border: #efc7bd;
+  --mb-border-strong: #dc8278;
+  --mb-success: #1f755d;
+  --mb-focus: #9c3442;
+  --mb-header-bg: rgb(255 245 239 / 90%);
+  --mb-shadow-soft: 0 10px 30px rgb(108 43 54 / 10%);
+  --mb-shadow: 0 18px 42px rgb(108 43 54 / 16%);
+  --mb-accent-shadow: 0 8px 18px rgb(255 127 114 / 24%);
+}
+
+html[data-mb-palette="pip"][data-mb-theme="dark"] {
+  --mb-bg: #231a20;
+  --mb-surface: #392830;
+  --mb-surface-muted: #50343a;
+  --mb-surface-raised: #432d35;
+  --mb-surface-inverse: #ff9776;
+  --mb-text: #fff6f1;
+  --mb-text-muted: #e6c5bd;
+  --mb-text-subtle: #c79993;
+  --mb-text-inverse: #2c1d25;
+  --mb-accent: #ff8072;
+  --mb-accent-strong: #ffad82;
+  --mb-accent-soft: #613d42;
+  --mb-on-accent: #2c1d25;
+  --mb-border: #5c3d43;
+  --mb-border-strong: #a86160;
+  --mb-success: #75d0a5;
+  --mb-focus: #ffc1a8;
+  --mb-header-bg: rgb(35 26 32 / 90%);
+  --mb-shadow-soft: 0 10px 30px rgb(0 0 0 / 24%);
+  --mb-shadow: 0 18px 42px rgb(0 0 0 / 38%);
+  --mb-accent-shadow: 0 8px 18px rgb(255 128 114 / 18%);
+}
