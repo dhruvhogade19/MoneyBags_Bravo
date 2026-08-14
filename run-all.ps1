@@ -41,6 +41,7 @@ $services = @(
     @{ Name = "discovery-server"; Directory = "discovery-server"; Port = 8761 },
     @{ Name = "product-master-service"; Directory = "product-master-service"; Port = 8083 },
     @{ Name = "deposit-account-service"; Directory = "deposit-account-service"; Port = 8086 },
+    @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088 },
     @{ Name = "api-gateway"; Directory = "api-gateway"; Port = 8080 }
 )
 
@@ -120,7 +121,9 @@ $status = foreach ($service in $services) {
 $status | Format-Table -AutoSize
 Write-Host "Swagger : http://localhost:8086/swagger-ui.html" -ForegroundColor Green
 Write-Host "Product : http://localhost:8083/swagger-ui.html" -ForegroundColor Green
+Write-Host "Accounting: http://localhost:8088/swagger-ui.html" -ForegroundColor Green
 Write-Host "Eureka  : http://localhost:8761" -ForegroundColor Green
 Write-Host "Gateway : http://localhost:8080" -ForegroundColor Green
 Write-Host ("Logs    : " + $logDir) -ForegroundColor Green
 Write-Host "Follow deposit logs: Get-Content .\logs\deposit-account-service.out.log -Wait -Tail 100"
+Write-Host "Follow accounting logs: Get-Content .\logs\accounting-service.out.log -Wait -Tail 100"
