@@ -38,6 +38,7 @@ public class DepositAccountApplicationService {
     private final AccountNumberGenerator accountNumberGenerator;
     private final AccountViewMapper viewMapper;
     private final PiiProtector piiProtector;
+    private final NotificationOutboxService notificationOutbox;
     private final DepositAccountProperties properties;
     private final ObjectMapper objectMapper;
 
@@ -53,6 +54,7 @@ public class DepositAccountApplicationService {
                                             AccountNumberGenerator accountNumberGenerator,
                                             AccountViewMapper viewMapper,
                                             PiiProtector piiProtector,
+                                            NotificationOutboxService notificationOutbox,
                                             DepositAccountProperties properties,
                                             ObjectMapper objectMapper) {
         this.accountRepository = accountRepository;
@@ -67,6 +69,7 @@ public class DepositAccountApplicationService {
         this.accountNumberGenerator = accountNumberGenerator;
         this.viewMapper = viewMapper;
         this.piiProtector = piiProtector;
+        this.notificationOutbox = notificationOutbox;
         this.properties = properties;
         this.objectMapper = objectMapper;
     }
@@ -146,7 +149,16 @@ public class DepositAccountApplicationService {
         idempotency.setResourceId(accountId);
         idempotency.setHttpStatus(201);
         idempotencyRepository.save(idempotency);
+        notificationOutbox.enqueue(request.primaryCustomerId(), "DEPOSIT_ACCOUNT_CREATED", accountId,
+                "deposit-account-" + accountId + "-created", Map.of(
+                        "accountType", titleCase(validation.accountType()), "accountId", accountId));
         return viewMapper.detail(account);
+    }
+
+    private String titleCase(String value) {
+        String normalized = value == null ? "Deposit" : value.toLowerCase(Locale.ROOT).replace('_', ' ');
+        return Arrays.stream(normalized.split(" ")).filter(part -> !part.isBlank())
+                .map(part -> Character.toUpperCase(part.charAt(0)) + part.substring(1)).collect(java.util.stream.Collectors.joining(" "));
     }
 
     @Transactional(readOnly = true)

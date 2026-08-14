@@ -49,6 +49,8 @@ moneybags:
     product-master:
       base-url: ${PRODUCT_MASTER_URL:http://product-master-service}
       access-token: ${PRODUCT_MASTER_ACCESS_TOKEN:}
+    notification:
+      base-url: ${NOTIFICATION_URL:http://notification-service}
   security:
     enabled: ${SECURITY_ENABLED:false}
     pii-key-base64: ${MONEYBAGS_PII_KEY_BASE64:}
@@ -57,6 +59,9 @@ moneybags:
     account-number-random-digits: ${ACCOUNT_NUMBER_DIGITS:12}
     stub-upstream-clients: ${STUB_UPSTREAM_CLIENTS:true}
     idempotency-ttl-hours: ${IDEMPOTENCY_TTL_HOURS:24}
+  notifications:
+    dispatch-enabled: ${NOTIFICATION_DISPATCH_ENABLED:true}
+    dispatch-delay: ${NOTIFICATION_DISPATCH_DELAY:5000}
 
 springdoc:
   swagger-ui:

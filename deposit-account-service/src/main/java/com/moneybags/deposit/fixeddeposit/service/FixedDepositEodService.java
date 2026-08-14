@@ -11,10 +11,12 @@ import com.moneybags.deposit.fixeddeposit.entity.*;
 import com.moneybags.deposit.fixeddeposit.repository.*;
 import com.moneybags.deposit.repository.*;
 import com.moneybags.deposit.service.Hashing;
+import com.moneybags.deposit.service.NotificationOutboxService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.*;
 import java.util.*;
 
@@ -26,13 +28,15 @@ public class FixedDepositEodService {
     private final FundReservationRepository reservations;
     private final AuditLogRepository audits; private final FixedDepositInterestCalculator calculator;
     private final MaturityClosureRecorder maturityClosures;
+    private final NotificationOutboxService notificationOutbox;
     public FixedDepositEodService(FixedDepositRepository fds,FixedDepositInterestAccrualRepository accruals,
         FixedDepositPayoutRepository payouts,AccountBalanceRepository balances,DepositAccountTransactionRepository transactions,
         FundReservationRepository reservations,
         AccountStatusHistoryRepository histories,AuditLogRepository audits,FixedDepositInterestCalculator calculator,
-        MaturityClosureRecorder maturityClosures){
+        MaturityClosureRecorder maturityClosures, NotificationOutboxService notificationOutbox){
         this.fds=fds;this.accruals=accruals;this.payouts=payouts;this.balances=balances;this.transactions=transactions;this.reservations=reservations;
         this.histories=histories;this.audits=audits;this.calculator=calculator;this.maturityClosures=maturityClosures;
+        this.notificationOutbox=notificationOutbox;
     }
     @Transactional public EodResult accrue(EodRequest r){
         int processed=0,skipped=0; BigDecimal total=BigDecimal.ZERO.setScale(4); List<String> failures=new ArrayList<>();
@@ -82,6 +86,11 @@ public class FixedDepositEodService {
             histories.save(new AccountStatusHistory(UUID.randomUUID().toString(),account.getId(),from,AccountStatus.CLOSED,"FD_MATURITY_PAID",null,"eod","SERVICE",reference));
             audits.save(new AuditLog(UUID.randomUUID().toString(),fd.getId(),"MATURE_FIXED_DEPOSIT","SUCCESS","eod","SERVICE","FD_MATURITY_PAID",null,Hashing.sha256(reference),reference));
             maturityClosures.recordCompleted(fd,interest,net,fd.getPayoutAccountId(),reference,r.businessDate());
+            String cifId=account.getHolders().stream().filter(holder -> holder.getRole()==HolderRole.PRIMARY)
+                    .findFirst().orElseThrow().getCustomerId();
+            notificationOutbox.enqueue(cifId,"FD_MATURITY",account.getId(),"fd-"+account.getId()+"-maturity",
+                    Map.of("accountId",account.getId(),"maturityDate",fd.getMaturityDate().toString(),
+                            "currency",fd.getCurrencyCode(),"maturityAmount",net.setScale(2, RoundingMode.HALF_EVEN).toPlainString()));
             processed++;total=total.add(net);
         }
         return new EodResult(r.eodRunId(),r.businessDate(),r.commandReference(),processed,skipped,total,failures);

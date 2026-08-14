@@ -30,7 +30,7 @@ public class FixedDepositApplicationService {
     private final AccountNomineeRepository nomineeRepository; private final AccountStatusHistoryRepository historyRepository;
     private final AuditLogRepository auditRepository; private final BankingReferenceGateway customers;
     private final FixedDepositProductGateway products; private final FixedDepositInterestCalculator calculator;
-    private final AccountNumberGenerator numberGenerator; private final PiiProtector pii;
+    private final AccountNumberGenerator numberGenerator; private final PiiProtector pii; private final NotificationOutboxService notificationOutbox;
 
     public FixedDepositApplicationService(FixedDepositRepository fdRepository, FixedDepositRateSnapshotRepository snapshotRepository,
         FixedDepositInterestAccrualRepository accrualRepository, DepositAccountRepository accountRepository,
@@ -38,12 +38,12 @@ public class FixedDepositApplicationService {
         FundReservationRepository reservationRepository,
         AccountNomineeRepository nomineeRepository, AccountStatusHistoryRepository historyRepository, AuditLogRepository auditRepository,
         BankingReferenceGateway customers, FixedDepositProductGateway products, FixedDepositInterestCalculator calculator,
-        AccountNumberGenerator numberGenerator, PiiProtector pii) {
+        AccountNumberGenerator numberGenerator, PiiProtector pii, NotificationOutboxService notificationOutbox) {
         this.fdRepository=fdRepository; this.snapshotRepository=snapshotRepository; this.accrualRepository=accrualRepository;
         this.accountRepository=accountRepository; this.balanceRepository=balanceRepository; this.transactionRepository=transactionRepository;
         this.reservationRepository=reservationRepository;
         this.nomineeRepository=nomineeRepository; this.historyRepository=historyRepository; this.auditRepository=auditRepository;
-        this.customers=customers; this.products=products; this.calculator=calculator; this.numberGenerator=numberGenerator; this.pii=pii;
+        this.customers=customers; this.products=products; this.calculator=calculator; this.numberGenerator=numberGenerator; this.pii=pii; this.notificationOutbox=notificationOutbox;
     }
 
     @Transactional
@@ -97,6 +97,8 @@ public class FixedDepositApplicationService {
                 AccountStatus.ACTIVE,"FD_FUNDED",null,actor,"USER",correlationId));
         auditRepository.save(new AuditLog(UUID.randomUUID().toString(),fdId,"BOOK_FIXED_DEPOSIT","SUCCESS",actor,"USER",
                 "FD_FUNDED",null,Hashing.sha256(fdId+r.principal()),correlationId));
+        notificationOutbox.enqueue(r.primaryCustomerId(), "DEPOSIT_ACCOUNT_CREATED", accountId,
+                "deposit-account-" + accountId + "-created", Map.of("accountType", "Fixed Deposit", "accountId", accountId));
         return view(fd);
     }
 

@@ -108,3 +108,12 @@ databaseChangeLog:
             path: db/changelog/changes/008-seed-complete-postman-test-data.sql
             splitStatements: true
             stripComments: true
+
+  - changeSet:
+      id: 009-add-notification-outbox
+      author: moneybags
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/009-add-notification-outbox.sql
+            splitStatements: true
+            stripComments: true
