@@ -28,20 +28,20 @@ Kafka, Docker and Flyway are intentionally not used.
 
 ## Oracle setup
 
-The default connection is:
+The Deposit service connects to Oracle using the shared environment variables below. For the current BRAVO environment:
 
 ```text
-jdbc:oracle:thin:@//localhost:1521/FREEPDB1
-username: moneybags_deposit
-password: moneybags_deposit
+MONEYBAGS_DB_URL=jdbc:oracle:thin:@//ofss-mum-1212.snbomprshared1.gbucdsint02bom.oraclevcn.com:1521/PDB1
+MONEYBAGS_DB_USERNAME=BRAVO
+MONEYBAGS_DB_PASSWORD=<set-in-local-.env-or-secret-manager>
 ```
 
 Create a dedicated Oracle user/schema, then put the connection settings in `.env` at the project root. Liquibase creates the service tables when the application starts:
 
 ```dotenv
-DB_URL=jdbc:oracle:thin:@//db-host:1521/SERVICE_NAME
-DB_USERNAME=moneybags_deposit
-DB_PASSWORD=use-a-secret-manager
+MONEYBAGS_DB_URL=jdbc:oracle:thin:@//ofss-mum-1212.snbomprshared1.gbucdsint02bom.oraclevcn.com:1521/PDB1
+MONEYBAGS_DB_USERNAME=BRAVO
+MONEYBAGS_DB_PASSWORD=use-a-secret-manager
 ```
 
 `run-all.ps1` loads this ignored file into its process before starting the services.
