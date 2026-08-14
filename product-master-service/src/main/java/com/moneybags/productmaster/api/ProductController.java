@@ -15,7 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/products")
+@RequestMapping({"/api/products", "/api/v1/products"})
 @Tag(name = "Product Master", description = "Banking product definitions and rule catalogue")
 public class ProductController {
     private final ProductService service;

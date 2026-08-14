@@ -1,10 +1,11 @@
 package com.moneybags.deposit.integration;
 
 import com.moneybags.deposit.exception.ApiException;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
@@ -24,38 +25,64 @@ public class RestClientBankingReferenceGateway implements BankingReferenceGatewa
     }
 
     @Override
-    @CircuitBreaker(name = "referenceServices")
     public ValidationResult validateAccountOpening(String customerId, String productCode, Long productVersion,
                                                    String currency, BigDecimal openingAmount) {
+        CustomerProfile customer = customerProfile(customerId);
         try {
-            CifClient.DepositCreationDetails customer = cifClient.depositCreationDetails(customerId);
-            ProductMasterClient.ProductResult product = productClient.getProduct(productCode);
-            ProductMasterClient.AccountOpeningValidation rules = productClient.validateAccountOpening(productCode,
-                    new ProductMasterClient.AccountOpeningValidationRequest(openingAmount,
-                            age(customer.dateOfBirth()), customer.customerType(), customer.kycCompleted()));
-            boolean versionMatches = product.version() == null || product.version().equals(productVersion);
-            boolean eligible = customer.kycCompleted() && product.active()
-                    && product.supportedDepositType() && versionMatches
-                    && currency.equals(product.currencyCode()) && rules != null && rules.eligible();
-            String code = eligible ? "ELIGIBLE" : product.supportedDepositType()
+            ProductMasterClient.AccountOpeningValidation decision = productClient.validateAccountOpening(productCode,
+                    new ProductMasterClient.AccountOpeningValidationRequest(openingAmount, currency,
+                            customer.age(), customer.customerType(), customer.customerCategory(), null,
+                            null, null, customer.kycVerified(), productVersion, LocalDate.now()));
+            if (decision == null) {
+                throw new ApiException(HttpStatus.BAD_GATEWAY, "INVALID_PRODUCT_MASTER_RESPONSE",
+                        "Product Master returned an empty validation response");
+            }
+            if (decision.productCode() == null || decision.productVersion() == null
+                    || decision.productName() == null || decision.subtype() == null
+                    || decision.currencyCode() == null
+                    || !productCode.equalsIgnoreCase(decision.productCode())
+                    || !productVersion.equals(decision.productVersion())
+                    || !currency.equalsIgnoreCase(decision.currencyCode())) {
+                throw new ApiException(HttpStatus.BAD_GATEWAY, "INVALID_PRODUCT_MASTER_RESPONSE",
+                        "Product Master returned inconsistent product identity data");
+            }
+            boolean supported = "SAVINGS".equalsIgnoreCase(decision.subtype())
+                    || "CURRENT".equalsIgnoreCase(decision.subtype());
+            boolean eligible = customer.eligible() && decision.eligible() && supported;
+            String code = eligible ? "ELIGIBLE" : supported
                     ? "REFERENCE_VALIDATION_FAILED" : "UNSUPPORTED_ACCOUNT_TYPE";
-            return new ValidationResult(eligible, code, product.productName(), product.resolvedSubtype(), OffsetDateTime.now());
-        } catch (RestClientException ex) {
-            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE",
-                    "CIF or Product Master is unavailable");
+            return new ValidationResult(eligible, code, decision.productName(), decision.subtype(),
+                    OffsetDateTime.now());
+        } catch (HttpClientErrorException ex) {
+            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "PRODUCT_VALIDATION_FAILED",
+                    "Product Master rejected the account-opening request");
+        } catch (CallNotPermittedException | RestClientException ex) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "PRODUCT_MASTER_UNAVAILABLE",
+                    "Product Master is unavailable");
         }
     }
 
     @Override
-    @CircuitBreaker(name = "referenceServices")
     public ValidationResult validateCustomerEligibility(String customerId) {
+        CustomerProfile customer = customerProfile(customerId);
+        return new ValidationResult(customer.eligible(), customer.eligible()
+                ? "ELIGIBLE" : "CUSTOMER_OR_KYC_NOT_ELIGIBLE", null, null, customer.evaluatedAt());
+    }
+
+    @Override
+    public CustomerProfile customerProfile(String customerId) {
         try {
             CifClient.DepositCreationDetails customer = cifClient.depositCreationDetails(customerId);
-            boolean eligible = customer.kycCompleted();
-            return new ValidationResult(eligible, eligible ? "ELIGIBLE" : "CUSTOMER_OR_KYC_NOT_ELIGIBLE",
-                    null, null, OffsetDateTime.now());
-        } catch (RestClientException ex) {
-            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE",
+            int age = age(customer.dateOfBirth());
+            boolean kycVerified = customer.kycCompleted();
+            String category = customer.customerCategory();
+            if (category == null || category.isBlank()) {
+                category = age >= 60 ? "SENIOR_CITIZEN" : "REGULAR";
+            }
+            return new CustomerProfile(kycVerified, age, customer.customerType(), category,
+                    kycVerified, OffsetDateTime.now());
+        } catch (CallNotPermittedException | RestClientException ex) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "CIF_UNAVAILABLE",
                     "CIF status is unavailable");
         }
     }

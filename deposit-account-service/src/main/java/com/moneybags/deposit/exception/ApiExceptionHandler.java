@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -37,6 +38,11 @@ public class ApiExceptionHandler {
     ResponseEntity<Problem> optimistic(HttpServletRequest request) {
         return response(HttpStatus.PRECONDITION_FAILED, "STALE_ACCOUNT_VERSION",
                 "The account changed; refresh and retry with the latest version", request, List.of());
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<Problem> notFound(HttpServletRequest request) {
+        return response(HttpStatus.NOT_FOUND, "NOT_FOUND", "The requested resource was not found", request, List.of());
     }
 
     @ExceptionHandler(Exception.class)

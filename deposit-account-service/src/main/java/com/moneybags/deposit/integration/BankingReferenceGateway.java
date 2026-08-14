@@ -9,6 +9,11 @@ public interface BankingReferenceGateway {
 
     ValidationResult validateCustomerEligibility(String customerId);
 
+    CustomerProfile customerProfile(String customerId);
+
     record ValidationResult(boolean eligible, String decisionCode, String productName, String accountType,
                             OffsetDateTime evaluatedAt) {}
+
+    record CustomerProfile(boolean eligible, Integer age, String customerType, String customerCategory,
+                           boolean kycVerified, OffsetDateTime evaluatedAt) {}
 }

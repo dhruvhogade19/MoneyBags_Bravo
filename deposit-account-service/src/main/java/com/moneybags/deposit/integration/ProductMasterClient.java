@@ -1,6 +1,10 @@
 package com.moneybags.deposit.integration;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -13,17 +17,34 @@ import java.util.List;
 public class ProductMasterClient {
     private final RestClient restClient;
 
-    public ProductMasterClient(RestClient.Builder restClientBuilder) {
-        this.restClient = restClientBuilder.clone().baseUrl("http://product-master-service/api/products").build();
+    public ProductMasterClient(
+            RestClient.Builder restClientBuilder,
+            @Value("${moneybags.clients.product-master.base-url:http://product-master-service}") String baseUrl,
+            @Value("${moneybags.clients.product-master.access-token:}") String accessToken) {
+        RestClient.Builder builder = restClientBuilder.clone().baseUrl(baseUrl);
+        if (accessToken != null && !accessToken.isBlank()) {
+            builder.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
+        }
+        this.restClient = builder.build();
     }
 
+    @CircuitBreaker(name = "productMaster")
+    @Retry(name = "productMaster")
     public ProductResult getProduct(String productCode) {
-        return restClient.get().uri("/{productCode}", productCode).retrieve().body(ProductResult.class);
+        return restClient.get().uri("/api/v1/products/{productCode}", productCode)
+                .retrieve().body(ProductResult.class);
     }
 
-    public AccountOpeningValidation validateAccountOpening(String productCode, AccountOpeningValidationRequest request) {
-        return restClient.post().uri("/{productCode}/validate-account-opening", productCode)
-                .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(AccountOpeningValidation.class);
+    @CircuitBreaker(name = "productMaster")
+    @Retry(name = "productMaster")
+    public AccountOpeningValidation validateAccountOpening(String productCode,
+                                                            AccountOpeningValidationRequest request) {
+        return restClient.post()
+                .uri("/internal/v1/products/{productCode}/validate-account-opening", productCode)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .body(AccountOpeningValidation.class);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -33,31 +54,47 @@ public class ProductMasterClient {
                          FixedDepositRule fixedDepositRule, List<InterestRateSlab> interestRateSlabs) {
         public boolean active() { return "ACTIVE".equalsIgnoreCase(status); }
         public String resolvedSubtype() { return subtype == null ? accountType : subtype; }
-        public boolean supportedDepositType() {
-            return "SAVINGS".equalsIgnoreCase(resolvedSubtype()) || "CURRENT".equalsIgnoreCase(resolvedSubtype())
-                    || "FIXED_DEPOSIT".equalsIgnoreCase(resolvedSubtype());
-        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record InterestRule(BigDecimal annualInterestRate, String policyVersion, String interestCalculationMethod,
-                        String interestPostingFrequency, String compoundingFrequency, String dayCountConvention) {}
+    public record InterestRule(BigDecimal annualInterestRate, String policyVersion,
+                        String interestCalculationMethod, String interestPostingFrequency,
+                        String compoundingFrequency, String dayCountConvention) {}
+
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record AmountRule(BigDecimal minimumAmount, BigDecimal maximumAmount,
+    public record AmountRule(BigDecimal minimumOpeningBalance, BigDecimal minimumBalance,
+                      BigDecimal maximumBalance, BigDecimal minimumAmount, BigDecimal maximumAmount,
                       Integer minimumTenureMonths, Integer maximumTenureMonths) {}
+
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record FixedDepositRule(List<String> allowedTenureUnits, List<String> allowedInterestPayoutFrequencies,
+    public record FixedDepositRule(List<String> allowedTenureUnits,
+                            List<String> allowedInterestPayoutFrequencies,
                             String defaultInterestPayoutFrequency, String compoundingFrequency,
                             String dayCountConvention) {}
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record InterestRateSlab(String slabCode, Integer minimumTenure, Integer maximumTenure, String tenureUnit,
-                            BigDecimal minimumAmount, BigDecimal maximumAmount, String customerCategory,
-                            BigDecimal annualInterestRate, LocalDate effectiveFrom, LocalDate effectiveTo,
-                            Boolean active) {}
-
-    public record AccountOpeningValidationRequest(BigDecimal openingAmount, int age, String customerType,
-                                           boolean kycCompleted) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record AccountOpeningValidation(boolean eligible) {}
+    public record InterestRateSlab(String slabCode, Integer minimumTenure, Integer maximumTenure,
+                            String tenureUnit, BigDecimal minimumAmount, BigDecimal maximumAmount,
+                            String customerCategory, BigDecimal annualInterestRate,
+                            LocalDate effectiveFrom, LocalDate effectiveTo, Boolean active) {}
+
+    public record AccountOpeningValidationRequest(
+            BigDecimal openingAmount, String currency, Integer age, String customerType,
+            String customerCategory, Integer tenureMonths, String tenureUnit,
+            String interestPayoutFrequency, Boolean kycVerified, Long productVersion,
+            LocalDate valueDate) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record AccountOpeningValidation(
+            boolean eligible, List<String> validationMessages, List<Object> applicableFees,
+            InterestRule applicableInterestRule, AmountRule applicableAmountRules,
+            String productCode, Long productVersion, Long appliedRuleVersion, String productName, String category,
+            String subtype, String currencyCode, FixedDepositRule applicableFixedDepositRule,
+            InterestRateSlab applicableInterestRateSlab) {
+        public String rejectionMessage() {
+            return validationMessages == null || validationMessages.isEmpty()
+                    ? "Product validation rejected the request"
+                    : String.join("; ", validationMessages);
+        }
+    }
 }

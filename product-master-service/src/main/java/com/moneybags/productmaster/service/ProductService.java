@@ -82,15 +82,30 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public ValidationResponse validateAccountOpening(String productCode, AccountOpeningValidationRequest request) {
-        ProductResponse product = get(productCode); List<String> messages = baseValidation(product, Category.DEPOSIT); AmountRuleDto amount = product.amountRule();
+        ProductResponse product = get(productCode);
+        LocalDate decisionDate = request.valueDate() == null ? LocalDate.now() : request.valueDate();
+        List<String> messages = baseValidation(product, Category.DEPOSIT, decisionDate);
+        if (request.productVersion() != null && !request.productVersion().equals(product.version())) {
+            messages.add("Product version does not match the requested version");
+        }
+        if (request.currency() != null && !request.currency().equalsIgnoreCase(product.currencyCode())) {
+            messages.add("Product currency does not match the requested currency");
+        }
+        AmountRuleDto amount = product.amountRule();
+        InterestRateSlabDto applicableSlab = null;
         if (amount == null) messages.add("Product has no deposit amount rules");
-        else if (product.subtype() == Subtype.FIXED_DEPOSIT) validateFixedDepositOpening(product, request, messages);
+        else if (product.subtype() == Subtype.FIXED_DEPOSIT) {
+            applicableSlab = validateFixedDepositOpening(product, request, decisionDate, messages);
+        }
         else {
             compareAmount(request.openingAmount(), amount.minimumOpeningBalance(), "Opening amount is below the minimum opening balance", messages);
             if (amount.maximumBalance() != null && request.openingAmount().compareTo(amount.maximumBalance()) > 0) messages.add("Opening amount is above the maximum balance");
         }
-        validateEligibility(product.eligibilityRules(), request.age(), null, request.customerType(), request.customerCategory(), request.kycCompleted(), messages);
-        return new ValidationResponse(messages.isEmpty(), messages, activeFees(product.fees()), product.interestRule(), amount);
+        validateEligibility(product.eligibilityRules(), request.age(), null, request.customerType(), request.customerCategory(), request.kycVerified(), messages);
+        return new ValidationResponse(messages.isEmpty(), messages, activeFees(product.fees()),
+                product.interestRule(), amount, product.productCode(), product.version(), product.version(),
+                product.productName(), product.category(), product.subtype(), product.currencyCode(),
+                product.fixedDepositRule(), applicableSlab);
     }
 
     @Transactional(readOnly = true)
@@ -159,14 +174,51 @@ public class ProductService {
     private void validate(CreditCardProduct product, boolean activate) {
         List<String> errors = new ArrayList<>(); validateDates(product.getEffectiveFrom(), product.getEffectiveTo(), "effectiveTo", errors); validateEligibilityRanges(product.getEligibilityRules(), errors); validateInterest(mapper.effective(product.getInterestPolicies(), product.getEffectiveFrom()), Category.CREDIT_CARD, errors); CreditCardRuleDto terms = mapper.card(mapper.effectiveTerms(product.getTerms(), product.getEffectiveFrom())); validateCard(terms, errors); if (activate && mapper.effective(product.getInterestPolicies(), product.getEffectiveFrom()) == null) errors.add("An active product requires an interest rule"); if (activate && terms == null) errors.add("An active credit-card product requires a credit-card rule"); throwIf(errors);
     }
-    private void validateFixedDepositOpening(ProductResponse product, AccountOpeningValidationRequest request, List<String> messages) {
-        AmountRuleDto amount = product.amountRule(); compareAmount(request.openingAmount(), amount.minimumAmount(), "Opening amount is below the minimum fixed-deposit amount", messages); if (amount.maximumAmount() != null && request.openingAmount().compareTo(amount.maximumAmount()) > 0) messages.add("Opening amount is above the maximum fixed-deposit amount");
-        if (request.tenureMonths() == null) { messages.add("Fixed-deposit opening requires tenureMonths"); return; }
-        String unit = request.tenureUnit() == null ? "MONTH" : request.tenureUnit(); boolean matches = product.interestRateSlabs().stream().anyMatch(s -> s.active() && unit.equals(s.tenureUnit()) && request.tenureMonths() >= s.minimumTenure() && request.tenureMonths() <= s.maximumTenure() && request.openingAmount().compareTo(s.minimumAmount()) >= 0 && (s.maximumAmount() == null || request.openingAmount().compareTo(s.maximumAmount()) <= 0) && (s.customerCategory() == null || s.customerCategory() == CustomerCategory.ANY || s.customerCategory() == request.customerCategory()) && effective(s.effectiveFrom(), s.effectiveTo())); if (!matches) messages.add("No active fixed-deposit rate slab matches the requested tenure, amount, and customer category");
-        FixedDepositRuleDto fd = product.fixedDepositRule(); if (fd != null && !fd.allowedTenureUnits().contains(unit)) messages.add("Tenure unit is not supported by the fixed-deposit product"); if (fd != null && request.interestPayoutFrequency() != null && !fd.allowedInterestPayoutFrequencies().contains(request.interestPayoutFrequency())) messages.add("Interest payout frequency is not supported by the fixed-deposit product");
+    private InterestRateSlabDto validateFixedDepositOpening(ProductResponse product,
+                                                             AccountOpeningValidationRequest request,
+                                                             LocalDate decisionDate,
+                                                             List<String> messages) {
+        AmountRuleDto amount = product.amountRule();
+        compareAmount(request.openingAmount(), amount.minimumAmount(),
+                "Opening amount is below the minimum fixed-deposit amount", messages);
+        if (amount.maximumAmount() != null && request.openingAmount().compareTo(amount.maximumAmount()) > 0) {
+            messages.add("Opening amount is above the maximum fixed-deposit amount");
+        }
+        if (request.tenureMonths() == null) {
+            messages.add("Fixed-deposit opening requires tenureMonths");
+            return null;
+        }
+        String unit = request.tenureUnit() == null ? "MONTH" : request.tenureUnit();
+        List<InterestRateSlabDto> matches = product.interestRateSlabs().stream()
+                .filter(InterestRateSlabDto::active)
+                .filter(s -> unit.equalsIgnoreCase(s.tenureUnit()))
+                .filter(s -> request.tenureMonths() >= s.minimumTenure()
+                        && request.tenureMonths() <= s.maximumTenure())
+                .filter(s -> request.openingAmount().compareTo(s.minimumAmount()) >= 0
+                        && (s.maximumAmount() == null || request.openingAmount().compareTo(s.maximumAmount()) <= 0))
+                .filter(s -> s.customerCategory() == null || s.customerCategory() == CustomerCategory.ANY
+                        || s.customerCategory() == request.customerCategory())
+                .filter(s -> effective(s.effectiveFrom(), s.effectiveTo(), decisionDate))
+                .toList();
+        if (matches.isEmpty()) {
+            messages.add("No active fixed-deposit rate slab matches the requested tenure, amount, and customer category");
+        } else if (matches.size() > 1) {
+            messages.add("Multiple active fixed-deposit rate slabs match the request");
+        }
+        FixedDepositRuleDto fd = product.fixedDepositRule();
+        if (fd != null && !fd.allowedTenureUnits().contains(unit)) {
+            messages.add("Tenure unit is not supported by the fixed-deposit product");
+        }
+        if (fd != null && request.interestPayoutFrequency() != null
+                && !fd.allowedInterestPayoutFrequencies().contains(request.interestPayoutFrequency())) {
+            messages.add("Interest payout frequency is not supported by the fixed-deposit product");
+        }
+        return matches.size() == 1 ? matches.getFirst() : null;
     }
-    private boolean effective(LocalDate from, LocalDate to) { LocalDate today = LocalDate.now(); return !from.isAfter(today) && (to == null || !to.isBefore(today)); }
-    private List<String> baseValidation(ProductResponse product, Category category) { List<String> messages = new ArrayList<>(); if (product.category() != category) messages.add("Product category is not " + category); if (product.status() != Status.ACTIVE) messages.add("Product is not active"); if (!effective(product, LocalDate.now())) messages.add("Product is not effective today"); return messages; }
+    private boolean effective(LocalDate from, LocalDate to) { return effective(from, to, LocalDate.now()); }
+    private boolean effective(LocalDate from, LocalDate to, LocalDate on) { return !from.isAfter(on) && (to == null || !to.isBefore(on)); }
+    private List<String> baseValidation(ProductResponse product, Category category) { return baseValidation(product, category, LocalDate.now()); }
+    private List<String> baseValidation(ProductResponse product, Category category, LocalDate on) { List<String> messages = new ArrayList<>(); if (product.category() != category) messages.add("Product category is not " + category); if (product.status() != Status.ACTIVE) messages.add("Product is not active"); if (!effective(product, on)) messages.add("Product is not effective on the requested date"); return messages; }
     private void validateEligibility(List<EligibilityRuleDto> rules, Integer age, BigDecimal income, CustomerType type, CustomerCategory category, Boolean kyc, List<String> messages) { List<EligibilityRuleDto> matchesType = rules.stream().filter(EligibilityRuleDto::active).filter(rule -> (rule.customerType() == CustomerType.ANY || type == null || rule.customerType() == type) && (rule.customerCategory() == null || rule.customerCategory() == CustomerCategory.ANY || category == null || rule.customerCategory() == category)).toList(); if (matchesType.isEmpty()) { messages.add("No active eligibility rule matches the customer type"); return; } boolean matches = matchesType.stream().anyMatch(rule -> (rule.minimumAge() == null || age != null && age >= rule.minimumAge()) && (rule.maximumAge() == null || age != null && age <= rule.maximumAge()) && (rule.minimumMonthlyIncome() == null || income != null && income.compareTo(rule.minimumMonthlyIncome()) >= 0) && (!rule.kycRequired() || Boolean.TRUE.equals(kyc))); if (!matches) messages.add("Customer does not meet age, income, customer-type, customer-category, or KYC rules"); }
     private void validateAmount(AmountRuleDto amount, List<String> errors) { if (amount == null) return; compare(amount.minimumBalance(), amount.maximumBalance(), "minimumBalance must not exceed maximumBalance", errors); compare(amount.minimumAmount(), amount.maximumAmount(), "minimumAmount must not exceed maximumAmount", errors); compare(amount.minimumTenureMonths(), amount.maximumTenureMonths(), "minimumTenureMonths must not exceed maximumTenureMonths", errors); if (!amount.overdraftAllowed() && positive(amount.overdraftLimit())) errors.add("overdraftLimit must be zero or null when overdraft is not allowed"); }
     private void validateInterest(AbstractInterestPolicy policy, Category category, List<String> errors) { if (policy == null) return; validateDates(policy.getEffectiveFrom(), policy.getEffectiveTo(), "interest policy effectiveTo", errors); compare(policy.getMinimumRate(), policy.getMaximumRate(), "minimumRate must not exceed maximumRate", errors); if (policy.getPricingMode() == PricingMode.FIXED && policy.getAnnualInterestRate() == null) errors.add("FIXED pricing requires annualInterestRate"); if (policy.getPricingMode() == PricingMode.BENCHMARK_PLUS_SPREAD && (policy.getBenchmarkCode() == null || policy.getProductSpread() == null)) errors.add("BENCHMARK_PLUS_SPREAD requires benchmarkCode and productSpread"); if (category == Category.DEPOSIT && policy.getInterestType() != InterestType.CREDIT) errors.add("Deposit interest must use CREDIT interestType"); if (category == Category.CREDIT_CARD && (policy.getInterestType() != InterestType.DEBIT || policy.getInterestCalculationFrequency() != InterestFrequency.DAILY || policy.getInterestPostingFrequency() != InterestPostingFrequency.MONTHLY)) errors.add("Credit-card interest must be DEBIT with DAILY calculation and MONTHLY posting"); }

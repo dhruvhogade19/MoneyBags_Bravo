@@ -26,8 +26,16 @@ public class StubBankingReferenceGateway implements BankingReferenceGateway {
 
     @Override
     public ValidationResult validateCustomerEligibility(String customerId) {
-        boolean eligible = !customerId.toUpperCase().contains("REJECT");
-        return new ValidationResult(eligible, eligible ? "ELIGIBLE" : "NOT_ELIGIBLE",
+        CustomerProfile profile = customerProfile(customerId);
+        return new ValidationResult(profile.eligible(), profile.eligible() ? "ELIGIBLE" : "NOT_ELIGIBLE",
                 null, null, OffsetDateTime.now());
+    }
+
+    @Override
+    public CustomerProfile customerProfile(String customerId) {
+        boolean eligible = !customerId.toUpperCase().contains("REJECT");
+        String category = customerId.toUpperCase().contains("SENIOR") ? "SENIOR_CITIZEN" : "REGULAR";
+        int age = "SENIOR_CITIZEN".equals(category) ? 65 : 30;
+        return new CustomerProfile(eligible, age, "INDIVIDUAL", category, eligible, OffsetDateTime.now());
     }
 }

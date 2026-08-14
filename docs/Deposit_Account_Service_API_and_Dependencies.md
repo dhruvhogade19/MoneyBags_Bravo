@@ -247,7 +247,8 @@ Required request JSON:
 }
 ```
 
-Current implementation rule: `openingAmount` must be exactly `0.00`; opening funding is not supported by this command.
+The validated `openingAmount` is recorded in the account's local balance projection when the account is opened.
+In a production deployment, the corresponding payment or accounting posting must be coordinated by the payment workflow.
 
 Response: `201 Created`, `Location` and `ETag` headers.
 
@@ -1312,7 +1313,7 @@ Response JSON: same `ClosureRequestView` shape as API 5.2.
 
 ## 10. Contract gaps to resolve before production
 
-1. **Product route mismatch.** Current code calls `/api/products/**`; the target cross-service contract uses `/api/v1/products/**` and `/internal/v1/products/**`. Choose one versioned canonical path and update both provider and client.
+1. **Product integration resolved.** Deposit calls the canonical `/internal/v1/products/{productCode}/validate-account-opening` route through Eureka, while Product Master exposes `/api/v1/products/**` and retains `/api/products/**` as a compatibility alias. Product Master returns the resolved FD slab and Deposit snapshots it at booking.
 2. **CIF visibility mismatch.** Current code calls public-looking `/api/v1/cifs/{id}/deposit-creation-details`; the target contract calls `/internal/v1/cifs/{id}/deposit-creation-details`. This should be an authenticated internal route.
 3. **Internal Deposit prefix mismatch.** Payment APIs use `/api/internal/**`, while EOD/peer APIs use `/internal/v1/**`. Standardize internal APIs under `/internal/v1/**` or publish an explicit compatibility period.
 4. **Gateway route gap.** The gateway does not route `/internal/v1/**`. This is acceptable only if EOD and peer services call port `8086` directly through service discovery.
