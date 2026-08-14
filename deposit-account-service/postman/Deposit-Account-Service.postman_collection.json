@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Moneybags Deposit Account Service - Complete API Test",
-    "description": "Run the complete collection in order. Liquibase testdata context provides the stable source and target accounts. Security is disabled by default for local development.",
+    "description": "Run the complete collection in order. It contains assertions for all 41 implemented Deposit Account controller endpoints plus health, seed-data, and workflow verification requests. The Liquibase testdata and postman contexts provide stable CASA and historical fixed-deposit scenarios. Internal /internal/v1 requests call serviceUrl directly because the gateway intentionally does not route them. Security is disabled by default for local development.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -23,7 +23,15 @@
     {"key": "cardReleasePaymentId", "value": ""},
     {"key": "cardReleaseReservationId", "value": ""},
     {"key": "validFrom", "value": ""},
-    {"key": "validTo", "value": ""}
+    {"key": "validTo", "value": ""},
+    {"key": "businessDate", "value": ""},
+    {"key": "fixedDepositId", "value": ""},
+    {"key": "fixedDepositAccountId", "value": ""},
+    {"key": "seedClosureAccountId", "value": "seed-sav-close-001"},
+    {"key": "seedPrematureFixedDepositId", "value": "seed-fd-premature-001"},
+    {"key": "seedMaturingFixedDepositId", "value": "seed-fd-maturity-001"},
+    {"key": "fdClosureRequestId", "value": ""},
+    {"key": "casaClosureRequestId", "value": ""}
   ],
   "item": [
     {
@@ -40,7 +48,10 @@
               "pm.collectionVariables.set('cardCapturePaymentId', 'CARD-CAP-' + runId);",
               "pm.collectionVariables.set('cardReleasePaymentId', 'CARD-REL-' + runId);",
               "pm.collectionVariables.set('validFrom', new Date(Date.now() + 60000).toISOString());",
-              "pm.collectionVariables.set('validTo', new Date(Date.now() + 86400000).toISOString());"
+              "pm.collectionVariables.set('validTo', new Date(Date.now() + 86400000).toISOString());",
+              "const now = new Date();",
+              "const businessDate = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');",
+              "pm.collectionVariables.set('businessDate', businessDate);"
             ]}},
             {"listen": "test", "script": {"exec": [
               "pm.test('Service and database are UP', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('UP'); });"
@@ -265,6 +276,209 @@
           "name": "Verify source balance after payments",
           "event": [{"listen": "test", "script": {"exec": ["pm.test('No blocked funds remain', () => { pm.response.to.have.status(200); pm.expect(Number(pm.response.json().blocked)).to.eql(0); });"]}}],
           "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/{{sourceAccountId}}/balance"}
+        },
+        {
+          "name": "Verify seeded CASA closure candidate",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Seeded CASA closure account is active with zero balance', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.accountId).to.eql(pm.collectionVariables.get('seedClosureAccountId')); pm.expect(body.status).to.eql('ACTIVE'); pm.expect(Number(body.balance.ledger)).to.eql(0); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/{{seedClosureAccountId}}"}
+        },
+        {
+          "name": "Verify seeded premature-closure fixed deposit",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Historical fixed deposit is ready for premature-closure testing', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.fixedDepositId).to.eql(pm.collectionVariables.get('seedPrematureFixedDepositId')); pm.expect(body.status).to.eql('ACTIVE'); pm.expect(Number(body.principal)).to.eql(5000); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits/{{seedPrematureFixedDepositId}}"}
+        },
+        {
+          "name": "Verify seeded maturing fixed deposit",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Maturity seed is due or already processed', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.fixedDepositId).to.eql(pm.collectionVariables.get('seedMaturingFixedDepositId')); pm.expect(['ACTIVE', 'PAID_OUT']).to.include(body.status); pm.expect(body.maturityDate <= pm.collectionVariables.get('businessDate')).to.eql(true); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits/{{seedMaturingFixedDepositId}}"}
+        }
+      ]
+    },
+    {
+      "name": "05 - Fixed deposit APIs",
+      "item": [
+        {
+          "name": "Quote fixed deposit",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Fixed deposit quote returned', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.productCode).to.eql('FD-REG-001'); pm.expect(Number(body.annualInterestRate)).to.be.above(0); pm.expect(Number(body.expectedMaturityAmount)).to.be.above(100); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Correlation-Id", "value": "fd-quote-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits/quotes",
+            "body": {"mode": "raw", "raw": "{\n  \"customerId\": \"CIF-1001\",\n  \"productCode\": \"FD-REG-001\",\n  \"productVersion\": 1,\n  \"principal\": 100,\n  \"currency\": \"INR\",\n  \"tenureValue\": 12,\n  \"tenureUnit\": \"MONTH\",\n  \"interestPayoutFrequency\": \"AT_MATURITY\",\n  \"valueDate\": \"{{businessDate}}\"\n}"}
+          }
+        },
+        {
+          "name": "Book fixed deposit",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Fixed deposit booked and funded', () => { pm.response.to.have.status(201); const body = pm.response.json(); pm.expect(body.status).to.eql('ACTIVE'); pm.expect(Number(body.principal)).to.eql(100); });",
+            "const body = pm.response.json();",
+            "pm.collectionVariables.set('fixedDepositId', body.fixedDepositId);",
+            "pm.collectionVariables.set('fixedDepositAccountId', body.accountId);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "fd-book-{{runId}}"}, {"key": "X-Correlation-Id", "value": "fd-book-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits",
+            "body": {"mode": "raw", "raw": "{\n  \"customerIds\": [\"CIF-1001\"],\n  \"primaryCustomerId\": \"CIF-1001\",\n  \"productCode\": \"FD-REG-001\",\n  \"productVersion\": 1,\n  \"principal\": 100,\n  \"currency\": \"INR\",\n  \"tenureValue\": 12,\n  \"tenureUnit\": \"MONTH\",\n  \"interestPayoutFrequency\": \"AT_MATURITY\",\n  \"fundingAccountId\": \"{{sourceAccountId}}\",\n  \"payoutAccountId\": \"{{sourceAccountId}}\",\n  \"servicingBranchId\": \"BR-001\",\n  \"nominees\": [],\n  \"channel\": \"INTERNET_BANKING\",\n  \"externalReference\": \"FD-POSTMAN-{{runId}}\"\n}"}
+          }
+        },
+        {
+          "name": "Get fixed deposit",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Fixed deposit returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().fixedDepositId).to.eql(pm.collectionVariables.get('fixedDepositId')); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits/{{fixedDepositId}}"}
+        },
+        {
+          "name": "Search fixed deposits",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Booked fixed deposit appears in search', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.content.some(fd => fd.fixedDepositId === pm.collectionVariables.get('fixedDepositId'))).to.eql(true); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits?customerId=CIF-1001&status=ACTIVE&page=0&size=100"}
+        },
+        {
+          "name": "Get fixed deposit projected schedule",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Projected schedule returned', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.fixedDepositId).to.eql(pm.collectionVariables.get('fixedDepositId')); pm.expect(Number(body.projectedMaturityAmount)).to.be.above(Number(body.principal)); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits/{{fixedDepositId}}/projected-schedule"}
+        },
+        {
+          "name": "Get internal fixed deposit snapshot",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Peer-safe fixed deposit snapshot returned', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().fixedDepositId).to.eql(pm.collectionVariables.get('fixedDepositId')); });"]}}],
+          "request": {"method": "GET", "header": [{"key": "X-Correlation-Id", "value": "fd-peer-{{runId}}"}], "url": "{{serviceUrl}}/internal/v1/deposit-accounts/fixed-deposits/{{fixedDepositId}}"}
+        }
+      ]
+    },
+    {
+      "name": "06 - EOD and reconciliation APIs",
+      "item": [
+        {
+          "name": "Run CASA accrual control",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('CASA accrual control completed', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.eodRunId).to.eql('EOD-' + pm.collectionVariables.get('runId')); pm.expect(body.failedCount).to.eql(0); });"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Correlation-Id", "value": "eod-casa-{{runId}}"}],
+            "url": "{{serviceUrl}}/internal/v1/deposit-accounts/eod/accruals",
+            "body": {"mode": "raw", "raw": "{\n  \"eodRunId\": \"EOD-{{runId}}\",\n  \"commandReference\": \"CASA-ACCRUAL-{{runId}}\",\n  \"businessDate\": \"{{businessDate}}\",\n  \"currency\": \"INR\"\n}"}
+          }
+        },
+        {
+          "name": "Get CASA EOD readiness",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('CASA readiness returned', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.service).to.eql('deposit-account-service'); pm.expect(body.blockers).to.be.an('array'); });"]}}],
+          "request": {"method": "GET", "url": "{{serviceUrl}}/internal/v1/deposit-accounts/eod/readiness"}
+        },
+        {
+          "name": "Run fixed deposit accruals",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Fixed deposit accrual completed', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.failures).to.be.an('array').that.is.empty; pm.expect(body.processed).to.be.at.least(1); });"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "fd-eod-accrual-{{runId}}"}, {"key": "X-Correlation-Id", "value": "fd-eod-accrual-{{runId}}"}],
+            "url": "{{serviceUrl}}/internal/v1/deposit-accounts/eod/fixed-deposit-accruals",
+            "body": {"mode": "raw", "raw": "{\n  \"eodRunId\": \"EOD-{{runId}}\",\n  \"businessDate\": \"{{businessDate}}\",\n  \"commandReference\": \"FD-ACCRUAL-{{runId}}\"\n}"}
+          }
+        },
+        {
+          "name": "Get fixed deposit interest accruals",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Fixed deposit accrual history returned', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body).to.be.an('array').that.is.not.empty; pm.expect(body.some(row => row.businessDate === pm.collectionVariables.get('businessDate'))).to.eql(true); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits/{{fixedDepositId}}/interest-accruals"}
+        },
+        {
+          "name": "Run fixed deposit maturities",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Fixed deposit maturity command completed', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.failures).to.be.an('array'); pm.expect(body.processed).to.be.at.least(0); });"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "fd-eod-maturity-{{runId}}"}, {"key": "X-Correlation-Id", "value": "fd-eod-maturity-{{runId}}"}],
+            "url": "{{serviceUrl}}/internal/v1/deposit-accounts/eod/fixed-deposit-maturities",
+            "body": {"mode": "raw", "raw": "{\n  \"eodRunId\": \"EOD-{{runId}}\",\n  \"businessDate\": \"{{businessDate}}\",\n  \"commandReference\": \"FD-MATURITY-{{runId}}\"\n}"}
+          }
+        },
+        {
+          "name": "Get fixed deposit EOD readiness",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Fixed deposit readiness returned', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.pendingFunding).to.be.at.least(0); pm.expect(body.pendingPayouts).to.be.at.least(0); pm.expect(body.blockers).to.be.an('array'); });"]}}],
+          "request": {"method": "GET", "url": "{{serviceUrl}}/internal/v1/deposit-accounts/eod/fixed-deposit-readiness"}
+        }
+      ]
+    },
+    {
+      "name": "07 - Fixed deposit premature closure APIs",
+      "item": [
+        {
+          "name": "Quote premature fixed deposit closure",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('New fixed deposit is correctly ineligible for premature closure', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.fixedDepositId).to.eql(pm.collectionVariables.get('fixedDepositId')); pm.expect(body.eligible).to.eql(false); pm.expect(body.blockers.some(value => value.includes('Minimum holding period'))).to.eql(true); });"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Correlation-Id", "value": "fd-close-quote-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits/{{fixedDepositId}}/premature-closure-quotes",
+            "body": {"mode": "raw", "raw": "{\n  \"customerId\": \"CIF-1001\",\n  \"destinationAccountId\": \"{{sourceAccountId}}\",\n  \"channel\": \"INTERNET_BANKING\",\n  \"requestedClosureDate\": \"{{businessDate}}\"\n}"}
+          }
+        },
+        {
+          "name": "Request premature fixed deposit closure",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Ineligible premature closure is recorded as rejected', () => { pm.response.to.have.status(201); const body = pm.response.json(); pm.expect(body.closureType).to.eql('FD_PREMATURE'); pm.expect(body.status).to.eql('REJECTED'); pm.expect(body.rejectionCode).to.eql('PREMATURE_CLOSURE_CHECK_FAILED'); });",
+            "pm.collectionVariables.set('fdClosureRequestId', pm.response.json().closureRequestId);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "fd-close-{{runId}}"}, {"key": "X-Correlation-Id", "value": "fd-close-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits/{{fixedDepositId}}/premature-closure-requests",
+            "body": {"mode": "raw", "raw": "{\n  \"customerId\": \"CIF-1001\",\n  \"destinationAccountId\": \"{{sourceAccountId}}\",\n  \"channel\": \"INTERNET_BANKING\",\n  \"reasonCode\": \"POSTMAN_EARLY_CLOSE\",\n  \"reasonText\": \"Expected minimum-holding-period rejection\",\n  \"requestedClosureDate\": \"{{businessDate}}\"\n}"}
+          }
+        },
+        {
+          "name": "Get premature fixed deposit closure request",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Premature closure request returned', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.closureRequestId).to.eql(pm.collectionVariables.get('fdClosureRequestId')); pm.expect(body.status).to.eql('REJECTED'); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/fixed-deposits/{{fixedDepositId}}/premature-closure-requests/{{fdClosureRequestId}}"}
+        }
+      ]
+    },
+    {
+      "name": "08 - CASA closure APIs",
+      "item": [
+        {
+          "name": "Quote CASA account closure",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Zero-balance CASA account is eligible for closure', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.eligible).to.eql(true); pm.expect(Number(body.netSettlementAmount)).to.eql(0); });"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "X-Correlation-Id", "value": "casa-close-quote-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/closure-quotes",
+            "body": {"mode": "raw", "raw": "{\n  \"customerId\": \"CIF-POSTMAN-{{runId}}\",\n  \"channel\": \"INTERNET_BANKING\",\n  \"requestedClosureDate\": \"{{businessDate}}\"\n}"}
+          }
+        },
+        {
+          "name": "Close CASA account",
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('CASA account closed', () => { pm.response.to.have.status(201); const body = pm.response.json(); pm.expect(body.closureType).to.eql('CASA_CUSTOMER_REQUEST'); pm.expect(body.status).to.eql('CLOSED'); pm.expect(body.settlement.status).to.eql('COMPLETED'); });",
+            "pm.collectionVariables.set('casaClosureRequestId', pm.response.json().closureRequestId);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "casa-close-{{runId}}"}, {"key": "X-Correlation-Id", "value": "casa-close-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/closure-requests",
+            "body": {"mode": "raw", "raw": "{\n  \"customerId\": \"CIF-POSTMAN-{{runId}}\",\n  \"channel\": \"INTERNET_BANKING\",\n  \"reasonCode\": \"POSTMAN_TEST_COMPLETE\",\n  \"reasonText\": \"Close the Postman-created zero-balance account\",\n  \"requestedClosureDate\": \"{{businessDate}}\"\n}"}
+          }
+        },
+        {
+          "name": "Get CASA closure request",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('CASA closure request returned', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.closureRequestId).to.eql(pm.collectionVariables.get('casaClosureRequestId')); pm.expect(body.checks).to.be.an('array').that.is.not.empty; });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/closure-requests/{{casaClosureRequestId}}"}
+        },
+        {
+          "name": "List CASA closure history",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('CASA closure history contains the request', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.some(row => row.closureRequestId === pm.collectionVariables.get('casaClosureRequestId'))).to.eql(true); });"]}}],
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/closure-requests"}
+        },
+        {
+          "name": "Cancel completed CASA closure - expected conflict",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Completed closure cannot be cancelled', () => { pm.response.to.have.status(409); const body = pm.response.json(); pm.expect(body.code).to.eql('CLOSURE_CANNOT_BE_CANCELLED'); });"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Idempotency-Key", "value": "casa-cancel-{{runId}}"}, {"key": "X-Correlation-Id", "value": "casa-cancel-{{runId}}"}],
+            "url": "{{baseUrl}}/api/deposit-accounts/{{openedAccountId}}/closure-requests/{{casaClosureRequestId}}/cancel",
+            "body": {"mode": "raw", "raw": "{\n  \"reasonCode\": \"POSTMAN_CANCEL_AFTER_COMPLETION\"\n}"}
+          }
+        },
+        {
+          "name": "Get internal closure snapshot",
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Peer closure snapshot returned', () => { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.closureRequestId).to.eql(pm.collectionVariables.get('casaClosureRequestId')); pm.expect(body.accountId).to.eql(pm.collectionVariables.get('openedAccountId')); });"]}}],
+          "request": {"method": "GET", "header": [{"key": "X-Correlation-Id", "value": "closure-peer-{{runId}}"}], "url": "{{serviceUrl}}/internal/v1/deposit-accounts/closures/{{casaClosureRequestId}}"}
         }
       ]
     }

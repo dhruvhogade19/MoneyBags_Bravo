@@ -27,4 +27,5 @@ public interface FundReservationRepository extends JpaRepository<FundReservation
                                                                     @Param("operationType") PaymentOperationType operationType);
 
     List<FundReservation> findTop100ByStatusAndExpiresAtBefore(ReservationStatus status, OffsetDateTime now);
+    long countBySourceAccountIdAndStatus(String accountId, ReservationStatus status);
 }

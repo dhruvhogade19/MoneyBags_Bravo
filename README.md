@@ -10,7 +10,7 @@ Spring Boot implementation of the Moneybags Deposit Account bounded context. The
 | `api-gateway` | 8080 | Routes deposit-account APIs to the service |
 | `deposit-account-service` | 8086 | Savings/current account lifecycle plus payment reservation, settlement and balance projection |
 
-The project intentionally does not include Product Master, CIF, KYC, Payment, Statement or Reconciliation implementations. They are separate bounded contexts. For local development, CIF and Product Master validation is stubbed; production mode calls them through OpenFeign and Eureka.
+The project intentionally does not include Product Master, CIF, KYC, Payment, Statement or Reconciliation implementations. They are separate bounded contexts. For local development, CIF and Product Master validation is stubbed; production mode calls them through Spring RestClient and Eureka.
 
 ## Technology
 
@@ -19,7 +19,7 @@ The project intentionally does not include Product Master, CIF, KYC, Payment, St
 - Spring Data JPA with Oracle JDBC
 - Liquibase Oracle migrations
 - OAuth2 resource-server/JWT support
-- Eureka, Spring Cloud Gateway and OpenFeign
+- Eureka, Spring Cloud Gateway and Spring RestClient
 - OpenAPI/Swagger, Actuator, Prometheus and Resilience4j
 
 Kafka, Docker and Flyway are intentionally not used.
@@ -96,12 +96,7 @@ $env:CIF_URL = "https://cif.internal"
 $env:PRODUCT_URL = "http://localhost:8084"
 ```
 
-When OpenFeign OAuth2 propagation is required, also configure the client registration and enable it:
-
-```powershell
-$env:FEIGN_OAUTH2_ENABLED = "true"
-$env:FEIGN_OAUTH2_CLIENT_REGISTRATION_ID = "moneybags-service-client"
-```
+Spring RestClient propagates the correlation ID for upstream calls. Configure OAuth2 client support separately if upstream endpoints require bearer-token propagation.
 
 Nominee names are encrypted with AES-256-GCM. Configure a 32-byte Base64 key before sending nominee data:
 
@@ -188,3 +183,5 @@ deposit-account-service/src/main/resources/db/changelog/db.changelog-master.yaml
 Never use `ddl-auto=update` against Oracle. Runtime configuration uses `ddl-auto=validate`; all schema changes must be forward Liquibase changesets.
 
 The runnable Postman collection is at `deposit-account-service/postman/Deposit-Account-Service.postman_collection.json`.
+
+The complete current endpoint catalog, request/response JSON templates, service-wise dependencies, and production contract gaps are documented in [`docs/Deposit_Account_Service_API_and_Dependencies.md`](docs/Deposit_Account_Service_API_and_Dependencies.md).

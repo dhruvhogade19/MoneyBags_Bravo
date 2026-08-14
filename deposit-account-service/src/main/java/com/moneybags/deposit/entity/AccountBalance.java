@@ -80,6 +80,22 @@ public class AccountBalance {
         advance(sourceReference);
     }
 
+    public void debit(BigDecimal amount, String sourceReference) {
+        ledgerBalance = ledgerBalance.subtract(amount);
+        availableBalance = availableBalance.subtract(amount);
+        advance(sourceReference);
+    }
+
+    public void creditLedgerOnly(BigDecimal amount, String sourceReference) {
+        ledgerBalance = ledgerBalance.add(amount);
+        advance(sourceReference);
+    }
+
+    public void debitLedgerOnly(BigDecimal amount, String sourceReference) {
+        ledgerBalance = ledgerBalance.subtract(amount);
+        advance(sourceReference);
+    }
+
     private void advance(String sourceReference) {
         projectionVersion++;
         asOf = OffsetDateTime.now();

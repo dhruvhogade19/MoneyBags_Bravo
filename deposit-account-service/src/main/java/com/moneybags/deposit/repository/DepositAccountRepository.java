@@ -7,6 +7,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
@@ -14,8 +16,17 @@ import java.util.Optional;
 public interface DepositAccountRepository extends JpaRepository<DepositAccount, String> {
     boolean existsByAccountNumber(String accountNumber);
 
+    long countByCurrencyCodeAndStatus(String currencyCode, AccountStatus status);
+
+    @Query("select count(distinct r.sourceAccountId) from FundReservation r where r.status = com.moneybags.deposit.domain.DomainTypes.ReservationStatus.ACTIVE")
+    long countAccountsWithActiveReservations();
+
     @EntityGraph(attributePaths = {"holders", "balance"})
     Optional<DepositAccount> findDetailedById(String id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from DepositAccount a where a.id=:id")
+    Optional<DepositAccount> findByIdForUpdate(@Param("id") String id);
 
     @Query(value = "select distinct a from DepositAccount a join a.holders h " +
             "where (:customerId is null or h.customerId = :customerId) " +

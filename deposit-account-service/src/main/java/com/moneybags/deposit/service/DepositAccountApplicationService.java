@@ -9,6 +9,7 @@ import com.moneybags.deposit.dto.AccountResponses.*;
 import com.moneybags.deposit.entity.*;
 import com.moneybags.deposit.exception.ApiException;
 import com.moneybags.deposit.integration.BankingReferenceGateway;
+import com.moneybags.deposit.integration.AccountingBalanceGateway;
 import com.moneybags.deposit.repository.*;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
@@ -33,6 +34,7 @@ public class DepositAccountApplicationService {
     private final IdempotencyRecordRepository idempotencyRepository;
     private final AuditLogRepository auditRepository;
     private final BankingReferenceGateway referenceGateway;
+    private final AccountingBalanceGateway accountingBalanceGateway;
     private final AccountNumberGenerator accountNumberGenerator;
     private final AccountViewMapper viewMapper;
     private final PiiProtector piiProtector;
@@ -47,6 +49,7 @@ public class DepositAccountApplicationService {
                                             IdempotencyRecordRepository idempotencyRepository,
                                             AuditLogRepository auditRepository,
                                             BankingReferenceGateway referenceGateway,
+                                            AccountingBalanceGateway accountingBalanceGateway,
                                             AccountNumberGenerator accountNumberGenerator,
                                             AccountViewMapper viewMapper,
                                             PiiProtector piiProtector,
@@ -60,6 +63,7 @@ public class DepositAccountApplicationService {
         this.idempotencyRepository = idempotencyRepository;
         this.auditRepository = auditRepository;
         this.referenceGateway = referenceGateway;
+        this.accountingBalanceGateway = accountingBalanceGateway;
         this.accountNumberGenerator = accountNumberGenerator;
         this.viewMapper = viewMapper;
         this.piiProtector = piiProtector;
@@ -107,7 +111,8 @@ public class DepositAccountApplicationService {
 
         String accountId = UUID.randomUUID().toString();
         DepositAccount account = new DepositAccount(accountId, accountNumberGenerator.next(), request.productId(),
-                request.productVersion(), validation.productName(), request.currency(), request.servicingBranchId(),
+                request.productVersion(), validation.productName(), ProductSubtype.valueOf(validation.accountType().toUpperCase()),
+                request.currency(), request.servicingBranchId(),
                 request.operatingInstruction(), request.externalReference(), actor);
         for (String customerId : new LinkedHashSet<>(request.customerIds())) {
             if (!customerId.equals(request.primaryCustomerId())) {
@@ -174,6 +179,7 @@ public class DepositAccountApplicationService {
     public AccountDetailView addHolder(String accountId, HolderRequest request, String actor, String correlationId) {
         DepositAccount account = loadDetailed(accountId);
         ensureMutable(account);
+        ensureTransactional(account);
         if (request.role() == HolderRole.PRIMARY) {
             throw new ApiException(HttpStatus.CONFLICT, "PRIMARY_HOLDER_ALREADY_EXISTS",
                     "Use a governed ownership-transfer workflow to replace the primary holder");
@@ -233,6 +239,7 @@ public class DepositAccountApplicationService {
                 "LIMIT_TYPE_MISMATCH", "Path and body limit types must match");
         DepositAccount account = loadDetailed(accountId);
         ensureMutable(account);
+        ensureTransactional(account);
         if (!account.getCurrencyCode().equals(request.currency())) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
                 "CURRENCY_MISMATCH", "Limit currency must match the account currency");
         if (request.effectiveTo() != null && !request.effectiveTo().isAfter(request.effectiveFrom())) {
@@ -256,6 +263,7 @@ public class DepositAccountApplicationService {
     public MandateView addMandate(String accountId, MandateRequest request, String actor, String correlationId) {
         DepositAccount account = loadDetailed(accountId);
         ensureMutable(account);
+        ensureTransactional(account);
         if (request.validTo() != null && !request.validTo().isAfter(request.validFrom())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_MANDATE_DATES", "validTo must be after validFrom");
         }
@@ -275,6 +283,7 @@ public class DepositAccountApplicationService {
     @Transactional
     public void revokeMandate(String accountId, String mandateId, String actor, String correlationId) {
         DepositAccount account = loadDetailed(accountId);
+        ensureTransactional(account);
         ensureMutable(account);
         AccountMandate mandate = mandateRepository.findById(mandateId).filter(m -> m.getAccountId().equals(accountId))
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "MANDATE_NOT_FOUND", "Mandate not found"));
@@ -288,6 +297,11 @@ public class DepositAccountApplicationService {
     public AccountDetailView command(String accountId, String command, StatusCommand request,
                                      Long expectedVersion, String actor, String correlationId) {
         DepositAccount account = loadDetailed(accountId);
+        ensureTransactional(account);
+        if ("request-close".equals(command) || "confirm-close".equals(command)) {
+            throw new ApiException(HttpStatus.CONFLICT, "USE_ACCOUNT_CLOSURE_WORKFLOW",
+                    "Use the dedicated closure quote and closure request APIs");
+        }
         if (expectedVersion != null && account.getVersion() != expectedVersion) {
             throw new ApiException(HttpStatus.PRECONDITION_FAILED, "STALE_ACCOUNT_VERSION",
                     "If-Match does not match the current account version");
@@ -311,8 +325,9 @@ public class DepositAccountApplicationService {
     @Transactional(readOnly = true)
     public AccountEligibilityView internalEligibility(String accountId) {
         DepositAccount account = loadDetailed(accountId);
-        boolean debit = account.getStatus() == AccountStatus.ACTIVE;
-        boolean credit = account.getStatus() == AccountStatus.ACTIVE || account.getStatus() == AccountStatus.BLOCKED;
+        boolean fixedDeposit = account.getProductSubtype() == ProductSubtype.FIXED_DEPOSIT;
+        boolean debit = !fixedDeposit && account.getStatus() == AccountStatus.ACTIVE;
+        boolean credit = !fixedDeposit && (account.getStatus() == AccountStatus.ACTIVE || account.getStatus() == AccountStatus.BLOCKED);
         List<LimitView> limits = limitRepository.findByAccountId(accountId).stream().map(viewMapper::limit).toList();
         return new AccountEligibilityView(accountId, account.getStatus(), debit, credit,
                 account.getCurrencyCode(), limits, OffsetDateTime.now());
@@ -357,7 +372,9 @@ public class DepositAccountApplicationService {
 
     private void assertCanClose(DepositAccount account) {
         AccountBalance b = account.getBalance();
-        if (b == null || b.getLedgerBalance().signum() != 0 || b.getAvailableBalance().signum() != 0
+        AccountingBalanceGateway.AccountBalanceResult authoritative = accountingBalanceGateway.getBalance(account.getId());
+        if (b == null || authoritative.ledgerBalance() == null || authoritative.ledgerBalance().signum() != 0
+                || !account.getCurrencyCode().equals(authoritative.currency()) || b.getAvailableBalance().signum() != 0
                 || b.getBlockedAmount().signum() != 0) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "CLOSURE_CHECK_FAILED",
                     "Account cannot close while balances or holds are non-zero");
@@ -401,6 +418,13 @@ public class DepositAccountApplicationService {
     private void ensureMutable(DepositAccount account) {
         if (account.getStatus() == AccountStatus.CLOSED || account.getStatus() == AccountStatus.CLOSURE_PENDING)
             throw new ApiException(HttpStatus.CONFLICT, "ACCOUNT_NOT_MUTABLE", "Account is closing or closed");
+    }
+
+    private void ensureTransactional(DepositAccount account) {
+        if (account.getProductSubtype() == ProductSubtype.FIXED_DEPOSIT) {
+            throw new ApiException(HttpStatus.CONFLICT, "FIXED_DEPOSIT_OPERATION_NOT_ALLOWED",
+                    "This operation is not available for fixed-deposit accounts");
+        }
     }
 
     private void touch(DepositAccount account, String actor) {

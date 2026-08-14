@@ -2,6 +2,8 @@ package com.moneybags.deposit.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.MDC;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +16,7 @@ import java.util.List;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
     public record FieldError(String field, String message) {}
     public record Problem(String code, String message, int status, String path, String correlationId,
                           OffsetDateTime timestamp, List<FieldError> errors) {}
@@ -38,6 +41,8 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<Problem> unexpected(Exception ex, HttpServletRequest request) {
+        log.error("Unhandled API error for {} (correlationId={})", request.getRequestURI(),
+                MDC.get("correlationId"), ex);
         return response(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
                 "An unexpected error occurred", request, List.of());
     }

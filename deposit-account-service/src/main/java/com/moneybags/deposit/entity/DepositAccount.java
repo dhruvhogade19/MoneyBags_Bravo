@@ -2,6 +2,7 @@ package com.moneybags.deposit.entity;
 
 import com.moneybags.deposit.domain.DomainTypes.AccountStatus;
 import com.moneybags.deposit.domain.DomainTypes.OperatingInstruction;
+import com.moneybags.deposit.domain.DomainTypes.ProductSubtype;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -33,6 +34,10 @@ public class DepositAccount {
 
     @Column(name = "PRODUCT_NAME_SNAPSHOT", length = 120, nullable = false)
     private String productNameSnapshot;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "PRODUCT_SUBTYPE", length = 30, nullable = false)
+    private ProductSubtype productSubtype;
 
     @Column(name = "CURRENCY_CODE", length = 3, columnDefinition = "CHAR(3)", nullable = false)
     private String currencyCode;
@@ -87,11 +92,20 @@ public class DepositAccount {
     public DepositAccount(String id, String accountNumber, String productId, Long productVersion,
                           String productNameSnapshot, String currencyCode, String servicingBranchId,
                           OperatingInstruction operatingInstruction, String externalReference, String actor) {
+        this(id, accountNumber, productId, productVersion, productNameSnapshot, ProductSubtype.SAVINGS,
+                currencyCode, servicingBranchId, operatingInstruction, externalReference, actor);
+    }
+
+    public DepositAccount(String id, String accountNumber, String productId, Long productVersion,
+                          String productNameSnapshot, ProductSubtype productSubtype, String currencyCode,
+                          String servicingBranchId, OperatingInstruction operatingInstruction,
+                          String externalReference, String actor) {
         this.id = id;
         this.accountNumber = accountNumber;
         this.productId = productId;
         this.productVersion = productVersion;
         this.productNameSnapshot = productNameSnapshot;
+        this.productSubtype = productSubtype;
         this.currencyCode = currencyCode;
         this.servicingBranchId = servicingBranchId;
         this.operatingInstruction = operatingInstruction;

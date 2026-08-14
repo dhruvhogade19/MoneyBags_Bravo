@@ -55,7 +55,10 @@ foreach ($service in $services) {
 
 $processes | ConvertTo-Json | Set-Content -LiteralPath $pidFile
 Write-Host "Waiting for services to open their ports..." -ForegroundColor Cyan
-$startupDeadline = (Get-Date).AddSeconds(60)
+# Oracle connectivity, Liquibase and Hibernate schema validation can take more
+# than one minute on the shared database. Avoid reporting a healthy service as
+# NOT STARTED while it is still completing startup validation.
+$startupDeadline = (Get-Date).AddSeconds(180)
 do {
     $waitingFor = @($services | Where-Object {
         $null -eq (Get-NetTCPConnection -State Listen -LocalPort $_.Port -ErrorAction SilentlyContinue |
