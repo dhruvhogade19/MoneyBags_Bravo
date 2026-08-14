@@ -65,16 +65,29 @@ Liquibase change set `005-seed-postman-test-data` creates deterministic local fi
 
 | Account ID | Customer | State | Ledger / available | Intended test use |
 |---|---|---|---:|---|
-| `seed-sav-source-001` | `CIF-1001` | ACTIVE | INR 25,000 | Debit source, reads and internal eligibility |
+| `seed-sav-source-001` | `CIF-1001` | ACTIVE | INR 250,000 | Debit source, FD funding, reads and internal eligibility |
 | `seed-cur-target-001` | `CIF-2001` | ACTIVE | INR 10,000 | Book-transfer credit target |
 | `seed-sav-pending-001` | `CIF-3001` | PENDING_ACTIVATION | INR 0 | Manual activation testing |
 | `seed-sav-blocked-001` | `CIF-4001` | BLOCKED | INR 1,000 | Status filtering and credit-only eligibility |
 | `seed-cur-dormant-001` | `CIF-5001` | DORMANT | INR 500 | Debit/credit rejection example |
+| `seed-sav-close-001` | `CIF-7001` | ACTIVE | INR 0 | Deterministic successful CASA closure candidate |
+
+The dedicated `postman` Liquibase context also creates historical fixed-deposit states that cannot
+be produced immediately through the booking API:
+
+| Fixed deposit ID | Account ID | Customer | Initial state | Intended test use |
+|---|---|---|---|---|
+| `seed-fd-premature-001` | `seed-fd-account-premature-001` | `CIF-1001` | ACTIVE; value date 30 days ago; INR 5,000 | Eligible premature-closure quote and settlement |
+| `seed-fd-maturity-001` | `seed-fd-account-maturity-001` | `CIF-1001` | ACTIVE; matures today; accrual complete; INR 3,000 | Successful EOD maturity payout and closure |
 
 Import `postman/Deposit-Account-Service.postman_collection.json` and run the entire collection in
 order. The first request creates a unique run ID; later requests automatically capture account,
 ETag, mandate and reservation identifiers. No Postman environment is required. The collection uses
 the gateway at `http://localhost:8080` and calls health directly at `http://localhost:8086`.
+
+Local `application.yml` enables both `testdata` and `postman` contexts by default. To request them
+explicitly, start the service with `LIQUIBASE_CONTEXTS=testdata,postman`. Automated integration tests
+use only `testdata`, keeping historical Postman scenarios out of exact-count assertions.
 
 Restart the service after adding the migration so Liquibase installs the fixtures:
 
@@ -83,5 +96,5 @@ Restart the service after adding the migration so Liquibase installs the fixture
 .\run-all.ps1
 ```
 
-For a non-development environment, exclude fixtures by setting `LIQUIBASE_CONTEXTS=schema` before
-starting the service.
+For a non-development environment, exclude all fixtures by setting `LIQUIBASE_CONTEXTS=schema`
+before starting the service.

@@ -1031,8 +1031,7 @@
           "cifId",
           "dateOfBirth",
           "customerType",
-          "kycStatus",
-          "active"
+          "kycStatus"
         ],
         "properties": {
           "cifId": {
@@ -1047,9 +1046,6 @@
           },
           "kycStatus": {
             "type": "string"
-          },
-          "active": {
-            "type": "boolean"
           }
         }
       },

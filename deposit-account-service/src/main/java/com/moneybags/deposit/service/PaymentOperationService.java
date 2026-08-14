@@ -199,6 +199,10 @@ public class PaymentOperationService {
 
     private void validateDebit(AccountBalance balance, String customerId, BigDecimal amount, String currency) {
         DepositAccount account = balance.getAccount();
+        if (account.getProductSubtype() == ProductSubtype.FIXED_DEPOSIT) {
+            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "FIXED_DEPOSIT_DEBIT_NOT_ALLOWED",
+                    "Fixed deposits cannot be used as ordinary payment source accounts");
+        }
         if (account.getStatus() != AccountStatus.ACTIVE) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "DEBIT_NOT_ALLOWED", "Source account is not active");
         }
@@ -214,6 +218,10 @@ public class PaymentOperationService {
     }
 
     private void validateCredit(AccountBalance balance, String currency) {
+        if (balance.getAccount().getProductSubtype() == ProductSubtype.FIXED_DEPOSIT) {
+            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "FIXED_DEPOSIT_CREDIT_NOT_ALLOWED",
+                    "Fixed deposits accept credits only through their funding workflow");
+        }
         AccountStatus status = balance.getAccount().getStatus();
         if (status != AccountStatus.ACTIVE && status != AccountStatus.BLOCKED) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "CREDIT_NOT_ALLOWED",

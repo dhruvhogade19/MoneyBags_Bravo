@@ -2,7 +2,21 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $logDir = Join-Path $projectRoot "logs"
 $pidFile = Join-Path $logDir "moneybags-pids.json"
+$envFile = Join-Path $projectRoot ".env"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+if (Test-Path -LiteralPath $envFile) {
+    Get-Content -LiteralPath $envFile | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#")) {
+            $parts = $line -split "=", 2
+            if ($parts.Count -eq 2 -and -not [string]::IsNullOrWhiteSpace($parts[0])) {
+                [Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim(), "Process")
+            }
+        }
+    }
+    Write-Host "Loaded local configuration from .env" -ForegroundColor Cyan
+}
 
 $java25 = Get-ChildItem "C:\Program Files\Java" -Directory -Filter "jdk-25*" -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending | Select-Object -First 1
@@ -56,7 +70,10 @@ foreach ($service in $services) {
 
 $processes | ConvertTo-Json | Set-Content -LiteralPath $pidFile
 Write-Host "Waiting for services to open their ports..." -ForegroundColor Cyan
-$startupDeadline = (Get-Date).AddSeconds(60)
+# Oracle connectivity, Liquibase and Hibernate schema validation can take more
+# than one minute on the shared database. Avoid reporting a healthy service as
+# NOT STARTED while it is still completing startup validation.
+$startupDeadline = (Get-Date).AddSeconds(180)
 do {
     $waitingFor = @($services | Where-Object {
         $null -eq (Get-NetTCPConnection -State Listen -LocalPort $_.Port -ErrorAction SilentlyContinue |
