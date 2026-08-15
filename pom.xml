@@ -48,5 +48,6 @@
         <module>payments-service</module>
         <module>cif-service</module>
         <module>accounting-service</module>
+        <module>bill-generation-service</module>
     </modules>
 </project>
