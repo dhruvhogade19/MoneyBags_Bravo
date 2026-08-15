@@ -2,9 +2,9 @@ spring:
   application:
     name: NOTIFICATION-SERVICE
   datasource:
-    url: jdbc:oracle:thin:@//ofss-mum-1212.snbomprshared1.gbucdsint02bom.oraclevcn.com:1521/PDB1
-    username: BRAVO
-    password: Bravo@123
+    url:
+    username:
+    password:
     driver-class-name: oracle.jdbc.OracleDriver
   jpa:
     hibernate:

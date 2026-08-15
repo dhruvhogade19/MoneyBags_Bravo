@@ -3,9 +3,9 @@ spring:
     name: cif-service
 
   datasource:
-    url: jdbc:oracle:thin:@//ofss-mum-1212.snbomprshared1.gbucdsint02bom.oraclevcn.com:1521/PDB1
-    username: BRAVO
-    password: BRAVO@123
+    url:
+    username:
+    password:
     driver-class-name: oracle.jdbc.OracleDriver
 
   liquibase:
