@@ -51,6 +51,23 @@ class DepositAccountControllerIntegrationTest {
     }
 
     @Test
+    void eodEndpointsAreReplaySafeAndReportReadiness() throws Exception {
+        String request = "{\"eodRunId\":\"EOD-2026-08-13-001\",\"commandReference\":\"deposit-accrual-2026-08-13\",\"businessDate\":\"2026-08-13\",\"currency\":\"INR\"}";
+        mockMvc.perform(post("/internal/v1/deposit-accounts/eod/accruals")
+                        .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.commandReference").value("deposit-accrual-2026-08-13"))
+                .andExpect(jsonPath("$.totalAmount").value(0));
+        mockMvc.perform(post("/internal/v1/deposit-accounts/eod/accruals")
+                        .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.commandReference").value("deposit-accrual-2026-08-13"));
+        mockMvc.perform(get("/internal/v1/deposit-accounts/eod/readiness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.service").value("deposit-account-service"));
+    }
+
+    @Test
     void swaggerOpenApiDefinitionLoads() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())

@@ -72,3 +72,39 @@ databaseChangeLog:
             path: db/changelog/changes/005-seed-postman-test-data.sql
             splitStatements: true
             stripComments: true
+
+  - changeSet:
+      id: 006-add-fixed-deposit
+      author: moneybags
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/006-add-fixed-deposit.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 007-add-account-closure
+      author: moneybags
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/007-add-account-closure.sql
+            splitStatements: true
+            stripComments: true
+
+  # Complete deterministic data for the expanded Postman collection. This is
+  # deliberately after the fixed-deposit and closure schema changes.
+  - changeSet:
+      id: 008-seed-complete-postman-test-data
+      author: moneybags
+      context: postman
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: FIXED_DEPOSIT
+        - tableExists:
+            tableName: ACCOUNT_CLOSURE_REQUEST
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/008-seed-complete-postman-test-data.sql
+            splitStatements: true
+            stripComments: true

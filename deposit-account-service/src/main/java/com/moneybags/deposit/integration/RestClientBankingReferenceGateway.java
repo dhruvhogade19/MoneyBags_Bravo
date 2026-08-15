@@ -1,11 +1,11 @@
 package com.moneybags.deposit.integration;
 
 import com.moneybags.deposit.exception.ApiException;
-import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -14,11 +14,11 @@ import java.time.Period;
 
 @Component
 @ConditionalOnProperty(name = "moneybags.deposit.stub-upstream-clients", havingValue = "false")
-public class FeignBankingReferenceGateway implements BankingReferenceGateway {
+public class RestClientBankingReferenceGateway implements BankingReferenceGateway {
     private final CifClient cifClient;
     private final ProductMasterClient productClient;
 
-    public FeignBankingReferenceGateway(CifClient cifClient, ProductMasterClient productClient) {
+    public RestClientBankingReferenceGateway(CifClient cifClient, ProductMasterClient productClient) {
         this.cifClient = cifClient;
         this.productClient = productClient;
     }
@@ -34,13 +34,13 @@ public class FeignBankingReferenceGateway implements BankingReferenceGateway {
                     new ProductMasterClient.AccountOpeningValidationRequest(openingAmount,
                             age(customer.dateOfBirth()), customer.customerType(), customer.kycCompleted()));
             boolean versionMatches = product.version() == null || product.version().equals(productVersion);
-            boolean eligible = customer.active() && customer.kycCompleted() && product.active()
+            boolean eligible = customer.kycCompleted() && product.active()
                     && product.supportedDepositType() && versionMatches
                     && currency.equals(product.currencyCode()) && rules != null && rules.eligible();
             String code = eligible ? "ELIGIBLE" : product.supportedDepositType()
                     ? "REFERENCE_VALIDATION_FAILED" : "UNSUPPORTED_ACCOUNT_TYPE";
-            return new ValidationResult(eligible, code, product.productName(), product.accountType(), OffsetDateTime.now());
-        } catch (FeignException ex) {
+            return new ValidationResult(eligible, code, product.productName(), product.resolvedSubtype(), OffsetDateTime.now());
+        } catch (RestClientException ex) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE",
                     "CIF or Product Master is unavailable");
         }
@@ -51,10 +51,10 @@ public class FeignBankingReferenceGateway implements BankingReferenceGateway {
     public ValidationResult validateCustomerEligibility(String customerId) {
         try {
             CifClient.DepositCreationDetails customer = cifClient.depositCreationDetails(customerId);
-            boolean eligible = customer.active() && customer.kycCompleted();
+            boolean eligible = customer.kycCompleted();
             return new ValidationResult(eligible, eligible ? "ELIGIBLE" : "CUSTOMER_OR_KYC_NOT_ELIGIBLE",
                     null, null, OffsetDateTime.now());
-        } catch (FeignException ex) {
+        } catch (RestClientException ex) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE",
                     "CIF status is unavailable");
         }

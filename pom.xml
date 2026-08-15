@@ -42,5 +42,6 @@
         <module>api-gateway</module>
         <module>deposit-account-service</module>
         <module>product-master-service</module>
+        <module>bill-generation-service</module>
     </modules>
 </project>

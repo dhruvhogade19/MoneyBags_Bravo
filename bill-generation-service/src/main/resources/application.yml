@@ -2,12 +2,14 @@ server:
   port: 8087
   shutdown: graceful
 spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: bill-generation-service
   datasource:
-    url: ${DB_URL:jdbc:oracle:thin:@//ofss-mum-1212.snbomprshared1.gbucdsint02bom.oraclevcn.com:1521/PDB1}
-    username: ${DB_USERNAME:BRAVO}
-    password: ${DB_PASSWORD:Bravo@123}
+    url: ${MONEYBAGS_DB_URL:${DB_URL:jdbc:oracle:thin:@//ofss-mum-1212.snbomprshared1.gbucdsint02bom.oraclevcn.com:1521/PDB1}}
+    username: ${MONEYBAGS_DB_USERNAME:${DB_USERNAME:BRAVO}}
+    password: ${MONEYBAGS_DB_PASSWORD:${DB_PASSWORD:moneybags}}
     driver-class-name: oracle.jdbc.OracleDriver
   jpa:
     open-in-view: false
@@ -27,6 +29,7 @@ eureka:
 moneybags:
   security.enabled: ${SECURITY_ENABLED:false}
   billing.stub-upstream-clients: ${STUB_UPSTREAM_CLIENTS:true}
+  billing.stub-notification-client: ${STUB_NOTIFICATION_CLIENT:${STUB_UPSTREAM_CLIENTS:true}}
 springdoc:
   swagger-ui.path: /swagger-ui.html
 management:
