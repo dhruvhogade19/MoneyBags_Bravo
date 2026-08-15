@@ -2,8 +2,8 @@
   "contract": {
     "status": "PASS",
     "serviceCount": 12,
-    "endpointCount": 128,
-    "schemaCount": 132,
+    "endpointCount": 133,
+    "schemaCount": 139,
     "resolvedDependencyCallCount": 39,
     "errors": [],
     "warnings": []
