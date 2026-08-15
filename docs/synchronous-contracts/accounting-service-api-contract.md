@@ -1,6 +1,6 @@
 # Accounting Service - API Contract and Implementation Scope
 
-Contract revision: 2.3  
+Contract revision: 2.4
 Technology baseline: Java 25, Spring Boot 4.1.0, Spring Cloud 2025.1.2, Oracle, Liquibase, Maven  
 Communication model: synchronous REST for the current release
 
@@ -114,8 +114,12 @@ Every mutable API requires:
 ```http
 Idempotency-Key: stable-command-key
 X-Correlation-Id: end-to-end-trace-id
-Authorization: Bearer <service-or-user-token>
 ```
+
+For the current local integration phase, `SECURITY_ENABLED=false` and callers do not need an
+`Authorization` header. JWT authentication remains implemented behind the feature flag. When
+Identity/JWK and scoped service-token support are available, production enables
+`SECURITY_ENABLED=true` and requires `Authorization: Bearer <service-or-user-token>`.
 
 Administrative concurrent updates also require:
 
@@ -139,14 +143,14 @@ Idempotency behaviour:
 
 | Consumer | Method and API | Purpose |
 |---|---|---|
-| Payments | `POST /internal/v1/payment-postings/settlements` | Post the Accounting leg for a book transfer, credit-card repayment, or future merchant payment. |
+| Payments | `POST /internal/v1/payment-postings/settlements` | Post the Accounting leg for a book transfer, credit-card repayment, or merchant payment. |
 | Payments | `POST /internal/v1/payment-postings/refunds` | Post a full or partial refund derived from an original journal. |
 | Payments | `GET /internal/v1/payment-postings/by-reference/{externalReference}` | Resolve a posting outcome after a timeout. |
 | Payments | `POST /internal/v1/journals/{journalNumber}/reversals` | Create an immutable opposite journal when downstream settlement fails. |
 
 Despite the existing endpoint name `settlements`, Payments calls it while the payment is in `PENDING_ACCOUNTING`. Payments may assign `SETTLED` only after Accounting posts the journal and all required Deposit/Credit Card projections succeed.
 
-#### Merchant-payment integration gap - high priority
+#### Merchant-payment rule - implemented
 
 The Payments service also requires:
 
@@ -158,18 +162,20 @@ Expected logical posting:
 
 ```text
 Debit  CREDIT_CARD_RECEIVABLE / source card account
-Credit MERCHANT_PAYABLE or SETTLEMENT_PAYABLE / merchant
+Credit MERCHANT_PAYABLE / merchant
 ```
 
-Before this payment type is enabled, Accounting and Payments must agree on:
+The approved Accounting configuration is:
 
-- The exact credit GL account: `MERCHANT_PAYABLE` or `SETTLEMENT_PAYABLE`.
-- A stable required `merchantId` and its maximum length/format.
-- The merchant subledger mapping code.
-- Accounting rule code and initial version.
-- Whether merchant settlement is immediate or Accounting only creates a payable awaiting later settlement.
+- Debit mapping: `CARD_RECEIVABLE`, resolving to `CREDIT_CARD_RECEIVABLE`.
+- Credit mapping: `MERCHANT_PAYABLE`, resolving to `MERCHANT_PAYABLE`.
+- Required merchant identifier: `destination.merchantId`, maximum 100 characters.
+- Rule code: `CREDIT_CARD_MERCHANT_PAYMENT_PRINCIPAL`.
+- Rule version: `1`.
+- Settlement timing: the merchant-payment journal creates a payable. It does not perform immediate merchant settlement.
 
-The posting endpoint and request shape can already support this type, but the integration is not complete until those accounting decisions, mappings, and rules are configured. This gap is high priority because it blocks real merchant-payment integration.
+Payments must send the source card account in `source.accountId` and the merchant in
+`destination.merchantId`. `destination.accountId` is not a substitute for the merchant field.
 
 #### Refund boundary - medium/future priority
 
@@ -473,7 +479,7 @@ Accounting returns:
 |---|---|---|
 | Book transfer | `CUSTOMER_DEPOSIT_LIABILITY`, source account | `CUSTOMER_DEPOSIT_LIABILITY`, destination account |
 | Credit-card repayment | `CUSTOMER_DEPOSIT_LIABILITY`, source deposit | `CREDIT_CARD_RECEIVABLE`, card account |
-| Credit-card merchant payment | `CREDIT_CARD_RECEIVABLE`, source card account | Pending decision: `MERCHANT_PAYABLE` or `SETTLEMENT_PAYABLE`, merchant subledger |
+| Credit-card merchant payment | `CREDIT_CARD_RECEIVABLE`, source card account | `MERCHANT_PAYABLE`, merchant subledger |
 | Bill interest | `CREDIT_CARD_RECEIVABLE`, card account | `INTEREST_INCOME` |
 | Bill fee or penalty | `CREDIT_CARD_RECEIVABLE`, card account | `FEE_INCOME` |
 | Bill tax | `CREDIT_CARD_RECEIVABLE`, card account | `TAX_PAYABLE` |
@@ -485,7 +491,7 @@ Accounting returns:
 | FD premature closure | Component-based rules for principal, adjusted interest, penalty, and tax | Net amount to `CUSTOMER_DEPOSIT_LIABILITY`, payout account |
 | Reversal | Opposite of each original journal line | Opposite of each original journal line |
 
-The merchant-payment row is a required unresolved configuration decision. It must not be activated until the payable/settlement semantics and merchant mapping are approved.
+The merchant-payment rule is active for INR and creates a merchant payable for later settlement.
 
 ## Oracle schema and tables
 
@@ -778,10 +784,11 @@ Accounting will post:
 
 ```text
 Debit  CREDIT_CARD_RECEIVABLE / CC-5001       INR 2,000
-Credit <APPROVED_MERCHANT_PAYABLE_GL> / MERCHANT-9001  INR 2,000
+Credit MERCHANT_PAYABLE / MERCHANT-9001              INR 2,000
 ```
 
-This request must remain disabled until the team approves the exact merchant payable GL, mapping code, rule version, required merchant identifier, and settlement timing.
+The returned journal records rule `CREDIT_CARD_MERCHANT_PAYMENT_PRINCIPAL`, version `1`. Payments
+may continue its card hold/capture workflow after the journal is posted.
 
 ## Example 7 - Deposit account opening
 
@@ -976,7 +983,7 @@ EOD freezes cutoff and drains Payments
 5. Implement account lifecycle registration, Accounting clearance, and closed-account posting protection.
 6. Implement journal, balance, and ledger-entry inquiries.
 7. Add gateway routes for `/api/v1/**` only.
-8. Add security, validation, correlation IDs, problem details, Actuator, and metrics.
+8. Keep local integration unauthenticated; enable scoped JWT security after Identity/JWK support is available.
 9. Add unit, integration, idempotency, lifecycle-race, concurrency, and Liquibase tests.
 
 ### Release 2 - EOD controls
@@ -990,7 +997,7 @@ EOD freezes cutoff and drains Payments
 
 - Payments sends `paymentType`, typed source/destination references, amount, currency, occurrence time, and business date.
 - Payments stores the returned `journalNumber` and does not mark `SETTLED` before all projections succeed.
-- `CREDIT_CARD_MERCHANT_PAYMENT` remains disabled until its merchant payable GL, mapping, merchant identifier, rule version, and settlement timing are approved.
+- `CREDIT_CARD_MERCHANT_PAYMENT` sends the merchant in `destination.merchantId` and posts to `MERCHANT_PAYABLE` using rule version `1`.
 - A successful Accounting refund reverses only the Accounting effect; Payments coordinates Deposit/Card operational restoration.
 - Bill Generation calls Accounting's `/internal/v1/bill-postings` endpoint and never reposts Payments activity.
 - Deposit Account owns FD orchestration and submits typed FD financial facts with unique posting references.
