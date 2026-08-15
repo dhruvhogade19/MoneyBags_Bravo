@@ -47,5 +47,6 @@
         <module>notification-service</module>
         <module>payments-service</module>
         <module>cif-service</module>
+        <module>accounting-service</module>
     </modules>
 </project>
