@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-add-age-to-cifs
+      author: bhavansh
+
+      changes:
+        - addColumn:
+            tableName: cifs
+            columns:
+              - column:
+                  name: age
+                  type: NUMBER(3)
+                  constraints:
+                    nullable: false
+
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE cifs
+              ADD CONSTRAINT chk_cifs_age
+              CHECK (age >= 0);

@@ -1575,11 +1575,27 @@
           "customerType": {
             "type": "string"
           },
+          "customerCategory": {
+            "type": "string"
+          },
+          "tenureMonths": {
+            "type": "integer"
+          },
+          "tenureUnit": {
+            "type": "string"
+          },
+          "interestPayoutFrequency": {
+            "type": "string"
+          },
           "kycVerified": {
             "type": "boolean"
           },
           "productVersion": {
             "type": "integer"
+          },
+          "valueDate": {
+            "type": "string",
+            "format": "date"
           }
         }
       },
@@ -1711,6 +1727,36 @@
           },
           "appliedRuleVersion": {
             "type": "integer"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "productVersion": {
+            "type": "integer"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "subtype": {
+            "type": "string"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "applicableInterestRule": {
+            "type": "object"
+          },
+          "applicableAmountRules": {
+            "type": "object"
+          },
+          "applicableFixedDepositRule": {
+            "type": "object"
+          },
+          "applicableInterestRateSlab": {
+            "type": "object"
           }
         }
       },

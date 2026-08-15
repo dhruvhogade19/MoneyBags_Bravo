@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:notification;MODE=Oracle;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=FALSE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+eureka:
+  client:
+    enabled: false

@@ -10,7 +10,9 @@ import java.time.LocalDate;
 @ConditionalOnProperty(name="moneybags.deposit.stub-upstream-clients", havingValue="true", matchIfMissing=true)
 public class StubFixedDepositProductGateway implements FixedDepositProductGateway {
     @Override public ProductTerms resolve(String code, Long version, BigDecimal principal, String currency,
-                                          int tenure, TenureUnit unit, InterestPayoutFrequency payout, LocalDate valueDate) {
+                                          int tenure, TenureUnit unit, InterestPayoutFrequency payout, LocalDate valueDate,
+                                          Integer customerAge, String customerType, String customerCategory,
+                                          boolean kycVerified) {
         BigDecimal rate = tenure >= 12 ? new BigDecimal("6.75000000") : new BigDecimal("5.50000000");
         return new ProductTerms(code, version, code.replace('-', ' '), "STUB-"+tenure+unit,
                 "V1", rate, "COMPOUND_INTEREST", CompoundingFrequency.QUARTERLY, payout,

@@ -1,0 +1,98 @@
+{
+  "info": {
+    "_postman_id": "4a199ff0-10b1-4ac2-930e-0c56bd5f42ae",
+    "name": "Moneybags - Notification Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "notificationServiceUrl", "value": "http://localhost:8090" },
+    { "key": "cifId", "value": "101" },
+    { "key": "notificationId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Create payment-success notification",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "payment-PAY-10045-success" },
+          { "key": "X-Correlation-ID", "value": "postman-payment-10045" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cifId\": {{cifId}},\n  \"notificationType\": \"PAYMENT_SUCCESS\",\n  \"sourceReference\": \"PAY-10045\",\n  \"templateVariables\": {\n    \"paymentType\": \"credit card\",\n    \"amount\": \"1500.00\",\n    \"currency\": \"INR\",\n    \"transactionDate\": \"2026-08-13\",\n    \"reference\": \"PAY-10045\"\n  }\n}"
+        },
+        "url": "{{notificationServiceUrl}}/internal/v1/notifications"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Notification is created', function () { pm.expect(pm.response.code).to.be.oneOf([201, 200]); });",
+            "const response = pm.response.json();",
+            "pm.collectionVariables.set('notificationId', response.notificationId);",
+            "pm.test('The notification belongs to the requested customer', function () { pm.expect(response.cifId).to.eql(Number(pm.collectionVariables.get('cifId'))); });"
+          ],
+          "type": "text/javascript"
+        }
+      }]
+    },
+    {
+      "name": "Replay the same notification",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "payment-PAY-10045-success" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cifId\": {{cifId}},\n  \"notificationType\": \"PAYMENT_SUCCESS\",\n  \"sourceReference\": \"PAY-10045\",\n  \"templateVariables\": {\n    \"paymentType\": \"credit card\",\n    \"amount\": \"1500.00\",\n    \"currency\": \"INR\",\n    \"transactionDate\": \"2026-08-13\",\n    \"reference\": \"PAY-10045\"\n  }\n}"
+        },
+        "url": "{{notificationServiceUrl}}/internal/v1/notifications"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": ["pm.test('The request is replayed without a second delivery', function () { pm.response.to.have.status(200); });"], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "Get notification history",
+      "request": {
+        "method": "GET",
+        "url": "{{notificationServiceUrl}}/api/notifications?cifId={{cifId}}&page=0&size=20"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": ["pm.test('History is returned', function () { pm.response.to.have.status(200); });"], "type": "text/javascript" }
+      }]
+    },
+    {
+      "name": "Get notification by ID",
+      "request": {
+        "method": "GET",
+        "url": "{{notificationServiceUrl}}/api/notifications/{{notificationId}}"
+      }
+    },
+    {
+      "name": "Idempotency conflict example",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "payment-PAY-10045-success" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cifId\": {{cifId}},\n  \"notificationType\": \"PAYMENT_SUCCESS\",\n  \"sourceReference\": \"PAY-10045\",\n  \"templateVariables\": {\n    \"paymentType\": \"credit card\",\n    \"amount\": \"1600.00\",\n    \"currency\": \"INR\",\n    \"transactionDate\": \"2026-08-13\",\n    \"reference\": \"PAY-10045\"\n  }\n}"
+        },
+        "url": "{{notificationServiceUrl}}/internal/v1/notifications"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "exec": ["pm.test('Changed content with the same key is rejected', function () { pm.response.to.have.status(409); });"], "type": "text/javascript" }
+      }]
+    }
+  ]
+}

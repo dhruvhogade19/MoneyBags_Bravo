@@ -1,6 +1,7 @@
 package com.moneybags.productmaster.api;
 
 import com.moneybags.productmaster.domain.Enums.*;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -149,9 +150,12 @@ public final class ProductDtos {
 
     public record AccountOpeningValidationRequest(
             @NotNull @DecimalMin("0.0") BigDecimal openingAmount,
+            @Pattern(regexp = "[A-Z]{3}") String currency,
             @Min(0) Integer age, CustomerType customerType, CustomerCategory customerCategory,
             @Min(1) Integer tenureMonths, String tenureUnit,
-            InterestPostingFrequency interestPayoutFrequency, Boolean kycCompleted) {}
+            InterestPostingFrequency interestPayoutFrequency,
+            @JsonAlias("kycCompleted") Boolean kycVerified,
+            @Positive Long productVersion, LocalDate valueDate) {}
 
     public record CreditCardApplicationValidationRequest(
             @NotNull @DecimalMin("0.0") BigDecimal requestedCreditLimit,
@@ -160,7 +164,10 @@ public final class ProductDtos {
 
     public record ValidationResponse(
             boolean eligible, List<String> validationMessages, List<FeeDto> applicableFees,
-            InterestRuleDto applicableInterestRule, AmountRuleDto applicableAmountRules) {}
+            InterestRuleDto applicableInterestRule, AmountRuleDto applicableAmountRules,
+            String productCode, Long productVersion, Long appliedRuleVersion, String productName, Category category,
+            Subtype subtype, String currencyCode, FixedDepositRuleDto applicableFixedDepositRule,
+            InterestRateSlabDto applicableInterestRateSlab) {}
 
     public record CreditCardValidationResponse(
             boolean eligible, List<String> validationMessages, List<FeeDto> applicableFees,

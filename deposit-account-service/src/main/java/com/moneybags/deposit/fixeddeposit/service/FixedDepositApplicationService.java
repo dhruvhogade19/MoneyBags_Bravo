@@ -30,7 +30,7 @@ public class FixedDepositApplicationService {
     private final AccountNomineeRepository nomineeRepository; private final AccountStatusHistoryRepository historyRepository;
     private final AuditLogRepository auditRepository; private final BankingReferenceGateway customers;
     private final FixedDepositProductGateway products; private final FixedDepositInterestCalculator calculator;
-    private final AccountNumberGenerator numberGenerator; private final PiiProtector pii;
+    private final AccountNumberGenerator numberGenerator; private final PiiProtector pii; private final NotificationOutboxService notificationOutbox;
 
     public FixedDepositApplicationService(FixedDepositRepository fdRepository, FixedDepositRateSnapshotRepository snapshotRepository,
         FixedDepositInterestAccrualRepository accrualRepository, DepositAccountRepository accountRepository,
@@ -38,20 +38,21 @@ public class FixedDepositApplicationService {
         FundReservationRepository reservationRepository,
         AccountNomineeRepository nomineeRepository, AccountStatusHistoryRepository historyRepository, AuditLogRepository auditRepository,
         BankingReferenceGateway customers, FixedDepositProductGateway products, FixedDepositInterestCalculator calculator,
-        AccountNumberGenerator numberGenerator, PiiProtector pii) {
+        AccountNumberGenerator numberGenerator, PiiProtector pii, NotificationOutboxService notificationOutbox) {
         this.fdRepository=fdRepository; this.snapshotRepository=snapshotRepository; this.accrualRepository=accrualRepository;
         this.accountRepository=accountRepository; this.balanceRepository=balanceRepository; this.transactionRepository=transactionRepository;
         this.reservationRepository=reservationRepository;
         this.nomineeRepository=nomineeRepository; this.historyRepository=historyRepository; this.auditRepository=auditRepository;
-        this.customers=customers; this.products=products; this.calculator=calculator; this.numberGenerator=numberGenerator; this.pii=pii;
+        this.customers=customers; this.products=products; this.calculator=calculator; this.numberGenerator=numberGenerator; this.pii=pii; this.notificationOutbox=notificationOutbox;
     }
 
     @Transactional
     public FixedDepositView book(BookingRequest r, String operationReference, String actor, String correlationId) {
-        validateCustomers(r);
+        var primaryCustomer=validateCustomers(r);
         LocalDate valueDate=LocalDate.now();
         var terms=products.resolve(r.productCode(),r.productVersion(),r.principal(),r.currency(),r.tenureValue(),
-                r.tenureUnit(),r.interestPayoutFrequency(),valueDate);
+                r.tenureUnit(),r.interestPayoutFrequency(),valueDate,primaryCustomer.age(),
+                primaryCustomer.customerType(),primaryCustomer.customerCategory(),primaryCustomer.kycVerified());
         var calculation=calculator.calculate(r.principal(),terms.annualRate(),valueDate,r.tenureValue(),r.tenureUnit(),terms.compoundingFrequency());
         AccountBalance source=lockEligibleLinkedAccount(r.fundingAccountId(),r.primaryCustomerId(),r.currency(),true);
         lockEligibleLinkedAccount(r.payoutAccountId(),r.primaryCustomerId(),r.currency(),false);
@@ -96,6 +97,8 @@ public class FixedDepositApplicationService {
                 AccountStatus.ACTIVE,"FD_FUNDED",null,actor,"USER",correlationId));
         auditRepository.save(new AuditLog(UUID.randomUUID().toString(),fdId,"BOOK_FIXED_DEPOSIT","SUCCESS",actor,"USER",
                 "FD_FUNDED",null,Hashing.sha256(fdId+r.principal()),correlationId));
+        notificationOutbox.enqueue(r.primaryCustomerId(), "DEPOSIT_ACCOUNT_CREATED", accountId,
+                "deposit-account-" + accountId + "-created", Map.of("accountType", "Fixed Deposit", "accountId", accountId));
         return view(fd);
     }
 
@@ -109,15 +112,21 @@ public class FixedDepositApplicationService {
                 f.getPrincipal(),f.getBookedAnnualRate(),f.getExpectedInterest(),f.getExpectedMaturityAmount(),f.getPayoutFrequency());
     }
 
-    private void validateCustomers(BookingRequest r){
+    private BankingReferenceGateway.CustomerProfile validateCustomers(BookingRequest r){
         if(!r.customerIds().contains(r.primaryCustomerId())||new HashSet<>(r.customerIds()).size()!=r.customerIds().size())
             throw new ApiException(HttpStatus.BAD_REQUEST,"INVALID_HOLDERS","Primary holder must be present and holders must be unique");
-        for(String id:r.customerIds()) if(!customers.validateCustomerEligibility(id).eligible())
-            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,"CUSTOMER_NOT_ELIGIBLE","A holder is not eligible");
+        BankingReferenceGateway.CustomerProfile primary=null;
+        for(String id:r.customerIds()) {
+            var customer=customers.customerProfile(id);
+            if(!customer.eligible())
+                throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,"CUSTOMER_NOT_ELIGIBLE","A holder is not eligible");
+            if(id.equals(r.primaryCustomerId())) primary=customer;
+        }
         if(r.nominees()!=null&&!r.nominees().isEmpty()){
             BigDecimal total=r.nominees().stream().map(n->n.allocationPercentage()).reduce(BigDecimal.ZERO,BigDecimal::add);
             if(total.compareTo(new BigDecimal("100.00"))!=0) throw new ApiException(HttpStatus.BAD_REQUEST,"INVALID_NOMINEE_ALLOCATION","Nominee allocations must total 100 percent");
         }
+        return primary;
     }
     private AccountBalance lockEligibleLinkedAccount(String accountId,String customerId,String currency,boolean funding){
         AccountBalance balance=balanceRepository.findByAccountIdForUpdate(accountId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"LINKED_ACCOUNT_NOT_FOUND","Linked account not found"));

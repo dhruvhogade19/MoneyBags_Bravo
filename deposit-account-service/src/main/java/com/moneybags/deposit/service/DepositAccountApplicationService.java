@@ -38,6 +38,7 @@ public class DepositAccountApplicationService {
     private final AccountNumberGenerator accountNumberGenerator;
     private final AccountViewMapper viewMapper;
     private final PiiProtector piiProtector;
+    private final NotificationOutboxService notificationOutbox;
     private final DepositAccountProperties properties;
     private final ObjectMapper objectMapper;
 
@@ -53,6 +54,7 @@ public class DepositAccountApplicationService {
                                             AccountNumberGenerator accountNumberGenerator,
                                             AccountViewMapper viewMapper,
                                             PiiProtector piiProtector,
+                                            NotificationOutboxService notificationOutbox,
                                             DepositAccountProperties properties,
                                             ObjectMapper objectMapper) {
         this.accountRepository = accountRepository;
@@ -67,6 +69,7 @@ public class DepositAccountApplicationService {
         this.accountNumberGenerator = accountNumberGenerator;
         this.viewMapper = viewMapper;
         this.piiProtector = piiProtector;
+        this.notificationOutbox = notificationOutbox;
         this.properties = properties;
         this.objectMapper = objectMapper;
     }
@@ -125,7 +128,11 @@ public class DepositAccountApplicationService {
             account.addHolder(new AccountHolder(UUID.randomUUID().toString(), customerId, role,
                     role == HolderRole.PRIMARY ? request.operatingInstruction().name() : "JOINT_HOLDER", null));
         }
-        account.setBalanceProjection(AccountBalance.initial(request.currency(), UUID.randomUUID().toString()));
+        AccountBalance openingBalance = AccountBalance.initial(request.currency(), UUID.randomUUID().toString());
+        if (request.openingAmount().signum() > 0) {
+            openingBalance.credit(request.openingAmount(), "INITIAL_FUNDING-" + accountId);
+        }
+        account.setBalanceProjection(openingBalance);
         accountRepository.save(account);
 
         if (request.nominees() != null) {
@@ -142,7 +149,16 @@ public class DepositAccountApplicationService {
         idempotency.setResourceId(accountId);
         idempotency.setHttpStatus(201);
         idempotencyRepository.save(idempotency);
+        notificationOutbox.enqueue(request.primaryCustomerId(), "DEPOSIT_ACCOUNT_CREATED", accountId,
+                "deposit-account-" + accountId + "-created", Map.of(
+                        "accountType", titleCase(validation.accountType()), "accountId", accountId));
         return viewMapper.detail(account);
+    }
+
+    private String titleCase(String value) {
+        String normalized = value == null ? "Deposit" : value.toLowerCase(Locale.ROOT).replace('_', ' ');
+        return Arrays.stream(normalized.split(" ")).filter(part -> !part.isBlank())
+                .map(part -> Character.toUpperCase(part.charAt(0)) + part.substring(1)).collect(java.util.stream.Collectors.joining(" "));
     }
 
     @Transactional(readOnly = true)
@@ -382,10 +398,6 @@ public class DepositAccountApplicationService {
     }
 
     private void validateOpeningRequest(OpenDepositAccountRequest request) {
-        if (request.openingAmount().compareTo(BigDecimal.ZERO) != 0) {
-            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "INITIAL_FUNDING_DEFERRED",
-                    "Initial funding is not supported in the basic release; openingAmount must be zero");
-        }
         if (!request.customerIds().contains(request.primaryCustomerId())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "PRIMARY_HOLDER_MISSING",
                     "primaryCustomerId must be included in customerIds");

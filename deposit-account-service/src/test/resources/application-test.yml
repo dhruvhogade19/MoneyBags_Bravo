@@ -27,3 +27,5 @@ moneybags:
     account-number-prefix: MB
     account-number-random-digits: 12
     idempotency-ttl-hours: 24
+  notifications:
+    dispatch-enabled: false

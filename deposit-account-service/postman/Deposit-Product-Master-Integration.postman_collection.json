@@ -1,0 +1,583 @@
+{
+  "info": {
+    "name": "Moneybags - Deposit and Product Master Integration",
+    "description": "Run this collection in order to verify the live Deposit Account -> Product Master integration. Prerequisites: Discovery, Gateway, Product Master, Deposit Account, CIF, and Oracle are running; Deposit has STUB_UPSTREAM_CLIENTS=false; Product Master seed data and Deposit postman/testdata contexts are applied. The collection intentionally asserts Product Master's exact seeded product name so it fails when Deposit is still using its stub. It creates one savings account and books one INR 1,000 fixed deposit from seed-sav-source-001 on every run.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const rawUrl = pm.request.url.toString();",
+          "let token = pm.collectionVariables.get('depositToken');",
+          "if (rawUrl.includes('/internal/v1/products/')) token = pm.collectionVariables.get('productValidationToken');",
+          "else if (rawUrl.includes('/api/v1/products/')) token = pm.collectionVariables.get('productReadToken');",
+          "else if (rawUrl.includes('/api/v1/cifs/')) token = pm.collectionVariables.get('cifToken');",
+          "pm.request.headers.remove('Authorization');",
+          "if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "if (!pm.request.headers.has('X-Correlation-Id')) {",
+          "  pm.request.headers.add({ key: 'X-Correlation-Id', value: 'postman-integration-' + (pm.collectionVariables.get('runId') || 'preflight') });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "gatewayBaseUrl", "value": "http://localhost:8080" },
+    { "key": "depositServiceUrl", "value": "http://localhost:8086" },
+    { "key": "productMasterServiceUrl", "value": "http://localhost:8083" },
+    { "key": "cifServiceUrl", "value": "http://localhost:8081" },
+    { "key": "regularCustomerId", "value": "CIF-1001" },
+    { "key": "savingsProductCode", "value": "SAV-REG-001" },
+    { "key": "fixedDepositProductCode", "value": "FD-REG-001" },
+    { "key": "productVersion", "value": "1" },
+    { "key": "currency", "value": "INR" },
+    { "key": "fundingAccountId", "value": "seed-sav-source-001" },
+    { "key": "payoutAccountId", "value": "seed-sav-source-001" },
+    { "key": "depositToken", "value": "" },
+    { "key": "productReadToken", "value": "" },
+    { "key": "productValidationToken", "value": "" },
+    { "key": "cifToken", "value": "" },
+    { "key": "runId", "value": "" },
+    { "key": "businessDate", "value": "" },
+    { "key": "openedAccountId", "value": "" },
+    { "key": "bookedFixedDepositId", "value": "" },
+    { "key": "resolvedRegularRate", "value": "" },
+    { "key": "resolvedRegularSlab", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 - Preconditions",
+      "item": [
+        {
+          "name": "Initialize run and check Product Master health",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('runId', Date.now().toString());",
+                  "pm.collectionVariables.set('businessDate', new Date().toISOString().slice(0, 10));",
+                  "pm.collectionVariables.unset('openedAccountId');",
+                  "pm.collectionVariables.unset('bookedFixedDepositId');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Product Master is UP', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().status).to.eql('UP');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{productMasterServiceUrl}}/actuator/health"
+          }
+        },
+        {
+          "name": "Check Deposit Account health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Deposit Account is UP', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().status).to.eql('UP');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{depositServiceUrl}}/actuator/health"
+          }
+        },
+        {
+          "name": "Check trusted CIF customer snapshot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('CIF customer is verified and usable', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.cifId).to.eql(pm.collectionVariables.get('regularCustomerId'));",
+                  "  pm.expect(body.kycStatus).to.eql('VERIFIED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{cifServiceUrl}}/api/v1/cifs/{{regularCustomerId}}/deposit-creation-details"
+          }
+        },
+        {
+          "name": "Check seeded FD funding account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Funding account is active, owned, and funded', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql('ACTIVE');",
+                  "  pm.expect(body.currency).to.eql(pm.collectionVariables.get('currency'));",
+                  "  pm.expect(body.balance.available).to.be.at.least(1000);",
+                  "  pm.expect(body.holders.some(h => h.customerId === pm.collectionVariables.get('regularCustomerId'))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{gatewayBaseUrl}}/api/deposit-accounts/{{fundingAccountId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Product Master provider contract",
+      "item": [
+        {
+          "name": "Get savings product through versioned gateway route",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Versioned savings product is active', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.productCode).to.eql(pm.collectionVariables.get('savingsProductCode'));",
+                  "  pm.expect(body.productName).to.eql('Regular Savings Account');",
+                  "  pm.expect(body.subtype).to.eql('SAVINGS');",
+                  "  pm.expect(body.status).to.eql('ACTIVE');",
+                  "  pm.expect(body.version).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{gatewayBaseUrl}}/api/v1/products/{{savingsProductCode}}"
+          }
+        },
+        {
+          "name": "Validate savings opening through internal Product Master API",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Savings opening is eligible', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.eligible).to.eql(true);",
+                  "  pm.expect(body.productName).to.eql('Regular Savings Account');",
+                  "  pm.expect(body.subtype).to.eql('SAVINGS');",
+                  "  pm.expect(body.currencyCode).to.eql('INR');",
+                  "  pm.expect(body.appliedRuleVersion).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"openingAmount\": 2000,\n  \"currency\": \"{{currency}}\",\n  \"age\": 30,\n  \"customerType\": \"INDIVIDUAL\",\n  \"customerCategory\": \"REGULAR\",\n  \"kycVerified\": true,\n  \"productVersion\": {{productVersion}},\n  \"valueDate\": \"{{businessDate}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{productMasterServiceUrl}}/internal/v1/products/{{savingsProductCode}}/validate-account-opening"
+          }
+        },
+        {
+          "name": "Get fixed-deposit product through versioned gateway route",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('FD product and slabs are available', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.productCode).to.eql(pm.collectionVariables.get('fixedDepositProductCode'));",
+                  "  pm.expect(body.subtype).to.eql('FIXED_DEPOSIT');",
+                  "  pm.expect(body.interestRateSlabs.length).to.be.above(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{gatewayBaseUrl}}/api/v1/products/{{fixedDepositProductCode}}"
+          }
+        },
+        {
+          "name": "Resolve regular-customer FD slab",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Exactly one regular FD slab is resolved', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.eligible).to.eql(true);",
+                  "  pm.expect(body.applicableInterestRateSlab.customerCategory).to.eql('REGULAR');",
+                  "  pm.expect(body.applicableInterestRateSlab.slabCode).to.eql('FD-12M-TO-24M-REGULAR');",
+                  "  pm.expect(Number(body.applicableInterestRateSlab.annualInterestRate)).to.eql(6.75);",
+                  "  pm.collectionVariables.set('resolvedRegularRate', String(body.applicableInterestRateSlab.annualInterestRate));",
+                  "  pm.collectionVariables.set('resolvedRegularSlab', body.applicableInterestRateSlab.slabCode);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"openingAmount\": 1000,\n  \"currency\": \"{{currency}}\",\n  \"age\": 30,\n  \"customerType\": \"INDIVIDUAL\",\n  \"customerCategory\": \"REGULAR\",\n  \"tenureMonths\": 12,\n  \"tenureUnit\": \"MONTH\",\n  \"interestPayoutFrequency\": \"AT_MATURITY\",\n  \"kycVerified\": true,\n  \"productVersion\": {{productVersion}},\n  \"valueDate\": \"{{businessDate}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{productMasterServiceUrl}}/internal/v1/products/{{fixedDepositProductCode}}/validate-account-opening"
+          }
+        },
+        {
+          "name": "Resolve senior-citizen FD slab",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Senior FD slab and eligibility are consistent', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.eligible).to.eql(true);",
+                  "  pm.expect(body.applicableInterestRateSlab.slabCode).to.eql('FD-12M-TO-24M-SENIOR');",
+                  "  pm.expect(Number(body.applicableInterestRateSlab.annualInterestRate)).to.eql(7.25);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"openingAmount\": 100000,\n  \"currency\": \"{{currency}}\",\n  \"age\": 65,\n  \"customerType\": \"INDIVIDUAL\",\n  \"customerCategory\": \"SENIOR_CITIZEN\",\n  \"tenureMonths\": 12,\n  \"tenureUnit\": \"MONTH\",\n  \"interestPayoutFrequency\": \"AT_MATURITY\",\n  \"kycVerified\": true,\n  \"productVersion\": {{productVersion}},\n  \"valueDate\": \"{{businessDate}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{productMasterServiceUrl}}/internal/v1/products/{{fixedDepositProductCode}}/validate-account-opening"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Deposit consumes Product Master",
+      "item": [
+        {
+          "name": "Check savings eligibility through Deposit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Deposit used the real Product Master decision', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.eligible).to.eql(true);",
+                  "  pm.expect(body.decisionCode).to.eql('ELIGIBLE');",
+                  "  pm.expect(body.productName).to.eql('Regular Savings Account');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{regularCustomerId}}\",\n  \"productId\": \"{{savingsProductCode}}\",\n  \"productVersion\": {{productVersion}},\n  \"currency\": \"{{currency}}\",\n  \"openingAmount\": 2000\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{gatewayBaseUrl}}/api/deposit-accounts/eligibility-check"
+          }
+        },
+        {
+          "name": "Open savings account using Product Master terms",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Savings account is created with the Product Master snapshot', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql('PENDING_ACTIVATION');",
+                  "  pm.expect(body.product.productId).to.eql(pm.collectionVariables.get('savingsProductCode'));",
+                  "  pm.expect(body.product.name).to.eql('Regular Savings Account');",
+                  "  pm.expect(body.product.version).to.eql(1);",
+                  "  pm.collectionVariables.set('openedAccountId', body.accountId);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "integration-open-{{runId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerIds\": [\"{{regularCustomerId}}\"],\n  \"primaryCustomerId\": \"{{regularCustomerId}}\",\n  \"productId\": \"{{savingsProductCode}}\",\n  \"productVersion\": {{productVersion}},\n  \"currency\": \"{{currency}}\",\n  \"openingAmount\": 2000,\n  \"servicingBranchId\": \"BR-001\",\n  \"operatingInstruction\": \"SINGLE\",\n  \"nominees\": [],\n  \"channel\": \"POSTMAN\",\n  \"externalReference\": \"INT-SAV-{{runId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{gatewayBaseUrl}}/api/deposit-accounts"
+          }
+        },
+        {
+          "name": "Read savings account product snapshot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Persisted account retains the resolved product snapshot', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.accountId).to.eql(pm.collectionVariables.get('openedAccountId'));",
+                  "  pm.expect(body.product.name).to.eql('Regular Savings Account');",
+                  "  pm.expect(body.product.version).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{gatewayBaseUrl}}/api/deposit-accounts/{{openedAccountId}}"
+          }
+        },
+        {
+          "name": "Quote FD through Deposit and compare provider rate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Deposit quote matches Product Master resolved terms', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.rateSlabCode).to.eql(pm.collectionVariables.get('resolvedRegularSlab'));",
+                  "  pm.expect(Number(body.annualInterestRate)).to.eql(Number(pm.collectionVariables.get('resolvedRegularRate')));",
+                  "  pm.expect(body.productName).to.eql('Regular Fixed Deposit');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{regularCustomerId}}\",\n  \"productCode\": \"{{fixedDepositProductCode}}\",\n  \"productVersion\": {{productVersion}},\n  \"principal\": 1000,\n  \"currency\": \"{{currency}}\",\n  \"tenureValue\": 12,\n  \"tenureUnit\": \"MONTH\",\n  \"interestPayoutFrequency\": \"AT_MATURITY\",\n  \"valueDate\": \"{{businessDate}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{gatewayBaseUrl}}/api/deposit-accounts/fixed-deposits/quotes"
+          }
+        },
+        {
+          "name": "Book FD using resolved Product Master terms",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('FD is booked using the resolved rate', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql('ACTIVE');",
+                  "  pm.expect(body.productCode).to.eql(pm.collectionVariables.get('fixedDepositProductCode'));",
+                  "  pm.expect(Number(body.annualInterestRate)).to.eql(Number(pm.collectionVariables.get('resolvedRegularRate')));",
+                  "  pm.collectionVariables.set('bookedFixedDepositId', body.fixedDepositId);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "integration-fd-{{runId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerIds\": [\"{{regularCustomerId}}\"],\n  \"primaryCustomerId\": \"{{regularCustomerId}}\",\n  \"productCode\": \"{{fixedDepositProductCode}}\",\n  \"productVersion\": {{productVersion}},\n  \"principal\": 1000,\n  \"currency\": \"{{currency}}\",\n  \"tenureValue\": 12,\n  \"tenureUnit\": \"MONTH\",\n  \"interestPayoutFrequency\": \"AT_MATURITY\",\n  \"fundingAccountId\": \"{{fundingAccountId}}\",\n  \"payoutAccountId\": \"{{payoutAccountId}}\",\n  \"servicingBranchId\": \"BR-001\",\n  \"nominees\": [],\n  \"channel\": \"POSTMAN\",\n  \"externalReference\": \"INT-FD-{{runId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{gatewayBaseUrl}}/api/deposit-accounts/fixed-deposits"
+          }
+        },
+        {
+          "name": "Read booked FD snapshot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Booked FD keeps the selected Product Master rate', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.fixedDepositId).to.eql(pm.collectionVariables.get('bookedFixedDepositId'));",
+                  "  pm.expect(Number(body.annualInterestRate)).to.eql(Number(pm.collectionVariables.get('resolvedRegularRate')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{gatewayBaseUrl}}/api/deposit-accounts/fixed-deposits/{{bookedFixedDepositId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Negative integration decisions",
+      "item": [
+        {
+          "name": "Product Master rejects wrong product version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Provider returns an explicit ineligible decision', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.eligible).to.eql(false);",
+                  "  pm.expect(body.validationMessages).to.include('Product version does not match the requested version');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"openingAmount\": 2000,\n  \"currency\": \"{{currency}}\",\n  \"age\": 30,\n  \"customerType\": \"INDIVIDUAL\",\n  \"customerCategory\": \"REGULAR\",\n  \"kycVerified\": true,\n  \"productVersion\": 999,\n  \"valueDate\": \"{{businessDate}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{productMasterServiceUrl}}/internal/v1/products/{{savingsProductCode}}/validate-account-opening"
+          }
+        },
+        {
+          "name": "Deposit propagates wrong-version decision",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Deposit returns Product Master rejection', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.eligible).to.eql(false);",
+                  "  pm.expect(body.decisionCode).to.eql('REFERENCE_VALIDATION_FAILED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{regularCustomerId}}\",\n  \"productId\": \"{{savingsProductCode}}\",\n  \"productVersion\": 999,\n  \"currency\": \"{{currency}}\",\n  \"openingAmount\": 2000\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{gatewayBaseUrl}}/api/deposit-accounts/eligibility-check"
+          }
+        },
+        {
+          "name": "Product Master rejects ambiguous FD category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('FD category is required to resolve the correct slab', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.eligible).to.eql(false);",
+                  "  pm.expect(body.applicableInterestRateSlab).to.eql(null);",
+                  "  pm.expect(body.validationMessages.some(message => message.includes('rate slab'))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"openingAmount\": 100000,\n  \"currency\": \"{{currency}}\",\n  \"age\": 30,\n  \"customerType\": \"INDIVIDUAL\",\n  \"tenureMonths\": 12,\n  \"tenureUnit\": \"MONTH\",\n  \"interestPayoutFrequency\": \"AT_MATURITY\",\n  \"kycVerified\": true,\n  \"productVersion\": {{productVersion}},\n  \"valueDate\": \"{{businessDate}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{productMasterServiceUrl}}/internal/v1/products/{{fixedDepositProductCode}}/validate-account-opening"
+          }
+        }
+      ]
+    }
+  ]
+}

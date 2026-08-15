@@ -32,6 +32,10 @@ eureka:
   instance:
     prefer-ip-address: true
 
+moneybags:
+  security:
+    enabled: ${SECURITY_ENABLED:false}
+
 springdoc:
   api-docs:
     enabled: true

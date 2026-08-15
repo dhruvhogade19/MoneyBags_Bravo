@@ -1,0 +1,552 @@
+{
+  "info": {
+    "_postman_id": "a534c38e-48ea-4d15-a825-4a69cac7106d",
+    "name": "Moneybags KYC Service",
+    "description": "End-to-end requests for the Moneybags KYC Service. Run the folders in order. The Create KYC request generates unique customer identifiers and stores kycId; Upload PAN document stores documentId. For file uploads, allow Postman to read files outside its working directory or reselect postman/fixtures/sample-pan.pdf. Direct service URL: http://localhost:8082.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8082", "type": "string" },
+    { "key": "cifId", "value": "", "type": "string" },
+    { "key": "kycId", "value": "", "type": "string" },
+    { "key": "documentId", "value": "", "type": "string" },
+    { "key": "panNumber", "value": "", "type": "string" },
+    { "key": "aadhaarNumber", "value": "", "type": "string" },
+    { "key": "mobileNumber", "value": "", "type": "string" },
+    { "key": "email", "value": "", "type": "string" },
+    { "key": "missingKycId", "value": "999999999999", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Service checks",
+      "item": [
+        {
+          "name": "Actuator health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/actuator/health",
+            "description": "Confirms that KYC Service is running and its configured dependencies are healthy."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Health endpoint returns 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Service reports UP', function () {",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response.status).to.eql('UP');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "OpenAPI document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v3/api-docs",
+            "description": "Returns the generated OpenAPI contract used by Swagger UI."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OpenAPI document returns 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('KYC API path is documented', function () {",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response.openapi).to.be.a('string');",
+                  "  pm.expect(response.paths).to.have.property('/api/v1/kycs');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Complete KYC workflow",
+      "description": "Creates a KYC, uploads and verifies a PAN document, records a final approval, and exercises CIF synchronization.",
+      "item": [
+        {
+          "name": "Create KYC",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const timestamp = String(Date.now());",
+                  "const eightDigits = timestamp.slice(-8);",
+                  "const twelveDigits = ('900000000000' + timestamp).slice(-12);",
+                  "pm.collectionVariables.set('cifId', timestamp.slice(-9));",
+                  "pm.collectionVariables.set('panNumber', 'MBKYC' + eightDigits.slice(-4) + 'A');",
+                  "pm.collectionVariables.set('aadhaarNumber', twelveDigits);",
+                  "pm.collectionVariables.set('mobileNumber', '9' + eightDigits + '0');",
+                  "pm.collectionVariables.set('email', 'kyc.' + timestamp + '@moneybags.test');",
+                  "pm.collectionVariables.unset('kycId');",
+                  "pm.collectionVariables.unset('documentId');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('KYC is created', function () { pm.response.to.have.status(201); });",
+                  "const response = pm.response.json();",
+                  "pm.test('Response contains a generated KYC ID', function () { pm.expect(response.kycId).to.be.a('number'); });",
+                  "pm.test('KYC starts in the expected state', function () {",
+                  "  pm.expect(response.kycStatus).to.eql('PENDING');",
+                  "  pm.expect(response.cifSyncStatus).to.eql('PENDING');",
+                  "  pm.expect(response.decision).to.eql(null);",
+                  "});",
+                  "pm.test('Customer snapshot matches the request', function () {",
+                  "  pm.expect(response.cifId).to.eql(Number(pm.collectionVariables.get('cifId')));",
+                  "  pm.expect(response.panNumber).to.eql(pm.collectionVariables.get('panNumber'));",
+                  "  pm.expect(response.employmentType).to.eql('SALARIED');",
+                  "  pm.expect(Number(response.salary)).to.eql(85000);",
+                  "});",
+                  "pm.collectionVariables.set('kycId', response.kycId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cifId\": {{cifId}},\n  \"firstName\": \"Aarav\",\n  \"lastName\": \"Sharma\",\n  \"dob\": \"1992-06-15\",\n  \"number\": \"{{mobileNumber}}\",\n  \"email\": \"{{email}}\",\n  \"panNumber\": \"{{panNumber}}\",\n  \"aadhaarNumber\": \"{{aadhaarNumber}}\",\n  \"address\": \"42 MG Road, Bengaluru, Karnataka 560001\",\n  \"employmentType\": \"SALARIED\",\n  \"salary\": 85000.00\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/kycs",
+            "description": "Creates a new PENDING KYC. Unique CIF, PAN, Aadhaar, mobile, and email values are generated before each execution."
+          }
+        },
+        {
+          "name": "Get KYC by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/kycs/{{kycId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('KYC is returned', function () { pm.response.to.have.status(200); });",
+                  "const response = pm.response.json();",
+                  "pm.test('Returned KYC has the requested ID', function () { pm.expect(response.kycId).to.eql(Number(pm.collectionVariables.get('kycId'))); });",
+                  "pm.test('Timestamps are populated', function () { pm.expect(response.createdAt).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List KYC records by CIF ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/kycs?cifId={{cifId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('KYC list is returned', function () { pm.response.to.have.status(200); });",
+                  "const response = pm.response.json();",
+                  "pm.test('List contains the newly created KYC', function () {",
+                  "  pm.expect(response).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(response.some(item => item.kycId === Number(pm.collectionVariables.get('kycId')))).to.eql(true);",
+                  "});",
+                  "pm.test('Every result belongs to the requested CIF', function () {",
+                  "  const cifId = Number(pm.collectionVariables.get('cifId'));",
+                  "  pm.expect(response.every(item => item.cifId === cifId)).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload PAN document",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "documentTypes", "value": "PAN", "type": "text" },
+                { "key": "files", "type": "file", "src": "postman/fixtures/sample-pan.pdf", "contentType": "application/pdf" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/kycs/{{kycId}}/documents",
+            "description": "Uploads the included sample PDF. If Postman cannot resolve the relative path, select kyc-service/postman/fixtures/sample-pan.pdf for the files field."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document is uploaded', function () { pm.response.to.have.status(201); });",
+                  "const response = pm.response.json();",
+                  "pm.test('One pending PAN document is returned', function () {",
+                  "  pm.expect(response).to.be.an('array').with.lengthOf(1);",
+                  "  pm.expect(response[0].documentType).to.eql('PAN');",
+                  "  pm.expect(response[0].verificationStatus).to.eql('PENDING');",
+                  "  pm.expect(response[0].kycId).to.eql(Number(pm.collectionVariables.get('kycId')));",
+                  "});",
+                  "pm.collectionVariables.set('documentId', response[0].documentId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get document metadata",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/kycs/{{kycId}}/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document metadata is returned', function () { pm.response.to.have.status(200); });",
+                  "const response = pm.response.json();",
+                  "pm.test('Uploaded document is present', function () {",
+                  "  const documentId = Number(pm.collectionVariables.get('documentId'));",
+                  "  pm.expect(response.some(item => item.documentId === documentId && item.documentType === 'PAN')).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Download document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/kycs/{{kycId}}/documents/{{documentId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document is downloaded', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response is a PDF attachment', function () {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');",
+                  "  pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment');",
+                  "  pm.expect(pm.response.responseSize).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify document",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"VERIFIED\",\n  \"remarks\": \"PAN details match the customer record\",\n  \"verifiedBy\": \"postman-reviewer\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/kycs/{{kycId}}/documents/{{documentId}}/verification"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Document verification is updated', function () { pm.response.to.have.status(200); });",
+                  "const response = pm.response.json();",
+                  "pm.test('Document is verified by the requested reviewer', function () {",
+                  "  pm.expect(response.verificationStatus).to.eql('VERIFIED');",
+                  "  pm.expect(response.verifiedBy).to.eql('postman-reviewer');",
+                  "  pm.expect(response.verifiedAt).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retry CIF sync before final decision - rejected",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/kycs/{{kycId}}/sync",
+            "description": "Demonstrates that CIF synchronization is unavailable until the KYC has a final decision."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Premature sync is rejected', function () { pm.response.to.have.status(400); });",
+                  "const response = pm.response.json();",
+                  "pm.test('Error explains the final-decision requirement', function () {",
+                  "  pm.expect(response.status).to.eql(400);",
+                  "  pm.expect(response.message).to.include('final KYC decision');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Approve KYC",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"rejectionReason\": null,\n  \"reviewedBy\": \"postman-reviewer\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/kycs/{{kycId}}/decision",
+            "description": "Records the final approval and triggers best-effort CIF synchronization and notification delivery."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Final decision is recorded', function () { pm.response.to.have.status(200); });",
+                  "const response = pm.response.json();",
+                  "pm.test('KYC is approved', function () {",
+                  "  pm.expect(response.kycStatus).to.eql('APPROVED');",
+                  "  pm.expect(response.decision).to.eql('APPROVED');",
+                  "  pm.expect(response.reviewedBy).to.eql('postman-reviewer');",
+                  "});",
+                  "pm.test('CIF synchronization was attempted', function () {",
+                  "  pm.expect(response.cifSyncStatus).to.be.oneOf(['SYNCED', 'FAILED']);",
+                  "  pm.expect(response.syncRetryCount).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retry CIF sync after final decision",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/kycs/{{kycId}}/sync",
+            "description": "Retries a failed CIF update. If the approval already synchronized successfully, the service correctly returns 400 instead."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Sync outcome matches the current CIF state', function () { pm.expect(pm.response.code).to.be.oneOf([200, 400]); });",
+                  "const response = pm.response.json();",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Retry returns the final KYC state', function () {",
+                  "    pm.expect(response.kycStatus).to.eql('APPROVED');",
+                  "    pm.expect(response.cifSyncStatus).to.be.oneOf(['SYNCED', 'FAILED']);",
+                  "  });",
+                  "} else {",
+                  "  pm.test('Already-synchronized KYC explains why retry was rejected', function () {",
+                  "    pm.expect(response.status).to.eql(400);",
+                  "    pm.expect(response.message).to.include('already synchronized');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Validation and error examples",
+      "description": "Independent contract checks plus state-dependent checks that use the KYC created by the workflow folder.",
+      "item": [
+        {
+          "name": "Reject invalid student salary",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cifId\": 800000001,\n  \"firstName\": \"Invalid\",\n  \"lastName\": \"Student\",\n  \"dob\": \"2002-01-01\",\n  \"number\": \"9876543210\",\n  \"email\": \"invalid.student@moneybags.test\",\n  \"panNumber\": \"ABCDE1234F\",\n  \"aadhaarNumber\": \"123456789012\",\n  \"address\": \"Test address\",\n  \"employmentType\": \"STUDENT\",\n  \"salary\": 1000.00\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/kycs",
+            "description": "Students must not include a salary snapshot."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid employment snapshot is rejected', function () { pm.response.to.have.status(400); });",
+                  "const response = pm.response.json();",
+                  "pm.test('Error describes the salary rule', function () { pm.expect(response.message).to.include('salary must be empty'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject malformed customer fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cifId\": 800000002,\n  \"firstName\": \"\",\n  \"lastName\": \"Customer\",\n  \"dob\": \"2099-01-01\",\n  \"number\": \"123\",\n  \"email\": \"not-an-email\",\n  \"panNumber\": \"bad-pan\",\n  \"aadhaarNumber\": \"1234\",\n  \"address\": \"Test address\",\n  \"employmentType\": \"SALARIED\",\n  \"salary\": 50000\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/kycs"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Bean validation rejects malformed fields', function () { pm.response.to.have.status(400); });",
+                  "const response = pm.response.json();",
+                  "pm.test('Validation errors identify invalid fields', function () {",
+                  "  pm.expect(response.message).to.eql('Validation failed');",
+                  "  pm.expect(response.validationErrors).to.have.property('firstName');",
+                  "  pm.expect(response.validationErrors).to.have.property('dob');",
+                  "  pm.expect(response.validationErrors).to.have.property('email');",
+                  "  pm.expect(response.validationErrors).to.have.property('panNumber');",
+                  "  pm.expect(response.validationErrors).to.have.property('aadhaarNumber');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get missing KYC",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v1/kycs/{{missingKycId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing KYC returns 404', function () { pm.response.to.have.status(404); });",
+                  "const response = pm.response.json();",
+                  "pm.test('Not-found response follows the API error contract', function () {",
+                  "  pm.expect(response.status).to.eql(404);",
+                  "  pm.expect(response.message).to.include(pm.collectionVariables.get('missingKycId'));",
+                  "  pm.expect(response.path).to.include('/api/v1/kycs/');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject second final decision",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"REJECTED\",\n  \"rejectionReason\": \"Decision cannot be changed after finalization\",\n  \"reviewedBy\": \"postman-reviewer\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/kycs/{{kycId}}/decision",
+            "description": "Requires the Complete KYC workflow folder to have run first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Second decision is rejected', function () { pm.response.to.have.status(400); });",
+                  "const response = pm.response.json();",
+                  "pm.test('Error explains that the decision is final', function () { pm.expect(response.message).to.include('already been completed'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject document upload after final decision",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "documentTypes", "value": "ADDRESS_PROOF", "type": "text" },
+                { "key": "files", "type": "file", "src": "postman/fixtures/sample-pan.pdf", "contentType": "application/pdf" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/kycs/{{kycId}}/documents",
+            "description": "Requires the Complete KYC workflow folder to have run first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Finalized KYC rejects document changes', function () { pm.response.to.have.status(400); });",
+                  "const response = pm.response.json();",
+                  "pm.test('Error explains that document changes are closed', function () { pm.expect(response.message).to.include('after final KYC decision'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

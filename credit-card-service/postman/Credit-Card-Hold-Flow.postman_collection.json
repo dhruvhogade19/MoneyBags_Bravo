@@ -1,0 +1,88 @@
+{
+  "info": {
+    "name": "Moneybags Credit Card Hold Flow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8087" },
+    { "key": "accountId", "value": "1" },
+    { "key": "holdId", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Create hold",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"referenceId\": \"PAY-12345\",\n  \"amount\": 50000.00\n}" },
+        "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/holds"
+      }
+    },
+    {
+      "name": "Capture hold",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/holds/{{holdId}}/capture"
+      }
+    },
+    {
+      "name": "Release hold",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/holds/{{holdId}}/release"
+      }
+    },
+    {
+      "name": "Bill paid - partial payment",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"amount\": 30000.00\n}" },
+        "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/payments/billpaid"
+      }
+    },
+    {
+      "name": "Bill paid - exact outstanding amount",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"amount\": 50000.00\n}" },
+        "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/payments/billpaid"
+      }
+    },
+    {
+      "name": "Bill paid - amount above outstanding is accepted",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"amount\": 60000.00\n}" },
+        "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/payments/billpaid"
+      }
+    },
+    {
+      "name": "Bill paid - invalid zero amount",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"amount\": 0\n}" },
+        "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/payments/billpaid"
+      }
+    },
+    {
+      "name": "Bill paid - invalid negative amount",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"amount\": -1.00\n}" },
+        "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/payments/billpaid"
+      }
+    },
+    {
+      "name": "Close credit-card account",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/close"
+      }
+    }
+  ]
+}

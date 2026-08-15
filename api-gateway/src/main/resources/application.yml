@@ -8,24 +8,38 @@ spring:
     name: api-gateway
   cloud:
     gateway:
-      routes:
-        - id: product-master-service
-          uri: lb://product-master-service
-          predicates:
-            - Path=/api/products/**,/api/benchmarks/**
-        - id: deposit-account-service
-          uri: lb://deposit-account-service
-          predicates:
-            - Path=/api/deposit-accounts/**,/api/internal/deposit-accounts/**,/api/internal/deposit-payment-operations/**
-      default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: "${CORS_ALLOWED_ORIGIN:http://localhost:8000}"
-            allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
-            allowedHeaders: "*"
-            allowCredentials: true
+      server:
+        webflux:
+          routes:
+            - id: product-master-service
+              uri: lb://product-master-service
+              predicates:
+                - Path=/api/products/**,/api/v1/products/**,/api/benchmarks/**
+            - id: deposit-account-service
+              uri: lb://deposit-account-service
+              predicates:
+                - Path=/api/deposit-accounts/**,/api/internal/deposit-accounts/**,/api/internal/deposit-payment-operations/**
+            - id: payments-service
+              uri: lb://payments-service
+              predicates:
+                - Path=/api/v1/payments/**
+            - id: cif-service
+              uri: lb://cif-service
+              predicates:
+                - Path=/api/v1/cifs/**
+            - id: kyc-service
+              uri: lb://kyc-service
+              predicates:
+                - Path=/api/v1/kycs/**
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOrigins: "${CORS_ALLOWED_ORIGIN:http://localhost:8000}"
+                allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+                allowedHeaders: "*"
+                allowCredentials: true
 
 eureka:
   client:

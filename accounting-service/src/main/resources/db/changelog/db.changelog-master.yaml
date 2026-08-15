@@ -1,0 +1,46 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-accounting-schema
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: GL_ACCOUNT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001-create-accounting-schema.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 002-seed-accounting-chart-and-rules
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: GL_ACCOUNT
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM GL_ACCOUNT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/002-seed-accounting-chart-and-rules.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 003-enable-credit-card-merchant-payment
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: ACCOUNTING_RULE
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM ACCOUNTING_RULE WHERE RULE_CODE = 'CREDIT_CARD_MERCHANT_PAYMENT_PRINCIPAL'
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/003-enable-credit-card-merchant-payment.sql
+            splitStatements: true
+            stripComments: true
