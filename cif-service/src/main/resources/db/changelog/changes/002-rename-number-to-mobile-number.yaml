@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-rename-number-to-mobile-number
+      author: bhavansh
+
+      changes:
+        - renameColumn:
+            tableName: cifs
+            oldColumnName: number
+            newColumnName: mobile_number
+            columnDataType: VARCHAR2(15)

@@ -1,0 +1,142 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-cifs-table
+      author: bhavansh
+
+      changes:
+        - createTable:
+            tableName: cifs
+            columns:
+              - column:
+                  name: cif_id
+                  type: NUMBER
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_cifs
+                    nullable: false
+
+              - column:
+                  name: first_name
+                  type: VARCHAR2(100)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: last_name
+                  type: VARCHAR2(100)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: dob
+                  type: DATE
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: email
+                  type: VARCHAR2(150)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: number
+                  type: VARCHAR2(15)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: address
+                  type: VARCHAR2(500)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: employment_type
+                  type: VARCHAR2(30)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: salary
+                  type: NUMBER(15,2)
+
+              - column:
+                  name: kyc_status
+                  type: VARCHAR2(30)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: pan_number
+                  type: VARCHAR2(20)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: aadhaar_number
+                  type: VARCHAR2(20)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+
+        - addUniqueConstraint:
+            tableName: cifs
+            columnNames: email
+            constraintName: uk_cifs_email
+
+        - addUniqueConstraint:
+            tableName: cifs
+            columnNames: number
+            constraintName: uk_cifs_number
+
+        - addUniqueConstraint:
+            tableName: cifs
+            columnNames: pan_number
+            constraintName: uk_cifs_pan_number
+
+        - addUniqueConstraint:
+            tableName: cifs
+            columnNames: aadhaar_number
+            constraintName: uk_cifs_aadhaar_number
+
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE cifs
+              ADD CONSTRAINT chk_cifs_employment_type
+              CHECK (employment_type IN ('BUSINESS', 'SALARIED', 'STUDENT'));
+
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE cifs
+              ADD CONSTRAINT chk_cifs_kyc_status
+              CHECK (kyc_status IN ('PENDING', 'VERIFIED', 'REJECTED'));
+
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE cifs
+              ADD CONSTRAINT chk_cifs_salary
+              CHECK (
+                (employment_type = 'STUDENT' AND salary IS NULL)
+                OR
+                (employment_type IN ('BUSINESS', 'SALARIED') AND salary > 0)
+              );
+
+      rollback:
+        - dropTable:
+            tableName: cifs

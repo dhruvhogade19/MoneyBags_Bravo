@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - include:
+      file: changes/001-create-cifs-table.yaml
+      relativeToChangelogFile: true
+
+  - include:
+      file: changes/002-rename-number-to-mobile-number.yaml
+      relativeToChangelogFile: true
+
+  - include:
+      file: changes/003-change-verified-to-approved.yaml
+      relativeToChangelogFile: true
+
+  - include:
+      file: changes/004-add-age-to-cifs.yaml
+      relativeToChangelogFile: true

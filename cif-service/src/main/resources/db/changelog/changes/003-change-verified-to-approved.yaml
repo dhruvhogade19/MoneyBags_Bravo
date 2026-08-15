@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-change-verified-to-approved
+      author: bhavansh
+
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE cifs
+              DROP CONSTRAINT chk_cifs_kyc_status;
+
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE cifs
+              ADD CONSTRAINT chk_cifs_kyc_status
+              CHECK (kyc_status IN ('PENDING', 'APPROVED', 'REJECTED'));
