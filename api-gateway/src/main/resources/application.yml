@@ -23,6 +23,14 @@ spring:
               uri: lb://payments-service
               predicates:
                 - Path=/api/v1/payments/**
+            - id: cif-service
+              uri: lb://cif-service
+              predicates:
+                - Path=/api/v1/cifs/**
+            - id: kyc-service
+              uri: lb://kyc-service
+              predicates:
+                - Path=/api/v1/kycs/**
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
           globalcors:
