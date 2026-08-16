@@ -6,11 +6,15 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration
+@Profile("!test")
 public class RestClientConfig {
+  private final ClientCredentialsTokenProvider tokens;
+  public RestClientConfig(ClientCredentialsTokenProvider tokens) { this.tokens = tokens; }
   @Bean
   @Qualifier("depositRestClient")
   RestClient depositRestClient(@Value("${clients.deposit.base-url}") String baseUrl) {
@@ -46,6 +50,12 @@ public class RestClientConfig {
         HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build());
     factory.setReadTimeout(Duration.ofSeconds(8));
     return RestClient.builder().baseUrl(baseUrl).requestFactory(factory)
-        .defaultHeader("Accept", "application/json").build();
+        .defaultHeader("Accept", "application/json")
+        .requestInterceptor((request, body, execution) -> {
+          if (request.getHeaders().getFirst("Authorization") == null) {
+            String token=tokens.token(); if(token!=null)request.getHeaders().setBearerAuth(token);
+          }
+          return execution.execute(request,body);
+        }).build();
   }
 }

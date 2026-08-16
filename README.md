@@ -6,12 +6,17 @@ Spring Boot services for the Moneybags banking platform. Each service owns its O
 
 | Module | Port | Responsibility |
 |---|---:|---|
+| `identity-access-service` | 8093 | OAuth2/OIDC authorization server, users, roles and service clients |
 | `discovery-server` | 8761 | Eureka service registry |
-| `api-gateway` | 8080 | Gateway routes for Product Master and Deposit Account APIs |
+| `api-gateway` | 8080 | Authenticated public API ingress and trusted identity headers |
+| `cif-service` | 8081 | Customer information records |
+| `kyc-service` | 8082 | KYC cases, documents and review workflow |
 | `product-master-service` | 8083 | Deposit and credit-card product catalogue, eligibility and fixed-deposit pricing rules |
 | `payments-service` | 8085 | Book transfers, card purchases and repayments, fixed-deposit funding/payout orchestration, EOD and recovery |
 | `deposit-account-service` | 8086 | CASA and fixed-deposit lifecycle, payment reservations, balance projections and notification outbox |
+| `credit-card-service` | 8087 | Card application, account and authorization lifecycle |
 | `accounting-service` | 8088 | Accounting journals, posting rules and financial ledger operations |
+| `notification-service` | 8090 | Internal delivery and customer notification history |
 
 Payments is included in the Maven reactor and coordinates peer services through synchronous REST calls. Deposit uses stubbed CIF/Product Master validation by default; production mode resolves configured peers through Spring `RestClient` and Eureka. Accounting is started by `run-all.ps1`; it is currently built independently rather than included in the root Maven reactor.
 
@@ -90,29 +95,38 @@ Useful URLs:
 
 Stop launcher-created processes with `./stop-all.ps1`.
 
-## Local and production modes
+## Authentication and authorization
 
-Local defaults are deliberately convenient:
+Security is enabled by default. `identity-access-service` issues short-lived JWT access tokens through OAuth2/OIDC. Interactive clients use Authorization Code with PKCE; services use Client Credentials. The supported human roles are `BANK_ADMIN` and `CONSUMER`.
 
-- `SECURITY_ENABLED=false`
-- `STUB_UPSTREAM_CLIENTS=true`
+- A consumer receives only customer-facing scopes and can access only resources linked to the signed `customer_id` claim.
+- A bank administrator can perform governed administration, KYC review, product, account, card, payment and accounting operations.
+- Internal routes are not exposed by the gateway and require service-specific scopes.
+- The gateway rejects spoofed identity headers, requires `X-Tenant-ID` to match `tenant_id`, and requires a UUID `X-Correlation-ID`.
+- CIF creation binds an initially unlinked consumer identity to the generated CIF. CIF alone can create the immutable KYC snapshot using `kyc:service`; consumers cannot post snapshot data directly.
+- Consumers can access and upload documents only for their signed CIF and tenant. Bank administrators can review only their signed tenant, and reviewer identity always comes from the JWT rather than request JSON.
+- Final KYC approval/rejection requires PAN, Aadhaar, address proof and salary proof to be reviewed. CIF status synchronization and customer email notification use authenticated service calls, with persisted notification retries.
+
+For local development, `run-all.ps1` starts Identity with the `local` profile and H2. It creates `admin@moneybags.local` and `consumer@moneybags.local`; set `LOCAL_ADMIN_PASSWORD` and `LOCAL_CONSUMER_PASSWORD` in `.env`. Copy `.env.example` to `.env`, replace all placeholder secrets, and keep `SECURITY_ENABLED=true`. Security is disabled only in isolated test profiles.
 
 Production must set:
 
 ```powershell
 $env:SECURITY_ENABLED = "true"
 $env:STUB_UPSTREAM_CLIENTS = "false"
-$env:SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI = "https://identity.example/issuer"
+$env:OAUTH2_ISSUER_URI = "https://identity.example/issuer"
+$env:OAUTH2_AUDIENCE = "moneybags-api"
+$env:M2M_CLIENT_SECRET = "a-long-secret-from-the-secret-manager"
+$env:IDENTITY_JWK_PUBLIC_KEY = "base64-or-PEM-public-key"
+$env:IDENTITY_JWK_PRIVATE_KEY = "base64-or-PEM-private-key"
 $env:CIF_URL = "https://cif.internal"
 $env:PRODUCT_MASTER_URL = "http://product-master-service"
-$env:PRODUCT_MASTER_ACCESS_TOKEN = "service-token-from-secret-manager"
 $env:NOTIFICATION_URL = "http://notification-service"
 $env:NOTIFICATION_DISPATCH_ENABLED = "true"
 ```
 
-Spring RestClient propagates the correlation ID for upstream calls. Product Master validation uses
-`POST /internal/v1/products/{productCode}/validate-account-opening`; its access token must come from the
-deployment secret manager when Product Master security is enabled.
+Spring RestClient propagates the correlation ID and obtains a short-lived client-credentials token for upstream calls. Product Master validation uses `POST /internal/v1/products/{productCode}/validate-account-opening`.
+The detailed access matrix and deployment checklist are in [`docs/SECURITY_IMPLEMENTATION.md`](docs/SECURITY_IMPLEMENTATION.md).
 For FD pricing, Deposit uses `customerCategory` from CIF when present; until CIF publishes that optional field,
 it derives `SENIOR_CITIZEN` at age 60 or above and `REGULAR` otherwise from the trusted date of birth.
 

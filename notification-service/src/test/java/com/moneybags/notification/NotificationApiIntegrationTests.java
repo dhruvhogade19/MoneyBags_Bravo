@@ -9,13 +9,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.context.annotation.Primary;
+import org.springframework.mail.MailSendException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import com.moneybags.notification.notification.integration.EmailSender;
 
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
@@ -23,7 +29,20 @@ import org.springframework.test.web.servlet.MockMvc;
 })
 @AutoConfigureMockMvc
 @ActiveProfiles({"test", "mock-cif"})
+@Import(NotificationApiIntegrationTests.FailingMailConfiguration.class)
 class NotificationApiIntegrationTests {
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class FailingMailConfiguration {
+
+        @Bean
+        @Primary
+        EmailSender emailSender() {
+            return (recipientEmail, subject, body) -> {
+                throw new MailSendException("Simulated SMTP delivery failure");
+            };
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -32,7 +51,7 @@ class NotificationApiIntegrationTests {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void createsFailedNotificationOnceAndReplaysWithoutDuplicateDelivery() throws Exception {
+    void reusesFailedNotificationAndRecordsANewDeliveryAttempt() throws Exception {
         String idempotencyKey = "test-payment-" + UUID.randomUUID();
         String requestBody = paymentRequest("1500.00");
 
@@ -60,7 +79,7 @@ class NotificationApiIntegrationTests {
                 "SELECT COUNT(*) FROM delivery_attempt da JOIN notification n ON n.notification_id = da.notification_id "
                         + "WHERE n.idempotency_key = ?", Integer.class, idempotencyKey);
         assertThat(notificationCount).isEqualTo(1);
-        assertThat(attemptCount).isEqualTo(1);
+        assertThat(attemptCount).isEqualTo(2);
     }
 
     @Test

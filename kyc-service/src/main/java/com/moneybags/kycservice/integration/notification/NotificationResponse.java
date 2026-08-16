@@ -1,4 +1,3 @@
 package com.moneybags.kycservice.integration.notification;
 
-public class NotificationResponse {
-}
+public record NotificationResponse(Long notificationId, Long cifId, String status) {}

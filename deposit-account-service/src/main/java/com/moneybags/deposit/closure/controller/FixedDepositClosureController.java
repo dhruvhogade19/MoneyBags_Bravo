@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -30,12 +31,14 @@ public class FixedDepositClosureController {
     }
 
     @PostMapping("/premature-closure-quotes")
+    @PreAuthorize("@depositAuthorization.canAccessFixedDeposit(authentication, #fdId)")
     public PrematureClosureQuoteResponse quote(@PathVariable String fdId,
             @Valid @RequestBody PrematureClosureQuoteRequest request) {
         return service.quote(fdId, request);
     }
 
     @PostMapping("/premature-closure-requests")
+    @PreAuthorize("@depositAuthorization.canAccessFixedDeposit(authentication, #fdId)")
     public ResponseEntity<ClosureRequestView> close(@PathVariable String fdId,
             @RequestHeader("Idempotency-Key") String key,
             @Valid @RequestBody PrematureClosureRequest request, Authentication authentication) {
@@ -47,6 +50,7 @@ public class FixedDepositClosureController {
     }
 
     @GetMapping("/premature-closure-requests/{requestId}")
+    @PreAuthorize("@depositAuthorization.canAccessFixedDeposit(authentication, #fdId)")
     public ClosureRequestView get(@PathVariable String fdId, @PathVariable String requestId) {
         return service.get(fdId, requestId);
     }

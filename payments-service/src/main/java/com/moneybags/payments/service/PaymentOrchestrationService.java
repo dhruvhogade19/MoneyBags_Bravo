@@ -331,12 +331,16 @@ public class PaymentOrchestrationService {
   }
 
   private AccountingResponse postAccounting(Payment payment) {
+    AccountingInstrument destination = payment.getDestinationInstrumentType() == InstrumentType.MERCHANT
+        ? new AccountingInstrument(payment.getDestinationInstrumentType().name(), null,
+            payment.getDestinationAccountId())
+        : new AccountingInstrument(payment.getDestinationInstrumentType().name(),
+            payment.getDestinationAccountId());
     AccountingSettlementRequest request = new AccountingSettlementRequest(payment.getPaymentId(),
         payment.getPaymentType().name(),
         new AccountingInstrument(payment.getSourceInstrumentType().name(),
             payment.getSourceAccountId()),
-        new AccountingInstrument(payment.getDestinationInstrumentType().name(),
-            payment.getDestinationAccountId()), payment.getAmount(), payment.getCurrencyCode(),
+        destination, payment.getAmount(), payment.getCurrencyCode(),
         Instant.now(), payment.getBusinessDate(), payment.getReference());
     String key = "PAYMENT:" + payment.getPaymentId() + ":ACCOUNTING";
     try {

@@ -13,6 +13,8 @@ public interface CifRepository extends JpaRepository<Cif, Long> {
 
     boolean existsByAadhaarNumber(String aadhaarNumber);
 
+    boolean existsByIdentityUserId(String identityUserId);
+
     boolean existsByEmailAndCifIdNot(String email, Long cifId);
 
     boolean existsByNumberAndCifIdNot(String number, Long cifId);

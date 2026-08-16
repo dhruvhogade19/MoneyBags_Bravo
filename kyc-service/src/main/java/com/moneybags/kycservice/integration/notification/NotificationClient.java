@@ -22,7 +22,7 @@ public class NotificationClient {
                 .build();
     }
 
-    public void sendKycStatusNotification(
+    public NotificationResponse sendKycStatusNotification(
             Long cifId,
             KycStatus kycStatus,
             String rejectionReason
@@ -37,11 +37,11 @@ public class NotificationClient {
 
         try {
 
-            restClient.post()
+            return restClient.post()
                     .uri("/internal/v1/notifications/kyc-status")
                     .body(request)
                     .retrieve()
-                    .toBodilessEntity();
+                    .body(NotificationResponse.class);
 
         } catch (Exception exception) {
 

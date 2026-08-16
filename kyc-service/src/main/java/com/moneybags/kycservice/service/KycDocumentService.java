@@ -11,6 +11,7 @@ import com.moneybags.kycservice.exception.BadRequestException;
 import com.moneybags.kycservice.exception.ResourceNotFoundException;
 import com.moneybags.kycservice.mapper.KycMapper;
 import com.moneybags.kycservice.repository.KycDocumentRepository;
+import com.moneybags.kycservice.repository.KycRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,15 +37,18 @@ public class KycDocumentService {
     private final KycDocumentRepository documentRepository;
     private final KycService kycService;
     private final KycMapper kycMapper;
+    private final KycRepository kycRepository;
 
     public KycDocumentService(
             KycDocumentRepository documentRepository,
             KycService kycService,
-            KycMapper kycMapper
+            KycMapper kycMapper,
+            KycRepository kycRepository
     ) {
         this.documentRepository = documentRepository;
         this.kycService = kycService;
         this.kycMapper = kycMapper;
+        this.kycRepository = kycRepository;
     }
 
     @Transactional
@@ -192,7 +196,8 @@ public class KycDocumentService {
     public KycDocumentResponse verifyDocument(
             Long kycId,
             Long documentId,
-            DocumentVerificationRequest request
+            DocumentVerificationRequest request,
+            String reviewerId
     ) {
 
         KycDocument document =
@@ -222,7 +227,7 @@ public class KycDocumentService {
         );
 
         document.setVerifiedBy(
-                request.verifiedBy()
+                reviewerId
         );
 
         document.setVerifiedAt(
@@ -239,10 +244,19 @@ public class KycDocumentService {
             kyc.setMismatchReason(
                     request.remarks()
             );
+        } else if (kyc.getKycStatus() == KycStatus.FLAGGED) {
+            boolean anotherMismatch = documentRepository.findAllByKycKycId(kycId).stream()
+                    .filter(existing -> !existing.getDocumentId().equals(documentId))
+                    .anyMatch(existing -> existing.getVerificationStatus() == VerificationStatus.MISMATCH);
+            if (!anotherMismatch) {
+                kyc.setKycStatus(KycStatus.PENDING);
+                kyc.setMismatchReason(null);
+            }
         }
 
         KycDocument savedDocument =
                 documentRepository.save(document);
+        kycRepository.save(kyc);
 
         return kycMapper.toDocumentResponse(
                 savedDocument

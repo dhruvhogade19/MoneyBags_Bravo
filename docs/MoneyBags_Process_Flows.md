@@ -2,7 +2,7 @@
 
 This document shows the primary user and data flows across the MoneyBags microservices. Public requests enter through the API Gateway; service-to-service arrows represent trusted internal calls.
 
-## 1. Customer Onboarding and KYC
+## 1. CIF Creation and KYC
 
 ```text
 ┌──────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐

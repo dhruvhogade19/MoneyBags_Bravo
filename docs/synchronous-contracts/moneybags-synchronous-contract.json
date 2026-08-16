@@ -6121,7 +6121,7 @@
   ],
   "workflows": [
     {
-      "name": "Customer onboarding and KYC",
+      "name": "CIF creation and KYC",
       "steps": [
         "Client creates CIF using POST /api/v1/cifs with Idempotency-Key.",
         "CIF persists the customer, then calls KYC POST /api/v1/kycs using the same correlation ID.",

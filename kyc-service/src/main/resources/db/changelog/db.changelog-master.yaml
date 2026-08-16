@@ -7,3 +7,9 @@ databaseChangeLog:
 
   - include:
       file: db/changelog/003-add-employment-snapshot-columns.sql
+
+  - include:
+      file: db/changelog/004-add-tenant-id.sql
+
+  - include:
+      file: db/changelog/005-add-notification-sync.sql

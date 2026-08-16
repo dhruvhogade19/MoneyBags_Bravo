@@ -25,4 +25,9 @@ public interface KycDocumentRepository
             DocumentType documentType
     );
 
+    boolean existsByKycKycIdAndVerificationStatus(
+            Long kycId,
+            com.moneybags.kycservice.enums.VerificationStatus status
+    );
+
 }

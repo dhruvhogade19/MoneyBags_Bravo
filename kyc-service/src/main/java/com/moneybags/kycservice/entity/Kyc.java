@@ -4,6 +4,7 @@ import com.moneybags.kycservice.enums.CifSyncStatus;
 import com.moneybags.kycservice.enums.EmploymentType;
 import com.moneybags.kycservice.enums.KycDecision;
 import com.moneybags.kycservice.enums.KycStatus;
+import com.moneybags.kycservice.enums.NotificationSyncStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -28,6 +29,10 @@ public class Kyc {
             nullable = false
     )
     private Long cifId;
+
+    @Setter
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
 
     @Setter
     @Column(
@@ -209,6 +214,28 @@ public class Kyc {
     @Column(name = "cif_synced_at")
     private OffsetDateTime cifSyncedAt;
 
+    @Setter
+    @Enumerated(EnumType.STRING)
+    @Column(name = "notification_sync_status", nullable = false, length = 20)
+    private NotificationSyncStatus notificationSyncStatus;
+
+    @Setter
+    @Column(name = "notification_retry_count", nullable = false)
+    private Integer notificationRetryCount;
+
+    @Setter
+    @Column(name = "last_notification_attempt_at")
+    private OffsetDateTime lastNotificationAttemptAt;
+
+    @Setter
+    @Lob
+    @Column(name = "last_notification_error")
+    private String lastNotificationError;
+
+    @Setter
+    @Column(name = "notification_sent_at")
+    private OffsetDateTime notificationSentAt;
+
     @Column(
             name = "created_at",
             nullable = false
@@ -245,6 +272,9 @@ public class Kyc {
         if (syncRetryCount == null) {
             syncRetryCount = 0;
         }
+
+        if (notificationSyncStatus == null) notificationSyncStatus = NotificationSyncStatus.NOT_REQUIRED;
+        if (notificationRetryCount == null) notificationRetryCount = 0;
 
         if (initiatedAt == null) {
             initiatedAt = now;

@@ -132,6 +132,8 @@ public class Notification {
         return emailBody;
     }
 
+    public String getRecipientEmail() { return recipientEmail; }
+
     public OffsetDateTime getCreatedAt() {
         return createdAt;
     }

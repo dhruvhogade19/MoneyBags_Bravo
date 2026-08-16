@@ -14,3 +14,7 @@ databaseChangeLog:
   - include:
       file: changes/004-add-age-to-cifs.yaml
       relativeToChangelogFile: true
+
+  - include:
+      file: changes/005-add-identity-link.yaml
+      relativeToChangelogFile: true

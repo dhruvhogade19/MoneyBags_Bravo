@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,6 +34,7 @@ public class NotificationHistoryController {
     }
 
     @GetMapping
+    @PreAuthorize("@notificationAuthorization.canUseCif(authentication, #cifId)")
     @Operation(summary = "Get notification history", description = "Returns a customer's notifications, newest first.")
     @ApiResponse(responseCode = "200", description = "Notification history returned")
     public Page<NotificationResponse> getHistory(
@@ -43,6 +45,7 @@ public class NotificationHistoryController {
     }
 
     @GetMapping("/{notificationId}")
+    @PreAuthorize("@notificationAuthorization.canAccess(authentication, #notificationId)")
     @Operation(summary = "Get a notification by ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Notification returned"),

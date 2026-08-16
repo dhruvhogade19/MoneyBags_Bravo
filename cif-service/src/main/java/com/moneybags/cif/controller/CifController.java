@@ -22,6 +22,9 @@ import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 @RestController
 @RequestMapping("/api/v1/cifs")
@@ -41,6 +44,7 @@ public class CifController {
 
 
     @PostMapping
+    @PreAuthorize("@cifAuthorization.canRegister(authentication)")
     @Operation(
             summary = "Create a CIF",
             description = """
@@ -49,9 +53,18 @@ public class CifController {
                 """
     )
     public ResponseEntity<CifResponse> createCif(
-            @Valid @RequestBody CreateCifRequest request
+            @Valid @RequestBody CreateCifRequest request,
+            Authentication authentication
     ) {
-        CifResponse response = cifService.createCif(request);
+        String identityUserId = null;
+        String tenantId = "moneybags";
+        if (authentication instanceof JwtAuthenticationToken jwt) {
+            tenantId = jwt.getToken().getClaimAsString("tenant_id");
+            boolean consumer = authentication.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_CONSUMER"));
+            if (consumer) identityUserId = jwt.getToken().getClaimAsString("user_id");
+        }
+        CifResponse response = cifService.createCif(request, identityUserId, tenantId);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -62,6 +75,7 @@ public class CifController {
 
 
     @GetMapping("/{cifId}")
+    @PreAuthorize("@cifAuthorization.canAccess(authentication, #cifId)")
     @Operation(
             summary = "Get complete CIF details",
             description = "Returns complete CIF details for the specified CIF ID."
@@ -76,6 +90,7 @@ public class CifController {
 
 
     @PutMapping("/{cifId}")
+    @PreAuthorize("@cifAuthorization.canAccess(authentication, #cifId)")
     @Operation(
             summary = "Update CIF details",
             description = "Updates customer information for the specified CIF ID."

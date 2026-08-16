@@ -40,16 +40,26 @@ public class CifServiceImpl implements CifService {
 
     @Override
     public CifResponse createCif(CreateCifRequest request) {
+        return createCif(request, null, "moneybags");
+    }
+
+    @Override
+    public CifResponse createCif(CreateCifRequest request, String identityUserId, String tenantId) {
         validateSalary(request.employmentType(), request.salary());
         validateUniqueFieldsForCreate(request);
+        if (identityUserId != null && cifRepository.existsByIdentityUserId(identityUserId)) {
+            throw new DuplicateResourceException("Authenticated consumer is already linked to a CIF");
+        }
 
         Cif cif = new Cif();
         copyCreateRequestToEntity(request, cif);
+        cif.setIdentityUserId(identityUserId);
+        cif.setTenantId(tenantId == null || tenantId.isBlank() ? "moneybags" : tenantId);
 
         Cif savedCif = cifRepository.save(cif);
 
         eventPublisher.publishEvent(
-                new CifCreatedEvent(toKycVerificationRequest(savedCif))
+                new CifCreatedEvent(toKycVerificationRequest(savedCif), identityUserId, savedCif.getTenantId())
         );
 
         return toCifResponse(savedCif);
@@ -75,7 +85,7 @@ public class CifServiceImpl implements CifService {
         Cif updatedCif = cifRepository.save(cif);
 
         eventPublisher.publishEvent(
-                new CifCreatedEvent(toKycVerificationRequest(updatedCif))
+                new CifCreatedEvent(toKycVerificationRequest(updatedCif), null, updatedCif.getTenantId())
         );
 
         return toCifResponse(updatedCif);
@@ -241,6 +251,7 @@ public class CifServiceImpl implements CifService {
     private KycVerificationRequest toKycVerificationRequest(Cif cif) {
         return new KycVerificationRequest(
                 cif.getCifId(),
+                cif.getTenantId(),
                 cif.getFirstName(),
                 cif.getLastName(),
                 cif.getDob(),

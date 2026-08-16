@@ -24,6 +24,12 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import com.moneybags.kycservice.enums.KycStatus;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -75,6 +81,7 @@ public class KycController {
             )
     })
     @PostMapping
+    @PreAuthorize("@kycAuthorization.canAccessCif(authentication, #request.cifId())")
     public ResponseEntity<KycResponse> createKyc(
             @Valid
             @RequestBody
@@ -113,6 +120,7 @@ public class KycController {
             )
     })
     @GetMapping("/{kycId}")
+    @PreAuthorize("@kycAuthorization.canAccess(authentication, #kycId)")
     public ResponseEntity<KycResponse> getKycById(
 
             @Parameter(
@@ -144,6 +152,7 @@ public class KycController {
             )
     })
     @GetMapping
+    @PreAuthorize("@kycAuthorization.canAccessCif(authentication, #cifId)")
     public ResponseEntity<List<KycResponse>> getKycsByCifId(
 
             @Parameter(
@@ -204,6 +213,7 @@ public class KycController {
             value = "/{kycId}/documents",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
+    @PreAuthorize("@kycAuthorization.canAccess(authentication, #kycId)")
     public ResponseEntity<List<KycDocumentResponse>> uploadDocuments(
 
             @Parameter(
@@ -265,6 +275,7 @@ public class KycController {
             )
     })
     @GetMapping("/{kycId}/documents")
+    @PreAuthorize("@kycAuthorization.canAccess(authentication, #kycId)")
     public ResponseEntity<List<KycDocumentResponse>> getDocuments(
 
             @Parameter(
@@ -303,6 +314,7 @@ public class KycController {
             )
     })
     @GetMapping("/{kycId}/documents/{documentId}")
+    @PreAuthorize("@kycAuthorization.canAccess(authentication, #kycId)")
     public ResponseEntity<ByteArrayResource> downloadDocument(
 
             @Parameter(
@@ -392,6 +404,7 @@ public class KycController {
     @PatchMapping(
             "/{kycId}/documents/{documentId}/verification"
     )
+    @PreAuthorize("@kycAuthorization.canAccess(authentication, #kycId)")
     public ResponseEntity<KycDocumentResponse> verifyDocument(
 
             @Parameter(
@@ -410,14 +423,16 @@ public class KycController {
 
             @Valid
             @RequestBody
-            DocumentVerificationRequest request
+            DocumentVerificationRequest request,
+            Authentication authentication
     ) {
 
         KycDocumentResponse response =
                 kycDocumentService.verifyDocument(
                         kycId,
                         documentId,
-                        request
+                        request,
+                        actor(authentication)
                 );
 
         return ResponseEntity.ok(response);
@@ -462,6 +477,7 @@ public class KycController {
             )
     })
     @PatchMapping("/{kycId}/decision")
+    @PreAuthorize("@kycAuthorization.canAccess(authentication, #kycId)")
     public ResponseEntity<KycResponse> makeDecision(
 
             @Parameter(
@@ -473,16 +489,47 @@ public class KycController {
 
             @Valid
             @RequestBody
-            KycDecisionRequest request
+            KycDecisionRequest request,
+            Authentication authentication
     ) {
 
         KycResponse response =
                 kycService.makeDecision(
                         kycId,
-                        request
+                        request,
+                        actor(authentication)
                 );
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/admin/work-queue")
+    @PreAuthorize("hasAuthority('SCOPE_kyc:review')")
+    public ResponseEntity<Page<KycResponse>> getAdminWorkQueue(
+            @RequestParam(required = false) Long cifId,
+            @RequestParam(required = false) List<KycStatus> statuses,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            Authentication authentication) {
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        return ResponseEntity.ok(kycService.getAdminWorkQueue(
+                tenant(authentication), cifId, statuses, PageRequest.of(Math.max(page, 0), safeSize)));
+    }
+
+    private String actor(Authentication authentication) {
+        if (authentication instanceof JwtAuthenticationToken jwt) {
+            String userId = jwt.getToken().getClaimAsString("user_id");
+            if (userId != null && !userId.isBlank()) return userId;
+        }
+        return authentication == null ? "unknown" : authentication.getName();
+    }
+
+    private String tenant(Authentication authentication) {
+        if (authentication instanceof JwtAuthenticationToken jwt) {
+            String tenantId = jwt.getToken().getClaimAsString("tenant_id");
+            if (tenantId != null && !tenantId.isBlank()) return tenantId;
+        }
+        throw new org.springframework.security.access.AccessDeniedException("tenant_id claim is required");
     }
 
     // =========================================================

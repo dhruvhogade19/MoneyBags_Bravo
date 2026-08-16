@@ -57,13 +57,14 @@ public class DeliveryAttempt {
 
     public DeliveryAttempt(
             Notification notification,
+            int attemptNo,
             String provider,
             DeliveryAttemptResult result,
             String providerReference,
             String errorDetails,
             OffsetDateTime attemptedAt) {
         this.notification = notification;
-        this.attemptNo = 1;
+        this.attemptNo = attemptNo;
         this.provider = provider;
         this.result = result;
         this.providerReference = providerReference;

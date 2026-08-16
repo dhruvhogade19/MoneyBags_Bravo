@@ -14,6 +14,13 @@ import com.moneybags.kycservice.exception.BadRequestException;
 import com.moneybags.kycservice.exception.ResourceNotFoundException;
 import com.moneybags.kycservice.mapper.KycMapper;
 import com.moneybags.kycservice.repository.KycRepository;
+import com.moneybags.kycservice.repository.KycDocumentRepository;
+import com.moneybags.kycservice.enums.DocumentType;
+import com.moneybags.kycservice.enums.VerificationStatus;
+import com.moneybags.kycservice.enums.NotificationSyncStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,18 +35,21 @@ public class KycService {
     private final KycMapper kycMapper;
     private final CifClient cifClient;
     private final NotificationClient notificationClient;
+    private final KycDocumentRepository documentRepository;
 
     public KycService(
             KycRepository kycRepository,
             KycMapper kycMapper,
             CifClient cifClient,
-            NotificationClient notificationClient
+            NotificationClient notificationClient,
+            KycDocumentRepository documentRepository
     ) {
 
         this.kycRepository = kycRepository;
         this.kycMapper = kycMapper;
         this.cifClient = cifClient;
         this.notificationClient = notificationClient;
+        this.documentRepository = documentRepository;
     }
 
     @Transactional
@@ -48,6 +58,14 @@ public class KycService {
     ) {
 
         validateEmploymentSnapshot(request);
+
+        var existing = kycRepository.findFirstByCifIdOrderByCreatedAtDesc(request.cifId());
+        if (existing.isPresent()) {
+            if (!existing.get().getTenantId().equals(request.tenantId())) {
+                throw new BadRequestException("CIF is already associated with a KYC case in another tenant");
+            }
+            return kycMapper.toResponse(existing.get());
+        }
 
         Kyc kyc = kycMapper.toEntity(request);
 
@@ -97,7 +115,8 @@ public class KycService {
     @Transactional
     public KycResponse makeDecision(
             Long kycId,
-            KycDecisionRequest request
+            KycDecisionRequest request,
+            String reviewerId
     ) {
 
         Kyc kyc = findKyc(kycId);
@@ -114,7 +133,7 @@ public class KycService {
 
         kyc.setDecision(request.decision());
         kyc.setKycStatus(finalStatus);
-        kyc.setReviewedBy(request.reviewedBy());
+        kyc.setReviewedBy(reviewerId);
         kyc.setReviewedAt(now);
         kyc.setUpdatedAt(now);
 
@@ -127,6 +146,9 @@ public class KycService {
         }
 
         kyc.setCifSyncStatus(CifSyncStatus.PENDING);
+        kyc.setNotificationSyncStatus(NotificationSyncStatus.PENDING);
+        kyc.setNotificationRetryCount(0);
+        kyc.setLastNotificationError(null);
 
         Kyc savedKyc = kycRepository.save(kyc);
 
@@ -198,6 +220,33 @@ public class KycService {
                     "rejectionReason is required when decision is REJECTED"
             );
         }
+
+        List<com.moneybags.kycservice.entity.KycDocument> documents =
+                documentRepository.findAllByKycKycId(kyc.getKycId());
+        java.util.Set<DocumentType> present = documents.stream()
+                .map(com.moneybags.kycservice.entity.KycDocument::getDocumentType)
+                .collect(java.util.stream.Collectors.toSet());
+        java.util.Set<DocumentType> missing = java.util.EnumSet.allOf(DocumentType.class);
+        missing.removeAll(present);
+        if (!missing.isEmpty()) {
+            throw new BadRequestException("All required KYC documents must be uploaded before a decision. Missing: "
+                    + missing);
+        }
+        if (documents.stream().anyMatch(document -> document.getVerificationStatus() == VerificationStatus.PENDING)) {
+            throw new BadRequestException("Every KYC document must be VERIFIED or MISMATCH before a decision");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<KycResponse> getAdminWorkQueue(String tenantId, Long cifId, List<KycStatus> statuses,
+                                               Pageable pageable) {
+        List<KycStatus> effectiveStatuses = statuses == null || statuses.isEmpty()
+                ? List.of(KycStatus.PENDING, KycStatus.FLAGGED) : statuses;
+        Page<Kyc> page = cifId == null
+                ? kycRepository.findAllByTenantIdAndKycStatusIn(tenantId, effectiveStatuses, pageable)
+                : kycRepository.findAllByTenantIdAndCifIdAndKycStatusIn(
+                        tenantId, cifId, effectiveStatuses, pageable);
+        return page.map(kycMapper::toResponse);
     }
 
     private void synchronizeWithCif(Kyc kyc) {
@@ -248,28 +297,52 @@ public class KycService {
     }
 
     private void sendNotification(Kyc kyc) {
-
+        if (kyc.getKycStatus() != KycStatus.APPROVED && kyc.getKycStatus() != KycStatus.REJECTED) return;
+        if (kyc.getNotificationRetryCount() >= 5) return;
+        kyc.setLastNotificationAttemptAt(OffsetDateTime.now());
+        kyc.setNotificationRetryCount(kyc.getNotificationRetryCount() + 1);
         try {
-
-            notificationClient
+            var response = notificationClient
                     .sendKycStatusNotification(
                             kyc.getCifId(),
                             kyc.getKycStatus(),
                             kyc.getRejectionReason()
                     );
-
+            if (response != null && "SENT".equals(response.status())) {
+                kyc.setNotificationSyncStatus(NotificationSyncStatus.SENT);
+                kyc.setNotificationSentAt(OffsetDateTime.now());
+                kyc.setLastNotificationError(null);
+            } else {
+                kyc.setNotificationSyncStatus(NotificationSyncStatus.FAILED);
+                kyc.setLastNotificationError("Notification service did not confirm email delivery");
+            }
         } catch (Exception exception) {
-
-            /*
-             * Notification failure should not undo
-             * the KYC decision.
-             *
-             * Later, this can be replaced by:
-             * - retry mechanism
-             * - Kafka
-             * - outbox pattern
-             */
+            kyc.setNotificationSyncStatus(NotificationSyncStatus.FAILED);
+            kyc.setLastNotificationError(exception.getMessage());
         }
+        kyc.setUpdatedAt(OffsetDateTime.now());
+        kycRepository.save(kyc);
+    }
+
+    @Scheduled(initialDelayString = "${moneybags.kyc.notification-retry-initial-delay:60000}",
+            fixedDelayString = "${moneybags.kyc.notification-retry-delay:60000}")
+    @Transactional
+    public void retryPendingNotifications() {
+        kycRepository.findTop50ByNotificationSyncStatusInAndNotificationRetryCountLessThanOrderByUpdatedAtAsc(
+                        List.of(NotificationSyncStatus.PENDING, NotificationSyncStatus.FAILED), 5)
+                .forEach(this::sendNotification);
+    }
+
+    @Scheduled(initialDelayString = "${moneybags.kyc.cif-retry-initial-delay:60000}",
+            fixedDelayString = "${moneybags.kyc.cif-retry-delay:60000}")
+    @Transactional
+    public void retryPendingCifSynchronizations() {
+        kycRepository.findTop50ByCifSyncStatusInAndSyncRetryCountLessThanOrderByUpdatedAtAsc(
+                        List.of(CifSyncStatus.PENDING, CifSyncStatus.FAILED), 5)
+                .stream()
+                .filter(kyc -> kyc.getKycStatus() == KycStatus.APPROVED
+                        || kyc.getKycStatus() == KycStatus.REJECTED)
+                .forEach(this::synchronizeWithCif);
     }
     @Transactional(readOnly = true)
     Kyc findKyc(Long kycId) {

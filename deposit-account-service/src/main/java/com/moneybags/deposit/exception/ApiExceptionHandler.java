@@ -7,7 +7,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -27,11 +29,23 @@ public class ApiExceptionHandler {
         return response(ex.status(), ex.code(), ex.getMessage(), request, List.of());
     }
 
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<Problem> forbidden(AccessDeniedException ex, HttpServletRequest request) {
+        return response(HttpStatus.FORBIDDEN, "FORBIDDEN",
+                "The authenticated identity is not allowed to access this resource", request, List.of());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<Problem> validation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         List<FieldError> errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> new FieldError(error.getField(), error.getDefaultMessage())).toList();
         return response(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Request validation failed", request, errors);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    ResponseEntity<Problem> missingHeader(MissingRequestHeaderException ex, HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, "REQUIRED_HEADER_MISSING",
+                "Required header is missing: " + ex.getHeaderName(), request, List.of());
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)

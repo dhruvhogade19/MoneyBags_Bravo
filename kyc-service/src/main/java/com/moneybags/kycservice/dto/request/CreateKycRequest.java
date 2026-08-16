@@ -18,6 +18,10 @@ public record CreateKycRequest(
         Long cifId,
 
         @NotBlank
+        @Pattern(regexp = "[A-Za-z0-9._-]{1,64}")
+        String tenantId,
+
+        @NotBlank
         @Size(max = 100)
         String firstName,
 

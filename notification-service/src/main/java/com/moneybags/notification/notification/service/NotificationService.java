@@ -73,6 +73,9 @@ public class NotificationService {
         var existing = notificationRepository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
             if (existing.get().getRequestFingerprint().equals(fingerprint)) {
+                if (existing.get().getStatus() == com.moneybags.notification.notification.domain.NotificationStatus.FAILED) {
+                    deliver(existing.get());
+                }
                 return new NotificationCreationResult(notificationMapper.toResponse(existing.get()), true);
             }
             throw new IdempotencyConflictException(idempotencyKey);
@@ -108,22 +111,27 @@ public class NotificationService {
                 request.cifId(), request.notificationType(), request.sourceReference(), idempotencyKey, fingerprint,
                 customer.email(), renderedEmail.subject(), renderedEmail.body(), now));
 
+        deliver(notification);
+        return notificationMapper.toResponse(notification);
+    }
+
+    private void deliver(Notification notification) {
+        int attemptNo = Math.toIntExact(deliveryAttemptRepository.countByNotificationId(notification.getId()) + 1);
         try {
-            emailSender.send(customer.email(), renderedEmail.subject(), renderedEmail.body());
+            emailSender.send(notification.getRecipientEmail(), notification.getEmailSubject(), notification.getEmailBody());
             OffsetDateTime sentAt = OffsetDateTime.now(ZoneOffset.UTC);
             notification.markSent(sentAt);
             deliveryAttemptRepository.save(new DeliveryAttempt(
-                    notification, mailProperties.provider(), DeliveryAttemptResult.SENT, null, null, sentAt));
+                    notification, attemptNo, mailProperties.provider(), DeliveryAttemptResult.SENT, null, null, sentAt));
         } catch (MailException exception) {
             LOGGER.warn("SMTP delivery failed for notificationId={}, exceptionType={}, rootCauseType={}",
                     notification.getId(), exception.getClass().getSimpleName(),
                     exception.getMostSpecificCause().getClass().getSimpleName());
             notification.markFailed();
             deliveryAttemptRepository.save(new DeliveryAttempt(
-                    notification, mailProperties.provider(), DeliveryAttemptResult.FAILED, null,
+                    notification, attemptNo, mailProperties.provider(), DeliveryAttemptResult.FAILED, null,
                     safeErrorMessage(exception), OffsetDateTime.now(ZoneOffset.UTC)));
         }
-        return notificationMapper.toResponse(notification);
     }
 
     private void validateCustomer(CustomerProfile customer, Long requestedCifId) {

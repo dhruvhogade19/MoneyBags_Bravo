@@ -67,7 +67,11 @@ public final class IntegrationDtos {
       BigDecimal purchaseInterestRateSnapshot, BigDecimal availableLimit,
       BigDecimal outstandingAmount, String status, Instant openedAt) { }
 
-  public record AccountingInstrument(String instrumentType, String accountId) { }
+  public record AccountingInstrument(String instrumentType, String accountId, String merchantId) {
+    public AccountingInstrument(String instrumentType, String accountId) {
+      this(instrumentType, accountId, null);
+    }
+  }
   public record AccountingSettlementRequest(
       String paymentId, String paymentType, AccountingInstrument source,
       AccountingInstrument destination, BigDecimal amount, String currencyCode,

@@ -55,7 +55,13 @@ class NotificationClientTests {
                           "kycStatus": "APPROVED"
                         }
                         """, true))
-                .andRespond(withSuccess());
+                .andRespond(withSuccess("""
+                        {
+                          "notificationId": 501,
+                          "cifId": 101,
+                          "status": "SENT"
+                        }
+                        """, MediaType.APPLICATION_JSON));
 
         notificationClient.sendKycStatusNotification(
                 101L,
@@ -80,7 +86,13 @@ class NotificationClientTests {
                           "rejectionReason": "PAN document could not be verified."
                         }
                         """, true))
-                .andRespond(withSuccess());
+                .andRespond(withSuccess("""
+                        {
+                          "notificationId": 502,
+                          "cifId": 101,
+                          "status": "SENT"
+                        }
+                        """, MediaType.APPLICATION_JSON));
 
         notificationClient.sendKycStatusNotification(
                 101L,

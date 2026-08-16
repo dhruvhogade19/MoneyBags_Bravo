@@ -4,6 +4,7 @@ import com.moneybags.kycservice.enums.CifSyncStatus;
 import com.moneybags.kycservice.enums.EmploymentType;
 import com.moneybags.kycservice.enums.KycDecision;
 import com.moneybags.kycservice.enums.KycStatus;
+import com.moneybags.kycservice.enums.NotificationSyncStatus;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -14,6 +15,8 @@ public record KycResponse(
         Long kycId,
 
         Long cifId,
+
+        String tenantId,
 
         String customerName,
 
@@ -64,6 +67,12 @@ public record KycResponse(
         Integer syncRetryCount,
 
         OffsetDateTime cifSyncedAt,
+
+        NotificationSyncStatus notificationSyncStatus,
+
+        Integer notificationRetryCount,
+
+        OffsetDateTime notificationSentAt,
 
         OffsetDateTime createdAt,
 

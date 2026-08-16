@@ -29,11 +29,16 @@ public class RestClientConfig {
     @LoadBalanced
     RestClient.Builder loadBalancedRestClientBuilder(
             @Value("${moneybags.http.connect-timeout:2s}") Duration connectTimeout,
-            @Value("${moneybags.http.read-timeout:5s}") Duration readTimeout) {
+            @Value("${moneybags.http.read-timeout:5s}") Duration readTimeout,
+            ClientCredentialsTokenProvider tokens) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(connectTimeout);
         requestFactory.setReadTimeout(readTimeout);
         return RestClient.builder().requestFactory(requestFactory).requestInterceptor((request, body, execution) -> {
+            if (request.getHeaders().getFirst(org.springframework.http.HttpHeaders.AUTHORIZATION) == null) {
+                String token = tokens.token();
+                if (token != null) request.getHeaders().setBearerAuth(token);
+            }
             String correlationId = MDC.get("correlationId");
             if (correlationId != null && !correlationId.isBlank()) {
                 request.getHeaders().set(CorrelationIdFilter.HEADER, correlationId);

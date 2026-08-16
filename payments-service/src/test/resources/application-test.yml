@@ -19,3 +19,7 @@ spring:
 eureka:
   client:
     enabled: false
+
+moneybags:
+  security:
+    enabled: false

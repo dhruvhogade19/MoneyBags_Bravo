@@ -7,6 +7,12 @@ spring:
     import: optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: deposit-account-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+          audiences: ${OAUTH2_AUDIENCE:moneybags-api}
   datasource:
     url: ${MONEYBAGS_DB_URL:${DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
     username: ${MONEYBAGS_DB_USERNAME:${DB_USERNAME:moneybags}}
@@ -52,7 +58,7 @@ moneybags:
     notification:
       base-url: ${NOTIFICATION_URL:http://notification-service}
   security:
-    enabled: ${SECURITY_ENABLED:false}
+    enabled: ${SECURITY_ENABLED:true}
     pii-key-base64: ${MONEYBAGS_PII_KEY_BASE64:}
   deposit:
     account-number-prefix: ${ACCOUNT_NUMBER_PREFIX:MB}

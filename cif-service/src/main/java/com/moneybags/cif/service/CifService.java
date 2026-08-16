@@ -12,6 +12,8 @@ public interface CifService {
 
     CifResponse createCif(CreateCifRequest request);
 
+    CifResponse createCif(CreateCifRequest request, String identityUserId, String tenantId);
+
     CifResponse getCifById(Long cifId);
 
     CifResponse updateCif(Long cifId, UpdateCifRequest request);

@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,6 +30,7 @@ public class CreditCardController {
     @ApiResponses({@ApiResponse(responseCode = "201", description = "Application decision recorded", content = @Content(schema = @Schema(implementation = ApplicationResponse.class))),
             @ApiResponse(responseCode = "400", description = ERROR_SCHEMA), @ApiResponse(responseCode = "404", description = "CIF or referenced resource not found"), @ApiResponse(responseCode = "409", description = ERROR_SCHEMA)})
     @PostMapping("/applications")
+    @PreAuthorize("@creditCardAuthorization.canAccessCif(authentication, #r.cifId())")
     @ResponseStatus(HttpStatus.CREATED)
     ApplicationResponse submit(@io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = "Application fields.", content = @Content(schema = @Schema(implementation = ApplicationRequest.class)))
                                @Valid @RequestBody ApplicationRequest r) {
@@ -38,6 +40,7 @@ public class CreditCardController {
     @Operation(tags = "Customer / Admin - Applications", summary = "Get a credit-card application", description = "Intended customer/admin read API; authentication is not currently enforced.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Application found", content = @Content(schema = @Schema(implementation = ApplicationResponse.class))), @ApiResponse(responseCode = "404", description = ERROR_SCHEMA)})
     @GetMapping("/applications/{applicationId}")
+    @PreAuthorize("@creditCardAuthorization.canAccessApplication(authentication, #applicationId)")
     ApplicationResponse application(@Parameter(description = "Credit-card application ID.", required = true, example = "1001") @PathVariable("applicationId") Long applicationId) {
         return service.application(applicationId);
     }
@@ -45,6 +48,7 @@ public class CreditCardController {
     @Operation(tags = "Customer / Admin - Applications", summary = "List applications by CIF", description = "Intended customer/admin read API; authentication is not currently enforced.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Applications for the CIF", content = @Content(schema = @Schema(implementation = ApplicationResponse.class))), @ApiResponse(responseCode = "400", description = ERROR_SCHEMA)})
     @GetMapping("/applications/cif/{cifId}")
+    @PreAuthorize("@creditCardAuthorization.canAccessCif(authentication, #cifId)")
     List<ApplicationResponse> applications(@Parameter(description = "Customer CIF ID.", required = true, example = "101") @PathVariable Long cifId) {
         return service.applications(cifId);
     }
@@ -74,6 +78,7 @@ public class CreditCardController {
     @Operation(tags = "Customer / Admin - Accounts", summary = "Get a credit-card account", description = "Intended customer/admin read API; authentication is not currently enforced.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Account found", content = @Content(schema = @Schema(implementation = AccountResponse.class))), @ApiResponse(responseCode = "404", description = ERROR_SCHEMA)})
     @GetMapping("/accounts/{accountId}")
+    @PreAuthorize("@creditCardAuthorization.canAccessAccount(authentication, #accountId)")
     AccountResponse account(@Parameter(description = "Credit-card account ID.", required = true, example = "5001") @PathVariable("accountId") Long accountId) {
         return service.account(accountId);
     }
@@ -81,6 +86,7 @@ public class CreditCardController {
     @Operation(tags = "Customer / Admin - Accounts", summary = "List accounts by CIF", description = "Intended customer/admin read API; authentication is not currently enforced.")
     @ApiResponses(@ApiResponse(responseCode = "200", description = "Accounts for the CIF", content = @Content(schema = @Schema(implementation = AccountResponse.class))))
     @GetMapping("/accounts/cif/{cifId}")
+    @PreAuthorize("@creditCardAuthorization.canAccessCif(authentication, #cifId)")
     List<AccountResponse> accounts(@Parameter(description = "Customer CIF ID.", required = true, example = "101") @PathVariable Long cifId) {
         return service.accounts(cifId);
     }
@@ -88,6 +94,7 @@ public class CreditCardController {
     @Operation(tags = "Customer / Admin - Accounts", summary = "Get available credit limit", description = "Read-only available-limit view. It does not reserve credit or participate in concurrency control; HOLD is the authoritative reservation operation.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Available limit", content = @Content(schema = @Schema(implementation = LimitResponse.class))), @ApiResponse(responseCode = "404", description = ERROR_SCHEMA)})
     @GetMapping("/accounts/{accountId}/available-limit")
+    @PreAuthorize("@creditCardAuthorization.canAccessAccount(authentication, #accountId)")
     LimitResponse limit(@Parameter(description = "Credit-card account ID.", required = true, example = "5001") @PathVariable("accountId") Long accountId) {
         return service.limit(accountId);
     }
@@ -128,6 +135,7 @@ public class CreditCardController {
     @Operation(tags = "Customer / Admin - Accounts", summary = "Begin account closure", description = "Intended customer/admin operation; authentication is not currently enforced. Sets CLOSURE_PENDING, requests Accounting clearance, and sets CLOSED only after Accounting confirms the final close.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Account is CLOSURE_PENDING or CLOSED", content = @Content(schema = @Schema(implementation = AccountResponse.class))), @ApiResponse(responseCode = "404", description = ERROR_SCHEMA), @ApiResponse(responseCode = "409", description = "Account is already closed or cannot be closed in its current state")})
     @PostMapping("/accounts/{accountId}/close")
+    @PreAuthorize("@creditCardAuthorization.canAccessAccount(authentication, #accountId)")
     AccountResponse close(@Parameter(description = "Credit-card account ID.", required = true, example = "5001") @PathVariable("accountId") Long accountId) {
         return service.close(accountId);
     }
@@ -135,6 +143,7 @@ public class CreditCardController {
     @Operation(tags = "Customer / Admin - Accounts", summary = "Get purchase interest rate", description = "Intended customer/admin read API; authentication is not currently enforced.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Interest-rate snapshot", content = @Content(schema = @Schema(implementation = InterestRateResponse.class))), @ApiResponse(responseCode = "404", description = ERROR_SCHEMA)})
     @GetMapping("/accounts/{accountId}/interest-rate")
+    @PreAuthorize("@creditCardAuthorization.canAccessAccount(authentication, #accountId)")
     InterestRateResponse interest(@Parameter(description = "Credit-card account ID.", required = true, example = "5001") @PathVariable("accountId") Long accountId) {
         return service.interest(accountId);
     }

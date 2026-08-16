@@ -5,8 +5,10 @@ import com.moneybags.cif.domain.enums.KycStatus;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import org.hibernate.annotations.JdbcTypeCode;
 
 @Entity
 @Table(
@@ -22,8 +24,15 @@ public class Cif {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @JdbcTypeCode(Types.NUMERIC)
     @Column(name = "cif_id")
     private Long cifId;
+
+    @Column(name = "identity_user_id", length = 36, unique = true)
+    private String identityUserId;
+
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
 
     @Column(name = "first_name", nullable = false, length = 100)
     private String firstName;
@@ -34,6 +43,7 @@ public class Cif {
     @Column(name = "dob", nullable = false)
     private LocalDate dob;
 
+    @JdbcTypeCode(Types.NUMERIC)
     @Column(name = "age", nullable = false)
     private Integer age;
 
@@ -87,6 +97,11 @@ public class Cif {
     public Long getCifId() {
         return cifId;
     }
+
+    public String getIdentityUserId() { return identityUserId; }
+    public void setIdentityUserId(String identityUserId) { this.identityUserId = identityUserId; }
+    public String getTenantId() { return tenantId; }
+    public void setTenantId(String tenantId) { this.tenantId = tenantId; }
 
     public String getFirstName() {
         return firstName;

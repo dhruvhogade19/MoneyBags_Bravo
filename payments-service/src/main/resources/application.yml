@@ -3,6 +3,12 @@ spring:
     import: optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: payments-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+          audiences: ${OAUTH2_AUDIENCE:moneybags-api}
   profiles:
     default: oracle
   datasource:
@@ -21,6 +27,10 @@ spring:
 
 server:
   port: "${SERVER_PORT:8085}"
+
+moneybags:
+  security:
+    enabled: ${SECURITY_ENABLED:true}
 
 eureka:
   client:
@@ -53,7 +63,7 @@ clients:
   deposit:
     base-url: "${DEPOSIT_BASE_URL:http://localhost:8086}"
   credit-card:
-    base-url: "${CREDIT_CARD_BASE_URL:http://localhost:8084}"
+    base-url: "${CREDIT_CARD_BASE_URL:http://localhost:8087}"
   billing:
     base-url: "${BILLING_BASE_URL:http://localhost:8087}"
   accounting:

@@ -9,6 +9,7 @@ import java.time.LocalDate;
 public record KycVerificationRequest(
 
         Long cifId,
+        String tenantId,
         String firstName,
         String lastName,
         LocalDate dob,

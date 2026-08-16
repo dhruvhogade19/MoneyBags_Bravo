@@ -90,7 +90,7 @@ flowchart LR
 | `/api/eod/**` | `/api/v1/eod/**` | EOD operator APIs follow the public version convention. |
 | `/internal/** (Accounting)` | `/internal/v1/**` | Accounting peer APIs use the common internal prefix. |
 
-## Workflow: Customer onboarding and KYC
+## Workflow: CIF creation and KYC
 
 1. Client creates CIF using POST /api/v1/cifs with Idempotency-Key.
 2. CIF persists the customer, then calls KYC POST /api/v1/kycs using the same correlation ID.

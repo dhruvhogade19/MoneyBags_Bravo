@@ -1,11 +1,20 @@
 spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: cif-service
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+          audiences: ${OAUTH2_AUDIENCE:moneybags-api}
+
   datasource:
-    url:
-    username:
-    password:
+    url: ${CIF_DB_URL:${MONEYBAGS_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
+    username: ${CIF_DB_USERNAME:${MONEYBAGS_DB_USERNAME:moneybags}}
+    password: ${CIF_DB_PASSWORD:${MONEYBAGS_DB_PASSWORD:moneybags}}
     driver-class-name: oracle.jdbc.OracleDriver
 
   liquibase:
@@ -36,3 +45,7 @@ management:
   endpoint:
     health:
       show-details: when_authorized
+
+moneybags:
+  security:
+    enabled: ${SECURITY_ENABLED:true}

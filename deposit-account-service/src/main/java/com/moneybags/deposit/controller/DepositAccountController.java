@@ -17,6 +17,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -36,6 +37,7 @@ public class DepositAccountController {
     }
 
     @PostMapping
+    @PreAuthorize("@depositAuthorization.canOpen(authentication, #request)")
     public ResponseEntity<AccountDetailView> open(@RequestHeader("Idempotency-Key") String idempotencyKey,
                                                    @Valid @RequestBody OpenDepositAccountRequest request,
                                                    Authentication authentication) {
@@ -45,17 +47,20 @@ public class DepositAccountController {
     }
 
     @PostMapping("/eligibility-check")
+    @PreAuthorize("@depositAuthorization.canUseCustomer(authentication, #request.customerId())")
     public EligibilityResult eligibility(@Valid @RequestBody EligibilityCheckRequest request) {
         return service.checkEligibility(request);
     }
 
     @GetMapping("/{accountId}")
+    @PreAuthorize("@depositAuthorization.canAccessAccount(authentication, #accountId)")
     public ResponseEntity<AccountDetailView> get(@PathVariable String accountId) {
         AccountDetailView result = service.get(accountId);
         return ResponseEntity.ok().eTag(etag(result.version())).body(result);
     }
 
     @GetMapping
+    @PreAuthorize("@depositAuthorization.canSearch(authentication, #customerId)")
     public Page<AccountSummaryView> search(@RequestParam(required = false) String customerId,
                                            @RequestParam(required = false) AccountStatus status,
                                            @RequestParam(defaultValue = "0") int page,
@@ -66,16 +71,19 @@ public class DepositAccountController {
     }
 
     @GetMapping("/{accountId}/balance")
+    @PreAuthorize("@depositAuthorization.canAccessAccount(authentication, #accountId)")
     public BalanceView balance(@PathVariable String accountId) {
         return service.balance(accountId);
     }
 
     @GetMapping("/{accountId}/status-history")
+    @PreAuthorize("@depositAuthorization.canAccessAccount(authentication, #accountId)")
     public List<StatusHistoryView> history(@PathVariable String accountId) {
         return service.history(accountId);
     }
 
     @PostMapping("/{accountId}/holders")
+    @PreAuthorize("@depositAuthorization.canManageAccount(authentication, #accountId)")
     public ResponseEntity<AccountDetailView> addHolder(@PathVariable String accountId,
                                                         @RequestHeader("Idempotency-Key") String idempotencyKey,
                                                         @Valid @RequestBody HolderRequest request,
@@ -87,6 +95,7 @@ public class DepositAccountController {
     }
 
     @DeleteMapping("/{accountId}/holders/{customerId}")
+    @PreAuthorize("@depositAuthorization.canManageAccount(authentication, #accountId)")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void removeHolder(@PathVariable String accountId, @PathVariable String customerId,
                              @RequestHeader("Idempotency-Key") String idempotencyKey,
@@ -96,6 +105,7 @@ public class DepositAccountController {
     }
 
     @PutMapping("/{accountId}/nominees")
+    @PreAuthorize("@depositAuthorization.canManageAccount(authentication, #accountId)")
     public List<NomineeView> replaceNominees(@PathVariable String accountId,
                                              @RequestHeader("Idempotency-Key") String idempotencyKey,
                                              @Valid @RequestBody List<@Valid NomineeRequest> requests,
@@ -106,6 +116,7 @@ public class DepositAccountController {
     }
 
     @PutMapping("/{accountId}/limits/{limitType}")
+    @PreAuthorize("@depositAuthorization.canManageAccount(authentication, #accountId)")
     public LimitView upsertLimit(@PathVariable String accountId, @PathVariable LimitType limitType,
                                  @RequestHeader("Idempotency-Key") String idempotencyKey,
                                  @Valid @RequestBody LimitRequest request, Authentication authentication) {
@@ -115,6 +126,7 @@ public class DepositAccountController {
     }
 
     @PostMapping("/{accountId}/mandates")
+    @PreAuthorize("@depositAuthorization.canManageAccount(authentication, #accountId)")
     public ResponseEntity<MandateView> addMandate(@PathVariable String accountId,
                                                   @RequestHeader("Idempotency-Key") String idempotencyKey,
                                                   @Valid @RequestBody MandateRequest request,
@@ -126,6 +138,7 @@ public class DepositAccountController {
     }
 
     @DeleteMapping("/{accountId}/mandates/{mandateId}")
+    @PreAuthorize("@depositAuthorization.canManageAccount(authentication, #accountId)")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revokeMandate(@PathVariable String accountId, @PathVariable String mandateId,
                               @RequestHeader("Idempotency-Key") String idempotencyKey,

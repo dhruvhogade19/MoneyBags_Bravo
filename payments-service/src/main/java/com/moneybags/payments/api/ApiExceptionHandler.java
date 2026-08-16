@@ -10,6 +10,7 @@ import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,6 +27,13 @@ public class ApiExceptionHandler {
   ApiError notFound(ResourceNotFoundException exception, HttpServletRequest request) {
     return error(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", exception.getMessage(), request,
         List.of());
+  }
+
+  @ExceptionHandler(AccessDeniedException.class)
+  @ResponseStatus(HttpStatus.FORBIDDEN)
+  ApiError forbidden(AccessDeniedException exception, HttpServletRequest request) {
+    return error(HttpStatus.FORBIDDEN, "FORBIDDEN",
+        "The authenticated identity is not allowed to access this resource", request, List.of());
   }
 
   @ExceptionHandler(BusinessValidationException.class)

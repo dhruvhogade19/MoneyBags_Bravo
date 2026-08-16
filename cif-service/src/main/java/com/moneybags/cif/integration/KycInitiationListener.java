@@ -16,14 +16,25 @@ public class KycInitiationListener {
             LoggerFactory.getLogger(KycInitiationListener.class);
 
     private final KycServiceClient kycServiceClient;
+    private final IdentityServiceClient identityServiceClient;
 
-    public KycInitiationListener(KycServiceClient kycServiceClient) {
+    public KycInitiationListener(KycServiceClient kycServiceClient, IdentityServiceClient identityServiceClient) {
         this.kycServiceClient = kycServiceClient;
+        this.identityServiceClient = identityServiceClient;
     }
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void initiateKyc(CifCreatedEvent event) {
+        if (event.identityUserId() != null) {
+            try {
+                identityServiceClient.linkCustomer(event.identityUserId(),
+                        event.kycVerificationRequest().cifId(), event.tenantId());
+            } catch (Exception exception) {
+                log.error("CIF was created, but its consumer identity could not be linked. cifId={}, userId={}",
+                        event.kycVerificationRequest().cifId(), event.identityUserId(), exception);
+            }
+        }
         try {
             kycServiceClient.initiateKycVerification(
                     event.kycVerificationRequest()

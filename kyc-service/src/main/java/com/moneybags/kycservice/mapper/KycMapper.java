@@ -17,6 +17,7 @@ public class KycMapper {
         Kyc kyc = new Kyc();
 
         kyc.setCifId(request.cifId());
+        kyc.setTenantId(request.tenantId());
         kyc.setCustomerName(
                 (request.firstName() + " " + request.lastName()).trim()
         );
@@ -47,6 +48,7 @@ public class KycMapper {
         return new KycResponse(
                 kyc.getKycId(),
                 kyc.getCifId(),
+                kyc.getTenantId(),
                 kyc.getCustomerName(),
                 kyc.getDateOfBirth(),
                 kyc.getMobileNumber(),
@@ -72,6 +74,9 @@ public class KycMapper {
                 kyc.getCifSyncStatus(),
                 kyc.getSyncRetryCount(),
                 kyc.getCifSyncedAt(),
+                kyc.getNotificationSyncStatus(),
+                kyc.getNotificationRetryCount(),
+                kyc.getNotificationSentAt(),
                 kyc.getCreatedAt(),
                 kyc.getUpdatedAt()
         );

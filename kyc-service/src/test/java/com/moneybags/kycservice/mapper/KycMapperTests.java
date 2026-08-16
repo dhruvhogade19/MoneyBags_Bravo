@@ -20,6 +20,7 @@ class KycMapperTests {
     void mapsEmploymentDetailsIntoSnapshot() {
         CreateKycRequest request = new CreateKycRequest(
                 42L,
+                "moneybags",
                 "Asha",
                 "Sharma",
                 LocalDate.of(1995, 4, 12),
@@ -39,6 +40,7 @@ class KycMapperTests {
                 () -> assertEquals(EmploymentType.SALARIED, snapshot.getEmploymentType()),
                 () -> assertEquals(new BigDecimal("75000.00"), snapshot.getSalary()),
                 () -> assertEquals("Asha Sharma", snapshot.getCustomerName()),
+                () -> assertEquals("moneybags", snapshot.getTenantId()),
                 () -> assertEquals("CIF_SERVICE", snapshot.getInitiatedBy())
         );
     }

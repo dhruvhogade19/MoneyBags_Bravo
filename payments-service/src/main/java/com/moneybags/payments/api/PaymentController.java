@@ -20,6 +20,7 @@ import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -38,6 +39,7 @@ public class PaymentController {
   }
 
   @PostMapping("/book-transfers")
+  @PreAuthorize("@paymentAuthorization.canUseCustomer(authentication, #request.requestorCustomerId())")
   @Operation(summary = "Create and settle an internal book transfer")
   @RequestBody(content = @Content(examples = @ExampleObject(value = """
       {"requestorCustomerId":101,"sourceAccountId":"dep-acc-001",
@@ -52,6 +54,7 @@ public class PaymentController {
   }
 
   @PostMapping("/credit-card-payment/merchant-payment")
+  @PreAuthorize("@paymentAuthorization.canUseCustomer(authentication, #request.requestorCustomerId())")
   @Operation(summary = "Pay a merchant using a credit-card hold and capture")
   @RequestBody(content = @Content(examples = @ExampleObject(value = """
       {"requestorCustomerId":101,"creditCardAccountId":"101",
@@ -66,6 +69,7 @@ public class PaymentController {
   }
 
   @PostMapping("/credit-card-payment/repayment")
+  @PreAuthorize("@paymentAuthorization.canUseCustomer(authentication, #request.requestorCustomerId())")
   @Operation(summary = "Repay a generated credit-card bill from a deposit account")
   @RequestBody(content = @Content(examples = @ExampleObject(value = """
       {"requestorCustomerId":101,"billId":"BILL-202608-001",
@@ -80,6 +84,7 @@ public class PaymentController {
   }
 
   @PostMapping("/fixed-deposit-funding")
+  @PreAuthorize("@paymentAuthorization.canUseCustomer(authentication, #request.requestorCustomerId())")
   @Operation(summary = "Fund and activate a fixed deposit from a deposit account")
   @RequestBody(content = @Content(examples = @ExampleObject(value = """
       {"requestorCustomerId":101,"sourceAccountId":"dep-acc-001",
@@ -95,12 +100,14 @@ public class PaymentController {
   }
 
   @GetMapping("/{paymentId}")
+  @PreAuthorize("@paymentAuthorization.canAccessPayment(authentication, #paymentId)")
   @Operation(summary = "Get a payment by ID")
   public PaymentResponse get(@PathVariable String paymentId) {
     return queries.get(paymentId);
   }
 
   @GetMapping
+  @PreAuthorize("@paymentAuthorization.canUseCustomer(authentication, #customerId)")
   @Operation(summary = "List a customer's payments, newest first")
   public PageResponse<PaymentResponse> byCustomer(
       @RequestParam @NotNull @Positive Long customerId,
@@ -110,6 +117,7 @@ public class PaymentController {
   }
 
   @PostMapping("/{paymentId}/cancel")
+  @PreAuthorize("@paymentAuthorization.canAccessPayment(authentication, #paymentId)")
   @Operation(summary = "Cancel a payment that has not posted to Accounting")
   public PaymentResponse cancel(@PathVariable String paymentId) {
     return queries.cancel(paymentId);
