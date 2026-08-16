@@ -10,3 +10,5 @@ spring:
   liquibase.contexts: testdata
 eureka.client.enabled: false
 moneybags.security.enabled: false
+moneybags.billing.stub-upstream-clients: true
+moneybags.billing.stub-notification-client: true

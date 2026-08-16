@@ -12,7 +12,7 @@ const services = [
   { name: "product-master-service", baseUrl: "http://localhost:8083", gatewayPrefixes: ["/api/products", "/api/v1/products", "/api/benchmarks"] },
   { name: "payments-service", baseUrl: "http://localhost:8085", gatewayPrefixes: ["/api/v1/payments"] },
   { name: "deposit-account-service", baseUrl: "http://localhost:8086", gatewayPrefixes: ["/api/deposit-accounts"] },
-  { name: "credit-card-service", baseUrl: "http://localhost:8087", gatewayPrefixes: ["/api/credit-cards"] },
+  { name: "credit-card-service", baseUrl: "http://localhost:8084", gatewayPrefixes: ["/api/credit-cards"] },
   { name: "accounting-service", baseUrl: "http://localhost:8088", gatewayPrefixes: ["/api/v1/journals", "/api/v1/gl-accounts", "/api/v1/accounting-rules", "/api/v1/subledger-mappings", "/api/v1/trial-balances", "/api/v1/reconciliation", "/api/v1/accounting-periods"] },
   { name: "notification-service", baseUrl: "http://localhost:8090", gatewayPrefixes: ["/api/notifications"] }
 ];

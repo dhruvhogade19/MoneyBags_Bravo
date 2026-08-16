@@ -1,7 +1,10 @@
 package com.moneybags.billing.integration;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
+import com.moneybags.billing.config.ClientCredentialsTokenProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -21,9 +24,10 @@ public class NotificationClient {
     private final boolean stub;
 
     @Autowired
-    public NotificationClient(@Value("${NOTIFICATION_URL:http://localhost:8090}") String notificationUrl,
-                              @Value("${moneybags.billing.stub-notification-client:true}") boolean stub) {
-        this(RestClient.builder().baseUrl(notificationUrl).build(), stub);
+    public NotificationClient(@Qualifier("billingNotificationRestClient") ObjectProvider<RestClient> restClient,
+                              @Value("${moneybags.billing.stub-notification-client:false}") boolean stub,
+                              ObjectProvider<ClientCredentialsTokenProvider> ignored) {
+        this(stub ? null : restClient.getObject(), stub);
     }
 
     NotificationClient(RestClient restClient, boolean stub) {

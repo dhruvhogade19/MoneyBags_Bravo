@@ -12,16 +12,18 @@ spring:
   profiles:
     default: oracle
   datasource:
-    url: jdbc:h2:mem:payments;MODE=Oracle;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=FALSE
-    username: sa
-    password: ""
-    driver-class-name: org.h2.Driver
+    url: ${MONEYBAGS_DB_URL:${PAYMENTS_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
+    username: ${MONEYBAGS_DB_USERNAME:${PAYMENTS_DB_USERNAME:moneybags}}
+    password: ${MONEYBAGS_DB_PASSWORD:${PAYMENTS_DB_PASSWORD:moneybags}}
+    driver-class-name: oracle.jdbc.OracleDriver
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     open-in-view: false
   liquibase:
-    enabled: false
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    contexts: ${LIQUIBASE_CONTEXTS:schema,testdata}
   jackson:
     default-property-inclusion: non_null
 
@@ -63,7 +65,7 @@ clients:
   deposit:
     base-url: "${DEPOSIT_BASE_URL:http://localhost:8086}"
   credit-card:
-    base-url: "${CREDIT_CARD_BASE_URL:http://localhost:8087}"
+    base-url: "${CREDIT_CARD_BASE_URL:http://localhost:8084}"
   billing:
     base-url: "${BILLING_BASE_URL:http://localhost:8087}"
   accounting:

@@ -57,6 +57,8 @@ moneybags:
       access-token: ${PRODUCT_MASTER_ACCESS_TOKEN:}
     notification:
       base-url: ${NOTIFICATION_URL:http://notification-service}
+    accounting:
+      base-url: ${ACCOUNTING_URL:http://accounting-service}
   security:
     enabled: ${SECURITY_ENABLED:true}
     pii-key-base64: ${MONEYBAGS_PII_KEY_BASE64:}

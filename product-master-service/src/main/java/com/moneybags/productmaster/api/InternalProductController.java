@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,5 +39,11 @@ public class InternalProductController {
             @PathVariable String productCode,
             @Valid @RequestBody CreditCardApplicationValidationRequest request) {
         return service.validateCreditCardApplication(productCode, request);
+    }
+
+    @GetMapping("/{productCode}/billing-details")
+    @Operation(summary = "Resolve the product terms required for credit-card bill generation")
+    public ProductDtos.ProductResponse billingDetails(@PathVariable String productCode) {
+        return service.get(productCode);
     }
 }

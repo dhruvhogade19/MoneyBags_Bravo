@@ -360,15 +360,15 @@ public class BillGenerationApplication {
         private final RestClient card;
         private final RestClient accounting;
 
-        HttpUpstreamGateway(@Value("${PRODUCT_URL:http://localhost:8084}") String productUrl, @Value("${CREDIT_CARD_URL:http://localhost:8085}") String cardUrl, @Value("${ACCOUNTING_URL:http://localhost:8089}") String accountingUrl) {
-            product = RestClient.builder().baseUrl(productUrl).build();
-            card = RestClient.builder().baseUrl(cardUrl).build();
-            accounting = RestClient.builder().baseUrl(accountingUrl).build();
+        HttpUpstreamGateway(@org.springframework.beans.factory.annotation.Qualifier("billingProductRestClient") RestClient product,
+                            @org.springframework.beans.factory.annotation.Qualifier("billingCreditCardRestClient") RestClient card,
+                            @org.springframework.beans.factory.annotation.Qualifier("billingAccountingRestClient") RestClient accounting) {
+            this.product = product; this.card = card; this.accounting = accounting;
         }
 
         @SuppressWarnings("unchecked")
         public BillingInputs fetch(String accountId, LocalDate from, LocalDate to) {
-            Map<String, Object> c = card.get().uri("/internal/v1/credit-card-accounts/{id}", accountId).retrieve().body(Map.class);
+            Map<String, Object> c = card.get().uri("/internal/v1/credit-card-accounts/{id}/billing-details", accountId).retrieve().body(Map.class);
             if (c == null)
                 throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "CARD_UNAVAILABLE", "Credit Card returned no account");
             Object cifValue = c.get("cifId");
@@ -380,27 +380,22 @@ public class BillGenerationApplication {
             } catch (NumberFormatException ex) {
                 throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "CARD_CIF_INVALID", "Credit Card returned an invalid cifId");
             }
-            Map<String, Object> rate = card.get().uri("/api/credit-cards/accounts/{id}/interest-rate", accountId).retrieve().body(Map.class);
-            if (rate == null)
-                throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "CARD_RATE_UNAVAILABLE", "Credit Card returned no effective interest rate");
             String productCode = (String) c.get("productCode");
-            List<Map<String, Object>> ps = product.get().uri("/api/v1/products/{code}/pricing", productCode).retrieve().body(List.class);
-            if (ps == null || ps.size() != 1)
-                throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "PRODUCT_UNAVAILABLE", "Expected exactly one effective product");
-            Map<String, Object> p = ps.getFirst();
+            Map<String, Object> p = product.get().uri("/internal/v1/products/{code}/billing-details", productCode).retrieve().body(Map.class);
+            if (p == null) throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "PRODUCT_UNAVAILABLE", "Product Master returned no product details");
             Map<String, Object> ir = (Map<String, Object>) p.get("interestRule");
             Map<String, Object> cr = (Map<String, Object>) p.get("creditCardRule");
             List<Map<String, Object>> fs = (List<Map<String, Object>>) p.getOrDefault("fees", List.of());
             List<Fee> fees = fs.stream().map(f -> new Fee((String) f.get("feeType"), decimal(f.get("feeAmount")), (String) f.get("frequency"), Boolean.TRUE.equals(f.get("active")))).toList();
-            Map<String, Object> page = accounting.get().uri(b -> b.path("/internal/v1/ledger-entries").queryParam("accountId", accountId).queryParam("fromDate", from).queryParam("toDate", to).queryParam("size", 500).build()).retrieve().body(Map.class);
+            Map<String, Object> page = accounting.get().uri(b -> b.path("/internal/v1/ledger-entries").queryParam("accountReference", "CC-" + accountId).queryParam("from", from).queryParam("to", to).queryParam("size", 500).build()).retrieve().body(Map.class);
             List<Map<String, Object>> entries = page == null ? List.of() : (List<Map<String, Object>>) page.getOrDefault("content", List.of());
-            List<Activity> acts = entries.stream().map(e -> new Activity(String.valueOf(e.getOrDefault("entryType", "PURCHASE")), String.valueOf(e.getOrDefault("reference", UUID.randomUUID())), String.valueOf(e.getOrDefault("description", "Ledger entry")), decimal(e.get("amount")), OffsetDateTime.now(ZoneOffset.UTC))).toList();
-            return new BillingInputs(new Product(productCode, (String) p.get("currencyCode"), (String) ir.getOrDefault("policyVersion", "V1"), (String) ir.getOrDefault("policyVersion", "V1"), decimal(rate.get("purchaseInterestRate")), decimal(cr.get("minimumPaymentPercentage")), decimal(cr.get("minimumPaymentAmount")), ((Number) cr.get("paymentDueDays")).intValue(), fees), new Card(accountId, cifId, productCode, (String) c.get("status"), decimal(c.get("outstandingAmount"))), acts);
+            List<Activity> acts = entries.stream().map(e -> new Activity(String.valueOf(e.getOrDefault("eventType", "PURCHASE")), String.valueOf(e.getOrDefault("journalNumber", UUID.randomUUID())), String.valueOf(e.getOrDefault("narration", "Ledger entry")), decimal(e.get("debitAmount")).subtract(decimal(e.get("creditAmount"))).abs(), OffsetDateTime.now(ZoneOffset.UTC))).toList();
+            return new BillingInputs(new Product(productCode, (String) p.get("currencyCode"), (String) ir.getOrDefault("policyVersion", "V1"), (String) ir.getOrDefault("policyVersion", "V1"), decimal(c.get("purchaseInterestRate")), decimal(cr.get("minimumPaymentPercentage")), decimal(cr.get("minimumPaymentAmount")), ((Number) cr.get("paymentDueDays")).intValue(), fees), new Card(accountId, cifId, productCode, (String) c.get("status"), decimal(c.get("outstandingAmount"))), acts);
         }
 
         public void postCalculatedCharges(String billId, String accountId, LocalDate date, String currency, List<Activity> charges) {
             if (charges.isEmpty()) return;
-            accounting.post().uri("/internal/v1/bill-postings").body(Map.of("billId", billId, "accountId", accountId, "businessDate", date, "currency", currency, "components", charges)).retrieve().toBodilessEntity();
+            accounting.post().uri("/internal/v1/bill-postings").body(Map.of("billId", billId, "accountId", accountId, "billingPeriodStart", date.withDayOfMonth(1), "billingPeriodEnd", date.withDayOfMonth(date.lengthOfMonth()), "businessDate", date, "occurredAt", OffsetDateTime.now(ZoneOffset.UTC), "currencyCode", currency, "components", charges.stream().map(c -> Map.of("componentType", c.type(), "amount", c.amount(), "description", c.description())).toList())).retrieve().toBodilessEntity();
         }
 
         private static BigDecimal decimal(Object n) {
@@ -616,8 +611,14 @@ public class BillGenerationApplication {
         @Bean
         @ConditionalOnProperty(name = "moneybags.security.enabled", havingValue = "true")
         SecurityFilterChain secured(HttpSecurity http) throws Exception {
-            return http.csrf(c -> c.disable()).authorizeHttpRequests(a -> a.requestMatchers("/actuator/health/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll().requestMatchers("/internal/**").hasAuthority("SCOPE_billing:service").anyRequest().authenticated()).oauth2ResourceServer(o -> o.jwt(j -> {
-            })).build();
+            return http.csrf(c -> c.disable()).authorizeHttpRequests(a -> a
+                    .requestMatchers("/actuator/health/**").permitAll()
+                    .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("BANK_ADMIN")
+                    .requestMatchers("/internal/**").hasAuthority("SCOPE_billing:service")
+                    .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/bills/**")
+                    .hasAnyAuthority("SCOPE_billing:read", "SCOPE_billing:admin")
+                    .anyRequest().denyAll())
+                    .oauth2ResourceServer(o -> o.jwt(j -> { })).build();
         }
     }
 }

@@ -46,6 +46,10 @@ management:
     health:
       show-details: when_authorized
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
 moneybags:
   security:
     enabled: ${SECURITY_ENABLED:true}

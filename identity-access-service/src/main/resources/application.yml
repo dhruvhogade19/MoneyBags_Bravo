@@ -2,6 +2,7 @@ server:
   port: ${SERVER_PORT:8093}
   shutdown: graceful
 
+
 spring:
   config:
     import: optional:file:.env[.properties],optional:file:../.env[.properties]

@@ -53,6 +53,11 @@ public class BillController {
         return service.get(billId);
     }
 
+    @GetMapping("/internal/v1/bills/{billId}")
+    BillResponse internalGet(@PathVariable String billId) {
+        return service.get(billId);
+    }
+
     @GetMapping("/internal/v1/bills")
     BillPage search(@RequestParam(required = false) String accountId,
                     @RequestParam(required = false) String billingPeriod,

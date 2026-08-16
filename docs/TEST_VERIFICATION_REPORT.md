@@ -25,17 +25,9 @@ The authenticated workflow verifies:
 11. CIF/Product/Accounting-backed credit-card application and account opening.
 12. Credit-card merchant payment through Card, Payments, Accounting and Notification, including idempotent replay.
 
-## Known incomplete integration
+## Bill Generation follow-up
 
-Credit-card bill repayment is **not operational** because the repository has no Bill Generation service. The configured local billing URL currently resolves to the Credit Card service, and a controlled repayment test produced:
-
-```text
-status: FAILED
-failureCode: PEER_HTTP_403
-failureMessage: BILL-GENERATION-SERVICE returned 403
-```
-
-This must not be reported as a fully working flow until a Bill Generation implementation provides bill lookup and payment-settlement callback APIs.
+The report above predates the Bill Generation service integration. Bill Generation is now assigned port `8087`, is registered with Eureka, is routed through the gateway for customer bill reads, and supports authenticated service-to-service lookup and payment-settlement callbacks. Its live end-to-end repayment workflow still needs to be run against the full local stack.
 
 The API-wide sweep proves authentication is enforced for every operation discovered from the running OpenAPI documents. It does not claim that every destructive business-state mutation was executed with a successful payload; positive-path coverage is supplied by the Maven suites, Postman collection and the 20-group live workflow above.
 

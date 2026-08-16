@@ -72,7 +72,7 @@
     },
     {
       "key": "creditCardBaseUrl",
-      "value": "http://localhost:8087",
+      "value": "http://localhost:8084",
       "type": "string"
     },
     {
@@ -652,7 +652,7 @@
     },
     {
       "key": "credit_card_baseUrl",
-      "value": "http://localhost:8087",
+      "value": "http://localhost:8084",
       "type": "string"
     },
     {
@@ -3253,7 +3253,7 @@
         },
         {
           "name": "Credit Card - applications, accounts, limits, rates, and readiness",
-          "description": "Requires credit-card-service on port 8087 plus a CIF that is KYC-complete. Transactional hold/capture/release/payment/closure APIs are in the embedded Credit Card suite below.",
+          "description": "Requires credit-card-service on port 8084 plus a CIF that is KYC-complete. Transactional hold/capture/release/payment/closure APIs are in the embedded Credit Card suite below.",
           "item": [
             {
               "name": "Credit Card readiness",
@@ -6681,7 +6681,7 @@
           ]
         },
         {
-          "name": "Credit Card hold and account lifecycle suite (requires service on port 8087)",
+          "name": "Credit Card hold and account lifecycle suite (requires service on port 8084)",
           "description": "Embedded from credit-card-service/postman/Credit-Card-Hold-Flow.postman_collection.json",
           "item": [
             {

@@ -12,6 +12,7 @@ import com.moneybags.deposit.fixeddeposit.repository.*;
 import com.moneybags.deposit.repository.*;
 import com.moneybags.deposit.service.Hashing;
 import com.moneybags.deposit.service.NotificationOutboxService;
+import com.moneybags.deposit.integration.AccountingLifecycleGateway;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,15 +29,15 @@ public class FixedDepositEodService {
     private final FundReservationRepository reservations;
     private final AuditLogRepository audits; private final FixedDepositInterestCalculator calculator;
     private final MaturityClosureRecorder maturityClosures;
-    private final NotificationOutboxService notificationOutbox;
+    private final NotificationOutboxService notificationOutbox; private final AccountingLifecycleGateway accountingLifecycle;
     public FixedDepositEodService(FixedDepositRepository fds,FixedDepositInterestAccrualRepository accruals,
         FixedDepositPayoutRepository payouts,AccountBalanceRepository balances,DepositAccountTransactionRepository transactions,
         FundReservationRepository reservations,
         AccountStatusHistoryRepository histories,AuditLogRepository audits,FixedDepositInterestCalculator calculator,
-        MaturityClosureRecorder maturityClosures, NotificationOutboxService notificationOutbox){
+        MaturityClosureRecorder maturityClosures, NotificationOutboxService notificationOutbox, AccountingLifecycleGateway accountingLifecycle){
         this.fds=fds;this.accruals=accruals;this.payouts=payouts;this.balances=balances;this.transactions=transactions;this.reservations=reservations;
         this.histories=histories;this.audits=audits;this.calculator=calculator;this.maturityClosures=maturityClosures;
-        this.notificationOutbox=notificationOutbox;
+        this.notificationOutbox=notificationOutbox;this.accountingLifecycle=accountingLifecycle;
     }
     @Transactional public EodResult accrue(EodRequest r){
         int processed=0,skipped=0; BigDecimal total=BigDecimal.ZERO.setScale(4); List<String> failures=new ArrayList<>();
@@ -82,7 +83,10 @@ public class FixedDepositEodService {
             transactions.save(new DepositAccountTransaction(UUID.randomUUID().toString(),fd.getPayoutAccountId(),reference,reservationId,
                     DepositTransactionType.CREDIT,PaymentOperationType.FIXED_DEPOSIT_MATURITY_PAYOUT,net,fd.getCurrencyCode(),destinationBefore,destination.getLedgerBalance(),reference));
             fd.setPaidInterest(interest);fd.setStatus(FixedDepositStatus.PAID_OUT);fd.setUpdatedAt(OffsetDateTime.now());
-            DepositAccount account=fd.getAccount();AccountStatus from=account.getStatus();account.setStatus(AccountStatus.CLOSED);account.setClosedAt(OffsetDateTime.now());
+            DepositAccount account=fd.getAccount();var clearance=accountingLifecycle.clearance(account.getId(),account.getCurrencyCode());
+            if(!clearance.accountingCleared())throw new ApiException(HttpStatus.CONFLICT,"ACCOUNTING_CLEARANCE_FAILED","Accounting has not cleared the account for closure: "+String.join(", ",clearance.blockers()));
+            AccountStatus from=account.getStatus();account.setStatus(AccountStatus.CLOSED);account.setClosedAt(OffsetDateTime.now());
+            OffsetDateTime closedAt=account.getClosedAt();accountingLifecycle.publishClosure(new AccountingLifecycleGateway.AccountClosedEvent("DEPOSIT-CLOSE:"+account.getId(),"DEPOSIT_ACCOUNT_CLOSED","DEPOSIT_ACCOUNT",account.getId(),account.getCurrencyCode(),closedAt.toLocalDate(),closedAt,"FD_MATURITY_PAID"),"DEPOSIT-CLOSE:"+account.getId(),reference);
             histories.save(new AccountStatusHistory(UUID.randomUUID().toString(),account.getId(),from,AccountStatus.CLOSED,"FD_MATURITY_PAID",null,"eod","SERVICE",reference));
             audits.save(new AuditLog(UUID.randomUUID().toString(),fd.getId(),"MATURE_FIXED_DEPOSIT","SUCCESS","eod","SERVICE","FD_MATURITY_PAID",null,Hashing.sha256(reference),reference));
             maturityClosures.recordCompleted(fd,interest,net,fd.getPayoutAccountId(),reference,r.businessDate());

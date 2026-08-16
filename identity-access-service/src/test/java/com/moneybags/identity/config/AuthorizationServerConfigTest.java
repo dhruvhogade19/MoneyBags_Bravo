@@ -23,6 +23,7 @@ class AuthorizationServerConfigTest {
         var consumer = clients.findByClientId("moneybags-consumer");
         var admin = clients.findByClientId("moneybags-admin");
         var payments = clients.findByClientId("payments-service");
+        var billing = clients.findByClientId("bill-generation-service");
         var cif = clients.findByClientId("cif-service");
 
         assertThat(consumer).isNotNull();
@@ -32,7 +33,11 @@ class AuthorizationServerConfigTest {
         assertThat(admin.getScopes()).contains("account:admin", "accounting:admin", "kyc:review");
         assertThat(payments).isNotNull();
         assertThat(payments.getScopes()).containsExactlyInAnyOrder(
-                "deposit-payment:write", "card-payment:write", "accounting:service", "notification:service");
+                "deposit-payment:write", "card-payment:write", "accounting:service", "notification:service",
+                "billing:service");
+        assertThat(billing).isNotNull();
+        assertThat(billing.getScopes()).containsExactlyInAnyOrder(
+                "product:validate", "card:billing", "accounting:service", "notification:service");
         assertThat(cif).isNotNull();
         assertThat(cif.getScopes()).containsExactlyInAnyOrder("kyc:service", "identity:service");
     }

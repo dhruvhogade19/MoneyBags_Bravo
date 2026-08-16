@@ -10,6 +10,7 @@ import com.moneybags.deposit.fixeddeposit.entity.*;
 import com.moneybags.deposit.fixeddeposit.integration.FixedDepositProductGateway;
 import com.moneybags.deposit.fixeddeposit.repository.*;
 import com.moneybags.deposit.integration.BankingReferenceGateway;
+import com.moneybags.deposit.integration.AccountingLifecycleGateway;
 import com.moneybags.deposit.repository.*;
 import com.moneybags.deposit.service.*;
 import org.springframework.data.domain.*;
@@ -30,7 +31,7 @@ public class FixedDepositApplicationService {
     private final AccountNomineeRepository nomineeRepository; private final AccountStatusHistoryRepository historyRepository;
     private final AuditLogRepository auditRepository; private final BankingReferenceGateway customers;
     private final FixedDepositProductGateway products; private final FixedDepositInterestCalculator calculator;
-    private final AccountNumberGenerator numberGenerator; private final PiiProtector pii; private final NotificationOutboxService notificationOutbox;
+    private final AccountNumberGenerator numberGenerator; private final PiiProtector pii; private final NotificationOutboxService notificationOutbox; private final AccountingLifecycleGateway accountingLifecycle;
 
     public FixedDepositApplicationService(FixedDepositRepository fdRepository, FixedDepositRateSnapshotRepository snapshotRepository,
         FixedDepositInterestAccrualRepository accrualRepository, DepositAccountRepository accountRepository,
@@ -38,12 +39,12 @@ public class FixedDepositApplicationService {
         FundReservationRepository reservationRepository,
         AccountNomineeRepository nomineeRepository, AccountStatusHistoryRepository historyRepository, AuditLogRepository auditRepository,
         BankingReferenceGateway customers, FixedDepositProductGateway products, FixedDepositInterestCalculator calculator,
-        AccountNumberGenerator numberGenerator, PiiProtector pii, NotificationOutboxService notificationOutbox) {
+        AccountNumberGenerator numberGenerator, PiiProtector pii, NotificationOutboxService notificationOutbox, AccountingLifecycleGateway accountingLifecycle) {
         this.fdRepository=fdRepository; this.snapshotRepository=snapshotRepository; this.accrualRepository=accrualRepository;
         this.accountRepository=accountRepository; this.balanceRepository=balanceRepository; this.transactionRepository=transactionRepository;
         this.reservationRepository=reservationRepository;
         this.nomineeRepository=nomineeRepository; this.historyRepository=historyRepository; this.auditRepository=auditRepository;
-        this.customers=customers; this.products=products; this.calculator=calculator; this.numberGenerator=numberGenerator; this.pii=pii; this.notificationOutbox=notificationOutbox;
+        this.customers=customers; this.products=products; this.calculator=calculator; this.numberGenerator=numberGenerator; this.pii=pii; this.notificationOutbox=notificationOutbox;this.accountingLifecycle=accountingLifecycle;
     }
 
     @Transactional
@@ -93,6 +94,7 @@ public class FixedDepositApplicationService {
                 DepositTransactionType.CREDIT,PaymentOperationType.FIXED_DEPOSIT_FUNDING,r.principal(),r.currency(),fdBefore,fdBalance.getLedgerBalance(),correlationId));
         fd.setStatus(FixedDepositStatus.ACTIVE); fd.setUpdatedAt(OffsetDateTime.now()); account.setStatus(AccountStatus.ACTIVE);
         account.setOpenedAt(OffsetDateTime.now()); account.setUpdatedAt(OffsetDateTime.now()); account.setUpdatedBy(actor);
+        OffsetDateTime openedAt=account.getOpenedAt();accountingLifecycle.publishOpening(new AccountingLifecycleGateway.AccountOpenedEvent("DEPOSIT-OPEN:"+accountId,"DEPOSIT_ACCOUNT_OPENED","DEPOSIT_ACCOUNT",accountId,r.productCode(),r.currency(),openedAt.toLocalDate(),openedAt),"DEPOSIT-OPEN:"+accountId,correlationId);
         historyRepository.save(new AccountStatusHistory(UUID.randomUUID().toString(),accountId,AccountStatus.PENDING_ACTIVATION,
                 AccountStatus.ACTIVE,"FD_FUNDED",null,actor,"USER",correlationId));
         auditRepository.save(new AuditLog(UUID.randomUUID().toString(),fdId,"BOOK_FIXED_DEPOSIT","SUCCESS",actor,"USER",

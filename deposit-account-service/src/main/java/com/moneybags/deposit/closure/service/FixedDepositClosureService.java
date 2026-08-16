@@ -12,6 +12,7 @@ import com.moneybags.deposit.fixeddeposit.entity.*;
 import com.moneybags.deposit.fixeddeposit.repository.*;
 import com.moneybags.deposit.repository.*;
 import com.moneybags.deposit.service.Hashing;
+import com.moneybags.deposit.integration.AccountingLifecycleGateway;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,15 +30,15 @@ public class FixedDepositClosureService {
     private final FixedDepositPayoutRepository payouts;private final AccountClosureRequestRepository requests;
     private final AccountClosureCheckRepository checks;private final AccountClosureSettlementRepository settlements;
     private final FixedDepositPrematureClosureCalculationRepository calculations;private final AccountStatusHistoryRepository histories;
-    private final AuditLogRepository audits;private final PrematureClosureCalculator calculator;private final CasaClosureService closureReader;
+    private final AuditLogRepository audits;private final PrematureClosureCalculator calculator;private final CasaClosureService closureReader;private final AccountingLifecycleGateway accountingLifecycle;
     public FixedDepositClosureService(FixedDepositRepository fds,DepositAccountRepository accounts,AccountBalanceRepository balances,
         FundReservationRepository reservations,DepositAccountTransactionRepository transactions,FixedDepositPayoutRepository payouts,
         AccountClosureRequestRepository requests,AccountClosureCheckRepository checks,AccountClosureSettlementRepository settlements,
         FixedDepositPrematureClosureCalculationRepository calculations,AccountStatusHistoryRepository histories,
-        AuditLogRepository audits,PrematureClosureCalculator calculator,CasaClosureService closureReader){this.fds=fds;this.accounts=accounts;
+        AuditLogRepository audits,PrematureClosureCalculator calculator,CasaClosureService closureReader,AccountingLifecycleGateway accountingLifecycle){this.fds=fds;this.accounts=accounts;
         this.balances=balances;this.reservations=reservations;this.transactions=transactions;this.payouts=payouts;
         this.requests=requests;this.checks=checks;this.settlements=settlements;this.calculations=calculations;
-        this.histories=histories;this.audits=audits;this.calculator=calculator;this.closureReader=closureReader;}
+        this.histories=histories;this.audits=audits;this.calculator=calculator;this.closureReader=closureReader;this.accountingLifecycle=accountingLifecycle;}
 
     @Transactional(readOnly=true)
     public PrematureClosureQuoteResponse quote(String fdId,PrematureClosureQuoteRequest input){
@@ -58,6 +59,7 @@ public class FixedDepositClosureService {
         List<String> blockers=validate(fd,input.customerId(),input.destinationAccountId(),input.requestedClosureDate());
         persistChecks(request.getId(),blockers);
         if(!blockers.isEmpty()){request.setRejectionCode("PREMATURE_CLOSURE_CHECK_FAILED");request.setRejectionDetails(String.join("; ",blockers));request.transition(ClosureRequestStatus.REJECTED);return closureReader.get(accountId,request.getId());}
+        requireAccountingClearance(fd.getAccount());
         var c=calculate(fd,input.requestedClosureDate());var original=calculator.calculate(fd.getPrincipal(),fd.getBookedAnnualRate(),fd.getValueDate(),input.requestedClosureDate(),fd.getBookedAnnualRate(),BigDecimal.ZERO,fd.getPaidInterest());
         calculations.save(new FixedDepositPrematureClosureCalculation(UUID.randomUUID().toString(),fdId,request.getId(),
             fd.getValueDate(),input.requestedClosureDate(),c.holdingDays(),fd.getMaturityDate(),fd.getBookedAnnualRate(),
@@ -77,6 +79,7 @@ public class FixedDepositClosureService {
         payout.setStatus(FixedDepositPayoutStatus.COMPLETED);payout.setCompletedAt(OffsetDateTime.now());payouts.save(payout);
         settlement.complete();fd.setPaidInterest(c.recalculatedInterest());fd.setStatus(FixedDepositStatus.CLOSED_PREMATURE);fd.setUpdatedAt(OffsetDateTime.now());
         account.setStatus(AccountStatus.CLOSED);account.setClosedAt(OffsetDateTime.now());account.setUpdatedAt(OffsetDateTime.now());
+        OffsetDateTime closedAt=account.getClosedAt();accountingLifecycle.publishClosure(new AccountingLifecycleGateway.AccountClosedEvent("DEPOSIT-CLOSE:"+accountId,"DEPOSIT_ACCOUNT_CLOSED","DEPOSIT_ACCOUNT",accountId,account.getCurrencyCode(),closedAt.toLocalDate(),closedAt,input.reasonCode()),"DEPOSIT-CLOSE:"+accountId,correlationId);
         histories.save(new AccountStatusHistory(UUID.randomUUID().toString(),accountId,AccountStatus.CLOSURE_PENDING,AccountStatus.CLOSED,"FD_PREMATURELY_CLOSED",input.reasonText(),actor,"USER",correlationId));
         request.transition(ClosureRequestStatus.CLOSED);audits.save(new AuditLog(UUID.randomUUID().toString(),fdId,"CLOSE_FIXED_DEPOSIT_PREMATURELY","SUCCESS",actor,"USER",input.reasonCode(),null,Hashing.sha256(reference),correlationId));
         return closureReader.get(accountId,request.getId());
@@ -106,6 +109,7 @@ public class FixedDepositClosureService {
     private PrematureClosureCalculator.Calculation calculate(FixedDeposit fd,LocalDate date){return calculator.calculate(fd.getPrincipal(),fd.getBookedAnnualRate(),fd.getValueDate(),date,fd.getBookedAnnualRate(),PENALTY_RATE,fd.getPaidInterest());}
     private void transfer(FixedDeposit fd,String destinationId,String customerId,BigDecimal net,String reference,String correlationId){List<String>ids=new ArrayList<>(List.of(fd.getAccount().getId(),destinationId));ids.sort(String::compareTo);Map<String,AccountBalance>locked=new HashMap<>();for(String id:ids)locked.put(id,balances.findByAccountIdForUpdate(id).orElseThrow());AccountBalance source=locked.get(fd.getAccount().getId()),destination=locked.get(destinationId);String reservationId=UUID.randomUUID().toString();FundReservation r=new FundReservation(reservationId,reference,PaymentOperationType.FIXED_DEPOSIT_PREMATURE_PAYOUT,fd.getAccount().getId(),destinationId,null,customerId,net,fd.getCurrencyCode(),OffsetDateTime.now().plusMinutes(5));r.transitionTo(ReservationStatus.SETTLED);reservations.save(r);BigDecimal sb=source.getLedgerBalance(),db=destination.getLedgerBalance();source.debitLedgerOnly(fd.getPrincipal(),reference+"-FD");destination.credit(net,reference+"-DEST");transactions.save(new DepositAccountTransaction(UUID.randomUUID().toString(),fd.getAccount().getId(),reference,reservationId,DepositTransactionType.DEBIT,PaymentOperationType.FIXED_DEPOSIT_PREMATURE_PAYOUT,fd.getPrincipal(),fd.getCurrencyCode(),sb,source.getLedgerBalance(),correlationId));transactions.save(new DepositAccountTransaction(UUID.randomUUID().toString(),destinationId,reference,reservationId,DepositTransactionType.CREDIT,PaymentOperationType.FIXED_DEPOSIT_PREMATURE_PAYOUT,net,fd.getCurrencyCode(),db,destination.getLedgerBalance(),correlationId));}
     private void persistChecks(String requestId,List<String> blockers){checks.save(new AccountClosureCheck(UUID.randomUUID().toString(),requestId,"FD_PREMATURE_ELIGIBILITY",blockers.isEmpty(),blockers.isEmpty()?"Check passed":String.join("; ",blockers)));}
+    private void requireAccountingClearance(DepositAccount account){var clearance=accountingLifecycle.clearance(account.getId(),account.getCurrencyCode());if(!clearance.accountingCleared())throw new ApiException(HttpStatus.CONFLICT,"ACCOUNTING_CLEARANCE_FAILED","Accounting has not cleared the account for closure: "+String.join(", ",clearance.blockers()));}
     private FixedDeposit load(String id,boolean lock){return (lock?fds.findByIdForUpdate(id):fds.findDetailedById(id)).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"FIXED_DEPOSIT_NOT_FOUND","Fixed deposit not found"));}
     private BigDecimal zero(){return BigDecimal.ZERO.setScale(4);}
 }

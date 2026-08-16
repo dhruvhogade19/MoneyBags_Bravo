@@ -136,13 +136,13 @@ public class AuthorizationServerConfig {
                         "kyc:read", "kyc:review", "account:read",
                         "account:admin", "fd:read", "fd:admin", "payment:read", "payment:admin", "card:read",
                         "card:admin", "accounting:read", "accounting:admin", "notification:read",
-                        "notification:admin"));
+                        "notification:admin", "billing:read", "billing:admin"));
 
         List<RegisteredClient> clients = new java.util.ArrayList<>();
         clients.add(consumer);
         clients.add(admin);
         clients.add(serviceClient("payments-service", serviceSecret, encoder, serviceTokens,
-                "deposit-payment:write", "card-payment:write", "accounting:service", "notification:service"));
+                "deposit-payment:write", "card-payment:write", "accounting:service", "notification:service", "billing:service"));
         clients.add(serviceClient("deposit-account-service", serviceSecret, encoder, serviceTokens,
                 "cif:service", "product:read", "product:validate", "accounting:service", "notification:service"));
         clients.add(serviceClient("credit-card-service", serviceSecret, encoder, serviceTokens,
@@ -152,6 +152,8 @@ public class AuthorizationServerConfig {
         clients.add(serviceClient("notification-service", serviceSecret, encoder, serviceTokens, "cif:service"));
         clients.add(serviceClient("cif-service", serviceSecret, encoder, serviceTokens,
                 "kyc:service", "identity:service"));
+        clients.add(serviceClient("bill-generation-service", serviceSecret, encoder, serviceTokens,
+                "product:validate", "card:billing", "accounting:service", "notification:service"));
         return new InMemoryRegisteredClientRepository(clients);
     }
 

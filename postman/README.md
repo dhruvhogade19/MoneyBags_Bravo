@@ -37,7 +37,7 @@ Do not point this collection at production. It performs real state changes.
 4. Run folders `00` through `05` in order. Use `Moneybags-Workflow.postman_data.json` as the data file if using Collection Runner.
 5. Run individual folders under `90` only when their extra destructive coverage is required.
 
-The optional Payments requests for merchant purchase, card repayment, fixed-deposit funding and fixed-deposit payout are automatically skipped until their prerequisite collection variables are populated. Set `creditCardAccountId`, `billId`, `fixedDepositId`, and `fixedDepositAccountId` as applicable. Credit Card coverage uses `credit-card-service` on port `8087`, which is included in `run-all.ps1`.
+The optional Payments requests for merchant purchase, card repayment, fixed-deposit funding and fixed-deposit payout are automatically skipped until their prerequisite collection variables are populated. Set `creditCardAccountId`, `billId`, `fixedDepositId`, and `fixedDepositAccountId` as applicable. Credit Card coverage uses `credit-card-service` on port `8084`, which is included in `run-all.ps1`.
 
 The collection generates a timestamp run ID, UUID correlation ID, unique PAN/Aadhaar test identifiers, and idempotency keys automatically. Clear the collection variable `runId` before starting another run in the same imported collection.
 

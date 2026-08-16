@@ -15,7 +15,7 @@ public class ClientCredentialsTokenProvider {
       @Value("${moneybags.security.m2m.token-uri:http://localhost:8093/oauth2/token}") String tokenUri,
       @Value("${moneybags.security.m2m.client-id:payments-service}") String clientId,
       @Value("${moneybags.security.m2m.client-secret:${M2M_CLIENT_SECRET:}}") String secret,
-      @Value("${moneybags.security.m2m.scope:deposit-payment:write card-payment:write accounting:service notification:service}") String scope){
+      @Value("${moneybags.security.m2m.scope:deposit-payment:write card-payment:write accounting:service notification:service billing:service}") String scope){
     this.enabled=enabled;this.tokenUri=tokenUri;this.clientId=clientId;this.secret=secret;this.scope=scope;}
   public String token(){if(!enabled)return null;if(secret.isBlank())throw new IllegalStateException("M2M_CLIENT_SECRET is required when security is enabled");CachedToken value=cached;if(valid(value))return value.value();synchronized(this){
     value=cached;if(valid(value))return value.value();var form=new LinkedMultiValueMap<String,String>();form.add("grant_type","client_credentials");form.add("scope",scope);

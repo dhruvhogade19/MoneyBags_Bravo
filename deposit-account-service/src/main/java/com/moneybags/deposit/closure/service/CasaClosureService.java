@@ -8,6 +8,7 @@ import com.moneybags.deposit.domain.DomainTypes.*;
 import com.moneybags.deposit.entity.*;
 import com.moneybags.deposit.exception.ApiException;
 import com.moneybags.deposit.repository.*;
+import com.moneybags.deposit.integration.AccountingLifecycleGateway;
 import com.moneybags.deposit.service.Hashing;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,15 +27,15 @@ public class CasaClosureService {
     private final AccountLimitRepository limits; private final DepositAccountTransactionRepository transactions;
     private final AccountClosureRequestRepository requests; private final AccountClosureCheckRepository checks;
     private final AccountClosureSettlementRepository settlements; private final AccountStatusHistoryRepository histories;
-    private final AuditLogRepository audits;
+    private final AuditLogRepository audits; private final AccountingLifecycleGateway accountingLifecycle;
 
     public CasaClosureService(DepositAccountRepository accounts,AccountBalanceRepository balances,
         FundReservationRepository reservations,AccountMandateRepository mandates,AccountLimitRepository limits,
         DepositAccountTransactionRepository transactions,AccountClosureRequestRepository requests,
         AccountClosureCheckRepository checks,AccountClosureSettlementRepository settlements,
-        AccountStatusHistoryRepository histories,AuditLogRepository audits){this.accounts=accounts;this.balances=balances;
+        AccountStatusHistoryRepository histories,AuditLogRepository audits,AccountingLifecycleGateway accountingLifecycle){this.accounts=accounts;this.balances=balances;
         this.reservations=reservations;this.mandates=mandates;this.limits=limits;this.transactions=transactions;
-        this.requests=requests;this.checks=checks;this.settlements=settlements;this.histories=histories;this.audits=audits;}
+        this.requests=requests;this.checks=checks;this.settlements=settlements;this.histories=histories;this.audits=audits;this.accountingLifecycle=accountingLifecycle;}
 
     @Transactional(readOnly=true)
     public ClosureQuoteResponse quote(String accountId,ClosureQuoteRequest request){
@@ -62,6 +63,7 @@ public class CasaClosureService {
             request.transition(ClosureRequestStatus.REJECTED);audit(accountId,"REQUEST_CASA_CLOSURE","REJECTED",actor,correlationId);
             return view(request);
         }
+        requireAccountingClearance(account);
         AccountStatus from=account.getStatus();account.setStatus(AccountStatus.CLOSURE_PENDING);account.setUpdatedAt(OffsetDateTime.now());account.setUpdatedBy(actor);
         histories.save(new AccountStatusHistory(UUID.randomUUID().toString(),accountId,from,AccountStatus.CLOSURE_PENDING,
             input.reasonCode(),input.reasonText(),actor,"USER",correlationId));
@@ -77,6 +79,7 @@ public class CasaClosureService {
             throw new ApiException(HttpStatus.CONFLICT,"CLOSURE_SETTLEMENT_NOT_ZERO","Account balances are not zero after settlement");
         settlement.complete();request.transition(ClosureRequestStatus.READY_TO_CLOSE);
         account.setStatus(AccountStatus.CLOSED);account.setClosedAt(OffsetDateTime.now());account.setUpdatedAt(OffsetDateTime.now());
+        OffsetDateTime closedAt=account.getClosedAt();accountingLifecycle.publishClosure(new AccountingLifecycleGateway.AccountClosedEvent("DEPOSIT-CLOSE:"+accountId,"DEPOSIT_ACCOUNT_CLOSED","DEPOSIT_ACCOUNT",accountId,account.getCurrencyCode(),closedAt.toLocalDate(),closedAt,input.reasonCode()),"DEPOSIT-CLOSE:"+accountId,correlationId);
         histories.save(new AccountStatusHistory(UUID.randomUUID().toString(),accountId,AccountStatus.CLOSURE_PENDING,
             AccountStatus.CLOSED,"CASA_CLOSURE_SETTLED",input.reasonText(),actor,"USER",correlationId));
         request.transition(ClosureRequestStatus.CLOSED);audit(accountId,"CLOSE_CASA_ACCOUNT","SUCCESS",actor,correlationId);
@@ -133,6 +136,7 @@ public class CasaClosureService {
         transactions.save(new DepositAccountTransaction(UUID.randomUUID().toString(),destinationId,reference,reservationId,DepositTransactionType.CREDIT,PaymentOperationType.CASA_ACCOUNT_CLOSURE,amount,sourceAccount.getCurrencyCode(),destinationBefore,destination.getLedgerBalance(),correlationId));
     }
     private void revokeConfiguration(String accountId){OffsetDateTime now=OffsetDateTime.now();for(AccountMandate m:mandates.findByAccountId(accountId))if(m.getStatus()==RecordStatus.ACTIVE)m.setStatus(RecordStatus.REVOKED);for(AccountLimit l:limits.findByAccountId(accountId))if(l.getEffectiveTo()==null||l.getEffectiveTo().isAfter(now))l.setEffectiveTo(now);}
+    private void requireAccountingClearance(DepositAccount account){var clearance=accountingLifecycle.clearance(account.getId(),account.getCurrencyCode());if(!clearance.accountingCleared())throw new ApiException(HttpStatus.CONFLICT,"ACCOUNTING_CLEARANCE_FAILED","Accounting has not cleared the account for closure: "+String.join(", ",clearance.blockers()));}
     private DepositAccount load(String id,boolean lock){
         DepositAccount account=(lock?accounts.findByIdForUpdate(id):accounts.findDetailedById(id)).orElseThrow(()->
             new ApiException(HttpStatus.NOT_FOUND,"ACCOUNT_NOT_FOUND","Deposit account not found"));

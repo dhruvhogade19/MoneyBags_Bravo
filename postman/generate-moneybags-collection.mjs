@@ -414,7 +414,7 @@ const additionalCoverageFolders = [
   },
   {
     name: "Credit Card - applications, accounts, limits, rates, and readiness",
-    description: "Requires credit-card-service on port 8087 plus a CIF that is KYC-complete. Transactional hold/capture/release/payment/closure APIs are in the embedded Credit Card suite below.",
+    description: "Requires credit-card-service on port 8084 plus a CIF that is KYC-complete. Transactional hold/capture/release/payment/closure APIs are in the embedded Credit Card suite below.",
     item: [
       request("Credit Card readiness", "GET", "{{creditCardBaseUrl}}/actuator/health/readiness", { tests: expectUp }),
       request("Submit credit-card application", "POST", "{{creditCardBaseUrl}}/api/credit-cards/applications", { headers: [jsonHeader], body: { cifId: "{{customerId}}", productCode: "{{creditCardProductCode}}", requestedCreditLimit: 100000 }, tests: ["pm.test('application decision is recorded', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('creditCardApplicationId', String(pm.response.json().applicationId));"] }),
@@ -444,7 +444,7 @@ const sourceCollections = [
   ["accounting", "Accounting - exhaustive controller coverage", "accounting-service/postman/Accounting-Service.postman_collection.json"],
   ["product", "Product Master smoke suite", "product-master-service/postman/Product-Master-Service.postman_collection.json"],
   ["notification", "Notification API suite", "notification-service/postman/Notification-Service.postman_collection.json"],
-  ["credit_card", "Credit Card hold and account lifecycle suite (requires service on port 8087)", "credit-card-service/postman/Credit-Card-Hold-Flow.postman_collection.json"]
+  ["credit_card", "Credit Card hold and account lifecycle suite (requires service on port 8084)", "credit-card-service/postman/Credit-Card-Hold-Flow.postman_collection.json"]
 ];
 
 function replaceVariableReferences(value, mappings) {
@@ -490,7 +490,7 @@ const collectionVariables = [
   ["cifBaseUrl", "http://localhost:8081"],
   ["kycBaseUrl", "http://localhost:8082"],
   ["productBaseUrl", "http://localhost:8083"],
-  ["creditCardBaseUrl", "http://localhost:8087"],
+  ["creditCardBaseUrl", "http://localhost:8084"],
   ["paymentsBaseUrl", "http://localhost:8085"],
   ["depositBaseUrl", "http://localhost:8086"],
   ["accountingBaseUrl", "http://localhost:8088"],

@@ -10,6 +10,7 @@ import com.moneybags.deposit.entity.*;
 import com.moneybags.deposit.exception.ApiException;
 import com.moneybags.deposit.integration.BankingReferenceGateway;
 import com.moneybags.deposit.integration.AccountingBalanceGateway;
+import com.moneybags.deposit.integration.AccountingLifecycleGateway;
 import com.moneybags.deposit.repository.*;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
@@ -35,6 +36,7 @@ public class DepositAccountApplicationService {
     private final AuditLogRepository auditRepository;
     private final BankingReferenceGateway referenceGateway;
     private final AccountingBalanceGateway accountingBalanceGateway;
+    private final AccountingLifecycleGateway accountingLifecycleGateway;
     private final AccountNumberGenerator accountNumberGenerator;
     private final AccountViewMapper viewMapper;
     private final PiiProtector piiProtector;
@@ -51,6 +53,7 @@ public class DepositAccountApplicationService {
                                             AuditLogRepository auditRepository,
                                             BankingReferenceGateway referenceGateway,
                                             AccountingBalanceGateway accountingBalanceGateway,
+                                            AccountingLifecycleGateway accountingLifecycleGateway,
                                             AccountNumberGenerator accountNumberGenerator,
                                             AccountViewMapper viewMapper,
                                             PiiProtector piiProtector,
@@ -66,6 +69,7 @@ public class DepositAccountApplicationService {
         this.auditRepository = auditRepository;
         this.referenceGateway = referenceGateway;
         this.accountingBalanceGateway = accountingBalanceGateway;
+        this.accountingLifecycleGateway = accountingLifecycleGateway;
         this.accountNumberGenerator = accountNumberGenerator;
         this.viewMapper = viewMapper;
         this.piiProtector = piiProtector;
@@ -134,6 +138,11 @@ public class DepositAccountApplicationService {
         }
         account.setBalanceProjection(openingBalance);
         accountRepository.save(account);
+        OffsetDateTime openedAt = OffsetDateTime.now();
+        accountingLifecycleGateway.publishOpening(new AccountingLifecycleGateway.AccountOpenedEvent(
+                "DEPOSIT-OPEN:" + accountId, "DEPOSIT_ACCOUNT_OPENED", "DEPOSIT_ACCOUNT", accountId,
+                request.productId(), request.currency(), openedAt.toLocalDate(), openedAt),
+                "DEPOSIT-OPEN:" + accountId, correlationId);
 
         if (request.nominees() != null) {
             request.nominees().forEach(n -> nomineeRepository.save(new AccountNominee(UUID.randomUUID().toString(),

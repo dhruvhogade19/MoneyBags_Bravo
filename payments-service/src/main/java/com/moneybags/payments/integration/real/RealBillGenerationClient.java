@@ -19,7 +19,7 @@ public class RealBillGenerationClient implements BillGenerationClient {
 
   @Override
   public BillSummary getBill(String billId, String correlationId) {
-    return RealClientSupport.errors(client.get().uri("/api/v1/bills/{id}", billId)
+    return RealClientSupport.errors(client.get().uri("/internal/v1/bills/{id}", billId)
         .header("X-Correlation-Id", correlationId).retrieve(), "BILL-GENERATION-SERVICE")
         .body(BillSummary.class);
   }

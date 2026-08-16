@@ -66,9 +66,10 @@ $services = @(
     @{ Name = "product-master-service"; Directory = "product-master-service"; Port = 8083 },
     @{ Name = "payments-service"; Directory = "payments-service"; Port = 8085 },
     @{ Name = "deposit-account-service"; Directory = "deposit-account-service"; Port = 8086 },
-    @{ Name = "credit-card-service"; Directory = "credit-card-service"; Port = 8087 },
+    @{ Name = "credit-card-service"; Directory = "credit-card-service"; Port = 8084 },
     @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088; Profiles = "local" },
     @{ Name = "notification-service"; Directory = "notification-service"; Port = 8090; Profiles = "mock-mail" },
+    @{ Name = "bill-generation-service"; Directory = "bill-generation-service"; Port = 8087 },
     @{ Name = "api-gateway"; Directory = "api-gateway"; Port = 8080 }
 )
 

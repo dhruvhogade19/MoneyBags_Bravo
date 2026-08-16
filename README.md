@@ -14,9 +14,10 @@ Spring Boot services for the Moneybags banking platform. Each service owns its O
 | `product-master-service` | 8083 | Deposit and credit-card product catalogue, eligibility and fixed-deposit pricing rules |
 | `payments-service` | 8085 | Book transfers, card purchases and repayments, fixed-deposit funding/payout orchestration, EOD and recovery |
 | `deposit-account-service` | 8086 | CASA and fixed-deposit lifecycle, payment reservations, balance projections and notification outbox |
-| `credit-card-service` | 8087 | Card application, account and authorization lifecycle |
+| `credit-card-service` | 8084 | Card application, account and authorization lifecycle |
 | `accounting-service` | 8088 | Accounting journals, posting rules and financial ledger operations |
 | `notification-service` | 8090 | Internal delivery and customer notification history |
+| `bill-generation-service` | 8087 | Credit-card billing cycles, bills and payment settlement |
 
 Payments is included in the Maven reactor and coordinates peer services through synchronous REST calls. Deposit uses stubbed CIF/Product Master validation by default; production mode resolves configured peers through Spring `RestClient` and Eureka. Accounting is started by `run-all.ps1`; it is currently built independently rather than included in the root Maven reactor.
 

@@ -14,7 +14,7 @@ const base = {
   product: "http://localhost:8083",
   payments: "http://localhost:8085",
   deposit: "http://localhost:8086",
-  card: "http://localhost:8087",
+  card: "http://localhost:8084",
   accounting: "http://localhost:8088",
   notification: "http://localhost:8090"
 };
