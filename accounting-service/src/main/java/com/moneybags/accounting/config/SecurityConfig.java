@@ -19,7 +19,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
     @Bean
-    @ConditionalOnProperty(name = "moneybags.security.enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnProperty(name = "moneybags.security.enabled", havingValue = "true")
     SecurityFilterChain secured(HttpSecurity http) throws Exception {
         return http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
@@ -36,7 +36,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "moneybags.security.enabled", havingValue = "false")
+    @ConditionalOnProperty(name = "moneybags.security.enabled", havingValue = "false", matchIfMissing = true)
     SecurityFilterChain localDevelopment(HttpSecurity http) throws Exception {
         return http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(auth -> auth.anyRequest().permitAll()).build();
     }
