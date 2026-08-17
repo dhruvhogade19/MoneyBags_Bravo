@@ -1,0 +1,31 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-add-cif-identity-link
+      author: moneybags
+      changes:
+        - addColumn:
+            tableName: cifs
+            columns:
+              - column:
+                  name: identity_user_id
+                  type: VARCHAR2(36)
+              - column:
+                  name: tenant_id
+                  type: VARCHAR2(64)
+                  defaultValue: moneybags
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: cifs
+            columnNames: identity_user_id
+            constraintName: uk_cifs_identity_user
+      rollback:
+        - dropUniqueConstraint:
+            tableName: cifs
+            constraintName: uk_cifs_identity_user
+        - dropColumn:
+            tableName: cifs
+            columnName: identity_user_id
+        - dropColumn:
+            tableName: cifs
+            columnName: tenant_id

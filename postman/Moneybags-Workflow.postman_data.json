@@ -1,0 +1,10 @@
+[
+  {
+    "scenario": "happy-path",
+    "customerId": 1001,
+    "sourceAccountId": "seed-sav-source-001",
+    "targetAccountId": "seed-cur-target-001",
+    "transferAmount": "100.00",
+    "tenantId": "moneybags-local"
+  }
+]

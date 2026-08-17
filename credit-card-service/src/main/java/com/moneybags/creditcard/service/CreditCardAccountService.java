@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.security.SecureRandom;
 import java.util.Map;
@@ -60,7 +59,7 @@ public class CreditCardAccountService {
         String accountReference = accountReference(savedAccount.id);
         var event = new AccountingLifecycleGateway.AccountOpenedEvent(
                 "CARD-OPEN:" + accountReference, "CREDIT_CARD_ACCOUNT_OPENED", "CREDIT_CARD_ACCOUNT",
-                accountReference, savedAccount.productCode, "INR", LocalDate.now(), savedAccount.openedAt);
+                accountReference, savedAccount.productCode, "INR", savedAccount.openedAt.toLocalDate(), savedAccount.openedAt);
         var response = accounting.publishOpening(event);
         if (response != null && "OPEN".equals(response.accountingLifecycleState())) {
             savedAccount.status = AccountStatus.ACTIVE;

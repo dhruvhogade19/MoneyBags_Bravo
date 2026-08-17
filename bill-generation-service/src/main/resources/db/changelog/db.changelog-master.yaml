@@ -1,0 +1,99 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-billing-schema
+      author: moneybags
+      # The first Oracle run may have created BILL before encountering the
+      # redundant index that was removed from the SQL. Treat that baseline as
+      # installed; later changesets repair any objects it did not reach.
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: BILL
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001-billing-schema.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 001a-repair-bill-lines
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: BILL_LINE
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001a-bill-lines.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 001b-repair-bill-snapshot
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: BILL_CALCULATION_SNAPSHOT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001b-bill-snapshot.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 001c-repair-bill-status-history
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: BILL_STATUS_HISTORY
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001c-bill-status-history.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 001d-repair-idempotency-record
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: IDEMPOTENCY_RECORD
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001d-idempotency-record.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 001e-repair-audit-log
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: AUDIT_LOG
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001e-audit-log.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 002-billing-postman-data
+      author: moneybags
+      context: testdata
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/002-postman-test-data.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 003-bill-payment-lifecycle
+      author: moneybags
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/003-bill-payment-lifecycle.sql
+            splitStatements: true
+            stripComments: true

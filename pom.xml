@@ -37,10 +37,35 @@
         </dependencies>
     </dependencyManagement>
 
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.5.0</version>
+                    <configuration>
+                        <!-- Windows can retain a just-released class or JAR handle briefly. -->
+                        <retryOnError>true</retryOnError>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
     <modules>
+        <module>identity-access-service</module>
         <module>discovery-server</module>
         <module>api-gateway</module>
         <module>deposit-account-service</module>
         <module>product-master-service</module>
+        <module>credit-card-service</module>
+        <module>kyc-service</module>
+        <module>notification-service</module>
+        <module>payments-service</module>
+        <module>cif-service</module>
+        <module>accounting-service</module>
+        <module>bill-generation-service</module>
     </modules>
+
 </project>

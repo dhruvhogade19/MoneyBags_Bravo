@@ -144,6 +144,13 @@ public class CreditCardService {
         return new InterestRateResponse(a.id, a.purchaseInterestRateSnapshot);
     }
 
+    @Transactional(readOnly = true)
+    public BillingAccountDetails billingDetails(Long id) {
+        var account = findAccount(id);
+        return new BillingAccountDetails(account.id, account.cifId, account.productCode,
+                account.purchaseInterestRateSnapshot, account.outstandingAmount, account.status);
+    }
+
     @Transactional
     public HoldResponse createHold(Long accountId, HoldRequest request) {
         var account = lockAccount(accountId);

@@ -31,6 +31,6 @@ public class RestClientCreditCardReferenceGateway implements CreditCardReference
                 "monthlyIncome", c.salary(),
                 "employmentType", c.employmentType(),
                 "kycCompleted", "APPROVED".equalsIgnoreCase(c.kycStatus()));
-        return product.post().uri("/api/products/{code}/validate-credit-card-application", code).contentType(MediaType.APPLICATION_JSON).body(body).retrieve().body(ProductValidation.class);
+        return product.post().uri("/internal/v1/products/{code}/validate-credit-card-application", code).contentType(MediaType.APPLICATION_JSON).body(body).retrieve().body(ProductValidation.class);
     }
 }

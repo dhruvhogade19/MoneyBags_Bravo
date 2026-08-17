@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -26,6 +27,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ApiException.class)
     ResponseEntity<Problem> api(ApiException ex, HttpServletRequest request) {
         return response(ex.status(), ex.code(), ex.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<Problem> forbidden(AccessDeniedException ex, HttpServletRequest request) {
+        return response(HttpStatus.FORBIDDEN, "FORBIDDEN",
+                "The authenticated identity is not allowed to access this resource", request, List.of());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

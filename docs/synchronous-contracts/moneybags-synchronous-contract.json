@@ -1376,15 +1376,17 @@
     {
       "id": "accounting-service",
       "name": "Accounting Service",
-      "port": 8089,
+      "port": 8088,
       "oracleSchema": "MONEYBAGS_ACCOUNTING",
       "scope": "Maintains the authoritative double-entry record, accounting rules, GL accounts, subledger mappings, journals, trial balances, financial reconciliation, and accounting periods.",
-      "owns": "Immutable journals and lines, reversals, GL master, rule versions, mappings, posting idempotency, trial balances, financial reconciliation, and periods.",
+      "owns": "Immutable journals and lines, reversals, GL master, rule versions, mappings, posting idempotency, Accounting lifecycle projections, trial balances, financial reconciliation, and periods.",
       "doesNotOwn": "Payment lifecycle, customer/account truth, product definitions, bills, statements, or EOD orchestration.",
       "tables": [
         "GL_ACCOUNT",
         "ACCOUNTING_RULE",
         "SUBLEDGER_MAPPING",
+        "SUBLEDGER_ACCOUNT",
+        "ACCOUNT_LIFECYCLE_EVENT",
         "POSTING_REQUEST",
         "JOURNAL",
         "JOURNAL_LINE",
@@ -1410,7 +1412,7 @@
           "calls": [],
           "idempotent": true,
           "if_match": false,
-          "notes": ""
+          "notes": "Supports BOOK_TRANSFER, CREDIT_CARD_REPAYMENT, and CREDIT_CARD_MERCHANT_PAYMENT. Merchant payments require destination.merchantId (max 100) and create MERCHANT_PAYABLE using rule CREDIT_CARD_MERCHANT_PAYMENT_PRINCIPAL version 1."
         },
         {
           "method": "POST",
@@ -1425,7 +1427,7 @@
           "calls": [],
           "idempotent": true,
           "if_match": false,
-          "notes": ""
+          "notes": "Reverses only the Accounting effect. Payments coordinates restoration of Deposit balances and Credit Card limits. Entries are derived from originalJournalNumber."
         },
         {
           "method": "GET",
@@ -1440,7 +1442,87 @@
           "calls": [],
           "idempotent": false,
           "if_match": false,
-          "notes": ""
+          "notes": "The response field is status, not outcome. Payments must query this endpoint before retrying after a timeout."
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/fixed-deposit-postings",
+          "visibility": "internal",
+          "purpose": "Post a typed fixed-deposit funding, accrual, payout, maturity, or premature-closure fact",
+          "request": "FixedDepositPostingRequest",
+          "response": "JournalResponse",
+          "consumers": [
+            "deposit-account-service",
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": "The submitting service must own the agreed orchestration and provide a stable postingReference."
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/fixed-deposit-postings/{operation}",
+          "visibility": "internal",
+          "purpose": "Compatibility aliases for fixed-deposit posting operations",
+          "request": "FixedDepositPostingRequest",
+          "response": "JournalResponse",
+          "consumers": [
+            "deposit-account-service",
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": "operation is one of fundings, interest-accruals, interest-payouts, maturity-payouts, or premature-closures."
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/fixed-deposit-postings/by-reference/{postingReference}",
+          "visibility": "internal",
+          "purpose": "Resolve an uncertain fixed-deposit posting outcome",
+          "request": null,
+          "response": "PostingOutcomeResponse",
+          "consumers": [
+            "deposit-account-service",
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": "The response field is status, not outcome."
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/account-lifecycle-events",
+          "visibility": "internal",
+          "purpose": "Register a Deposit or Credit Card opening or closing fact without creating a journal",
+          "request": "AccountLifecycleEventRequest",
+          "response": "AccountLifecycleResponse",
+          "consumers": [
+            "deposit-account-service",
+            "credit-card-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": "Opening registers the Accounting subledger. Closing is accepted only after an atomic clearance recheck."
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/account-clearances/{accountType}/{accountReference}",
+          "visibility": "internal",
+          "purpose": "Report Accounting-owned balances and blockers before account closure",
+          "request": null,
+          "response": "AccountClearanceResponse",
+          "consumers": [
+            "deposit-account-service",
+            "credit-card-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": "The owning service remains responsible for operational closure checks and the final closure decision."
         },
         {
           "method": "GET",
@@ -1850,7 +1932,7 @@
     {
       "id": "statement-service",
       "name": "Statement Service",
-      "port": 8088,
+      "port": 8089,
       "oracleSchema": "MONEYBAGS_STATEMENT",
       "scope": "Builds downloadable deposit-account and credit-card statements from authoritative account, payment, bill, and customer-contact APIs.",
       "owns": "Statement requests, generation status, immutable generated document metadata, file references, and generation audit.",
@@ -4034,6 +4116,26 @@
         }
       }
     },
+    "InstrumentReference": {
+      "type": "object",
+      "required": [
+        "instrumentType"
+      ],
+      "properties": {
+        "instrumentType": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "accountId": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "merchantId": {
+          "type": "string",
+          "maxLength": 100
+        }
+      }
+    },
     "PaymentSettlementPostingRequest": {
       "type": "object",
       "required": [
@@ -4042,30 +4144,33 @@
         "source",
         "destination",
         "amount",
-        "currency",
+        "currencyCode",
         "occurredAt",
         "businessDate"
       ],
       "properties": {
         "paymentId": {
           "type": "string",
-          "format": "uuid"
+          "maxLength": 100
         },
         "paymentType": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 60
         },
         "source": {
-          "type": "object"
+          "$ref": "#/components/schemas/InstrumentReference"
         },
         "destination": {
-          "type": "object"
+          "$ref": "#/components/schemas/InstrumentReference"
         },
         "amount": {
           "type": "number",
-          "format": "decimal"
+          "format": "decimal",
+          "minimum": 0.0001
         },
-        "currency": {
-          "type": "string"
+        "currencyCode": {
+          "type": "string",
+          "pattern": "[A-Z]{3}"
         },
         "occurredAt": {
           "type": "string",
@@ -4074,6 +4179,10 @@
         "businessDate": {
           "type": "string",
           "format": "date"
+        },
+        "reference": {
+          "type": "string",
+          "maxLength": 255
         }
       }
     },
@@ -4082,26 +4191,34 @@
       "required": [
         "refundId",
         "paymentId",
+        "originalJournalNumber",
         "amount",
-        "currency",
+        "currencyCode",
         "occurredAt",
-        "businessDate"
+        "businessDate",
+        "reason"
       ],
       "properties": {
         "refundId": {
           "type": "string",
-          "format": "uuid"
+          "maxLength": 100
         },
         "paymentId": {
           "type": "string",
-          "format": "uuid"
+          "maxLength": 100
+        },
+        "originalJournalNumber": {
+          "type": "string",
+          "maxLength": 60
         },
         "amount": {
           "type": "number",
-          "format": "decimal"
+          "format": "decimal",
+          "minimum": 0.0001
         },
-        "currency": {
-          "type": "string"
+        "currencyCode": {
+          "type": "string",
+          "pattern": "[A-Z]{3}"
         },
         "occurredAt": {
           "type": "string",
@@ -4110,6 +4227,10 @@
         "businessDate": {
           "type": "string",
           "format": "date"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 500
         }
       }
     },
@@ -4120,7 +4241,7 @@
         "externalReference",
         "status",
         "businessDate",
-        "currency",
+        "currencyCode",
         "totalDebit",
         "totalCredit",
         "lines"
@@ -4129,17 +4250,31 @@
         "journalNumber": {
           "type": "string"
         },
+        "postingSequence": {
+          "type": "integer",
+          "format": "int64"
+        },
         "externalReference": {
           "type": "string"
         },
-        "status": {
+        "sourceService": {
           "type": "string"
+        },
+        "eventType": {
+          "type": "string"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
         },
         "businessDate": {
           "type": "string",
           "format": "date"
         },
-        "currency": {
+        "currencyCode": {
+          "type": "string"
+        },
+        "status": {
           "type": "string"
         },
         "totalDebit": {
@@ -4150,14 +4285,24 @@
           "type": "number",
           "format": "decimal"
         },
+        "correlationId": {
+          "type": "string"
+        },
+        "postedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "idempotentReplay": {
+          "type": "boolean"
+        },
+        "reversesJournalNumber": {
+          "type": "string"
+        },
         "lines": {
           "type": "array",
           "items": {
             "type": "object"
           }
-        },
-        "reversesJournalNumber": {
-          "type": "string"
         }
       }
     },
@@ -4165,13 +4310,13 @@
       "type": "object",
       "required": [
         "externalReference",
-        "outcome"
+        "status"
       ],
       "properties": {
         "externalReference": {
           "type": "string"
         },
-        "outcome": {
+        "status": {
           "type": "string"
         },
         "journalNumber": {
@@ -4182,6 +4327,250 @@
           "format": "date-time"
         },
         "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "journal": {
+          "$ref": "#/components/schemas/JournalResponse"
+        }
+      }
+    },
+    "FixedDepositComponent": {
+      "type": "object",
+      "required": [
+        "componentType",
+        "amount"
+      ],
+      "properties": {
+        "componentType": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal",
+          "minimum": 0
+        }
+      }
+    },
+    "FixedDepositPostingRequest": {
+      "type": "object",
+      "required": [
+        "postingReference",
+        "fixedDepositAccountId",
+        "currencyCode",
+        "businessDate",
+        "occurredAt",
+        "components"
+      ],
+      "properties": {
+        "postingReference": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "postingType": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "fixedDepositAccountId": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "productCode": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "currencyCode": {
+          "type": "string",
+          "pattern": "[A-Z]{3}"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/components/schemas/FixedDepositComponent"
+          }
+        },
+        "fundingAccountId": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "payoutAccountId": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "payoutMode": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "reasonCode": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "narration": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    },
+    "AccountLifecycleEventRequest": {
+      "type": "object",
+      "required": [
+        "eventReference",
+        "eventType",
+        "accountType",
+        "accountReference",
+        "currencyCode",
+        "businessDate",
+        "occurredAt"
+      ],
+      "properties": {
+        "eventReference": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "DEPOSIT_ACCOUNT_OPENED",
+            "DEPOSIT_ACCOUNT_CLOSED",
+            "CREDIT_CARD_ACCOUNT_OPENED",
+            "CREDIT_CARD_ACCOUNT_CLOSED"
+          ]
+        },
+        "accountType": {
+          "type": "string",
+          "enum": [
+            "DEPOSIT_ACCOUNT",
+            "CREDIT_CARD_ACCOUNT"
+          ]
+        },
+        "accountReference": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "productCode": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "currencyCode": {
+          "type": "string",
+          "pattern": "[A-Z]{3}"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reasonCode": {
+          "type": "string",
+          "maxLength": 40
+        }
+      }
+    },
+    "AccountLifecycleResponse": {
+      "type": "object",
+      "required": [
+        "eventReference",
+        "accountType",
+        "accountReference",
+        "accountingLifecycleState",
+        "processedAt",
+        "correlationId",
+        "idempotentReplay"
+      ],
+      "properties": {
+        "eventReference": {
+          "type": "string"
+        },
+        "accountType": {
+          "type": "string"
+        },
+        "accountReference": {
+          "type": "string"
+        },
+        "accountingLifecycleState": {
+          "type": "string",
+          "enum": [
+            "OPEN",
+            "CLOSED"
+          ]
+        },
+        "processedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "correlationId": {
+          "type": "string"
+        },
+        "idempotentReplay": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ClearanceBalance": {
+      "type": "object",
+      "properties": {
+        "currencyCode": {
+          "type": "string"
+        },
+        "logicalRole": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        }
+      }
+    },
+    "AccountClearanceResponse": {
+      "type": "object",
+      "required": [
+        "accountType",
+        "accountReference",
+        "accountingCleared",
+        "balances",
+        "blockers",
+        "checkedAt"
+      ],
+      "properties": {
+        "accountType": {
+          "type": "string"
+        },
+        "accountReference": {
+          "type": "string"
+        },
+        "accountingCleared": {
+          "type": "boolean"
+        },
+        "balances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/ClearanceBalance"
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "lastPostingSequence": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "checkedAt": {
           "type": "string",
           "format": "date-time"
         }
@@ -4218,29 +4607,48 @@
         "billId",
         "accountId",
         "businessDate",
-        "currency",
+        "occurredAt",
+        "currencyCode",
         "components"
       ],
       "properties": {
         "billId": {
           "type": "string",
-          "format": "uuid"
+          "maxLength": 100
         },
         "accountId": {
           "type": "string",
-          "format": "uuid"
+          "maxLength": 100
+        },
+        "productCode": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "billingPeriodStart": {
+          "type": "string",
+          "format": "date"
+        },
+        "billingPeriodEnd": {
+          "type": "string",
+          "format": "date"
         },
         "businessDate": {
           "type": "string",
           "format": "date"
         },
-        "currency": {
-          "type": "string"
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "currencyCode": {
+          "type": "string",
+          "pattern": "[A-Z]{3}"
         },
         "components": {
           "type": "array",
+          "minItems": 1,
           "items": {
-            "type": "object"
+            "$ref": "#/components/schemas/BillComponent"
           }
         }
       }
@@ -4253,6 +4661,10 @@
         "reason"
       ],
       "properties": {
+        "paymentId": {
+          "type": "string",
+          "maxLength": 100
+        },
         "businessDate": {
           "type": "string",
           "format": "date"
@@ -4262,7 +4674,8 @@
           "format": "date-time"
         },
         "reason": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 500
         }
       }
     },
@@ -6121,7 +6534,7 @@
   ],
   "workflows": [
     {
-      "name": "Customer onboarding and KYC",
+      "name": "CIF creation and KYC",
       "steps": [
         "Client creates CIF using POST /api/v1/cifs with Idempotency-Key.",
         "CIF persists the customer, then calls KYC POST /api/v1/kycs using the same correlation ID.",

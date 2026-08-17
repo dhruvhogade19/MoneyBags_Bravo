@@ -1,0 +1,51 @@
+server:
+  port: 8087
+  shutdown: graceful
+spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  application:
+    name: bill-generation-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+          audiences: ${OAUTH2_AUDIENCE:moneybags-api}
+  datasource:
+    url: ${MONEYBAGS_DB_URL:${DB_URL:jdbc:oracle:thin:@//ofss-mum-1212.snbomprshared1.gbucdsint02bom.oraclevcn.com:1521/PDB1}}
+    username: ${MONEYBAGS_DB_USERNAME:${DB_USERNAME:BRAVO}}
+    password: ${MONEYBAGS_DB_PASSWORD:${DB_PASSWORD:moneybags}}
+    driver-class-name: oracle.jdbc.OracleDriver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    contexts: ${LIQUIBASE_CONTEXTS:testdata}
+eureka:
+  client:
+    enabled: ${EUREKA_ENABLED:true}
+    service-url.defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+moneybags:
+  security:
+    enabled: ${SECURITY_ENABLED:true}
+    m2m:
+      token-uri: ${M2M_TOKEN_URI:http://localhost:8093/oauth2/token}
+      client-id: ${M2M_CLIENT_ID:bill-generation-service}
+      client-secret: ${M2M_CLIENT_SECRET:}
+      scope: ${M2M_SCOPE:product:validate card:billing accounting:service notification:service}
+  billing:
+    stub-upstream-clients: ${STUB_UPSTREAM_CLIENTS:false}
+    stub-notification-client: ${STUB_NOTIFICATION_CLIENT:${STUB_UPSTREAM_CLIENTS:false}}
+    product-base-url: ${PRODUCT_URL:http://product-master-service}
+    credit-card-base-url: ${CREDIT_CARD_URL:http://credit-card-service}
+    accounting-base-url: ${ACCOUNTING_URL:http://accounting-service}
+    notification-base-url: ${NOTIFICATION_URL:http://notification-service}
+springdoc:
+  swagger-ui.path: /swagger-ui.html
+management:
+  endpoints.web.exposure.include: health,info,metrics

@@ -1,0 +1,654 @@
+{
+  "info": {
+    "_postman_id": "b9641b89-cif-service-moneybags-v1",
+    "name": "MoneyBags - CIF Service",
+    "description": "CIF Service collection. Requests use API Gateway by default. Set baseUrl to http://localhost:8081 to test CIF directly. When SECURITY_ENABLED=true, set accessToken to an admin/customer JWT and serviceAccessToken to a token containing SCOPE_cif:service.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "cifId",
+      "value": ""
+    },
+    {
+      "key": "missingCifId",
+      "value": "999999999"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "serviceAccessToken",
+      "value": ""
+    },
+    {
+      "key": "createdEmail",
+      "value": ""
+    },
+    {
+      "key": "createdMobile",
+      "value": ""
+    },
+    {
+      "key": "createdPan",
+      "value": ""
+    },
+    {
+      "key": "createdAadhaar",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "CIF Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "CIF Lifecycle",
+      "item": [
+        {
+          "name": "Create CIF",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const stamp = Date.now().toString();",
+                  "pm.collectionVariables.set('createdEmail', `cif.${stamp}@example.com`);",
+                  "pm.collectionVariables.set('createdMobile', `9${stamp.slice(-9)}`);",
+                  "pm.collectionVariables.set('createdPan', `CIFAA${stamp.slice(-4)}Z`);",
+                  "pm.collectionVariables.set('createdAadhaar', `12${stamp.slice(-10)}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201 Created', function () {",
+                  "    pm.expect(pm.response.code).to.eql(201);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('CIF ID is returned', function () {",
+                  "    pm.expect(response.cifId).to.not.be.undefined;",
+                  "});",
+                  "pm.test('Initial KYC status is PENDING', function () {",
+                  "    pm.expect(response.kycStatus).to.eql('PENDING');",
+                  "});",
+                  "pm.collectionVariables.set('cifId', String(response.cifId));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Aarav\",\n  \"lastName\": \"Sharma\",\n  \"dob\": \"1995-06-15\",\n  \"age\": 30,\n  \"email\": \"{{createdEmail}}\",\n  \"number\": \"{{createdMobile}}\",\n  \"address\": \"21 Park Street, New Delhi\",\n  \"employmentType\": \"SALARIED\",\n  \"salary\": 75000.00,\n  \"panNumber\": \"{{createdPan}}\",\n  \"aadhaarNumber\": \"{{createdAadhaar}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs"
+              ]
+            },
+            "description": "Creates a customer CIF profile. The test script saves the generated CIF ID in the collection variable cifId."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Created CIF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const response = pm.response.json();",
+                  "pm.test('Returned CIF ID matches collection variable', function () {",
+                  "    pm.expect(String(response.cifId)).to.eql(pm.collectionVariables.get('cifId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs/{{cifId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs",
+                "{{cifId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update CIF and Start Re-KYC",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('KYC status resets to PENDING', function () {",
+                  "    pm.expect(pm.response.json().kycStatus).to.eql('PENDING');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Aarav\",\n  \"lastName\": \"Sharma\",\n  \"dob\": \"1995-06-15\",\n  \"age\": 30,\n  \"email\": \"{{createdEmail}}\",\n  \"number\": \"{{createdMobile}}\",\n  \"address\": \"22 Park Street, New Delhi\",\n  \"employmentType\": \"SALARIED\",\n  \"salary\": 75000.00,\n  \"panNumber\": \"{{createdPan}}\",\n  \"aadhaarNumber\": \"{{createdAadhaar}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs/{{cifId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs",
+                "{{cifId}}"
+              ]
+            },
+            "description": "Updates the CIF profile. A successful update resets KYC to PENDING and starts re-KYC in the background."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "KYC Status Callback",
+      "item": [
+        {
+          "name": "Approve KYC",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('KYC status is APPROVED', function () {",
+                  "    pm.expect(pm.response.json().kycStatus).to.eql('APPROVED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{serviceAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kycStatus\": \"APPROVED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs/{{cifId}}/kyc-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs",
+                "{{cifId}}",
+                "kyc-status"
+              ]
+            },
+            "description": "This endpoint is normally called by KYC Service, not by the customer frontend."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject KYC",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('KYC status is REJECTED', function () {",
+                  "    pm.expect(pm.response.json().kycStatus).to.eql('REJECTED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{serviceAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kycStatus\": \"REJECTED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs/{{cifId}}/kyc-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs",
+                "{{cifId}}",
+                "kyc-status"
+              ]
+            },
+            "description": "Use this request to verify rejected-KYC behavior."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Downstream Service Contracts",
+      "item": [
+        {
+          "name": "Credit Card Details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{serviceAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs/{{cifId}}/credit-card-details",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs",
+                "{{cifId}}",
+                "credit-card-details"
+              ]
+            },
+            "description": "Expected fields: cifId, age, employmentType, salary, kycStatus."
+          },
+          "response": []
+        },
+        {
+          "name": "Deposit Creation Details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{serviceAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs/{{cifId}}/deposit-creation-details",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs",
+                "{{cifId}}",
+                "deposit-creation-details"
+              ]
+            },
+            "description": "Expected fields: cifId, dob, employmentType, kycStatus."
+          },
+          "response": []
+        },
+        {
+          "name": "Notification and Statement Contact Details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{serviceAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs/{{cifId}}/customer-contact-details",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs",
+                "{{cifId}}",
+                "customer-contact-details"
+              ]
+            },
+            "description": "Expected fields: cifId, firstName, lastName, email, number, address."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Validation and Error Cases",
+      "item": [
+        {
+          "name": "Student Cannot Have Salary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Student\",\n  \"lastName\": \"Example\",\n  \"dob\": \"2004-02-10\",\n  \"age\": 22,\n  \"email\": \"student.validation@example.com\",\n  \"number\": \"9876543211\",\n  \"address\": \"New Delhi\",\n  \"employmentType\": \"STUDENT\",\n  \"salary\": 5000,\n  \"panNumber\": \"STUDE1234X\",\n  \"aadhaarNumber\": \"123456789013\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Duplicate Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Duplicate\",\n  \"lastName\": \"Email\",\n  \"dob\": \"1995-06-15\",\n  \"age\": 30,\n  \"email\": \"{{createdEmail}}\",\n  \"number\": \"9876543222\",\n  \"address\": \"New Delhi\",\n  \"employmentType\": \"SALARIED\",\n  \"salary\": 50000.00,\n  \"panNumber\": \"DUPLI1234E\",\n  \"aadhaarNumber\": \"123456789014\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "CIF Not Found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cifs/{{missingCifId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cifs",
+                "{{missingCifId}}"
+              ]
+            },
+            "description": "With security enabled, use an admin token for this request; a customer token may be denied before CIF performs the not-found lookup."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

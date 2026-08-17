@@ -24,10 +24,23 @@ public class CifClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record DepositCreationDetails(String cifId, LocalDate dateOfBirth, String customerType,
-                                  String customerCategory, String kycStatus) {
+    public record DepositCreationDetails(String cifId, LocalDate dob, String employmentType,
+                                  String kycStatus) {
+        public LocalDate dateOfBirth() {
+            return dob;
+        }
+
+        public String customerType() {
+            return "INDIVIDUAL";
+        }
+
+        public String customerCategory() {
+            return null;
+        }
+
         public boolean kycCompleted() {
-            return "VERIFIED".equalsIgnoreCase(kycStatus);
+            return "APPROVED".equalsIgnoreCase(kycStatus)
+                    || "VERIFIED".equalsIgnoreCase(kycStatus);
         }
     }
 }

@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:payments-test;MODE=Oracle;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=FALSE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      # H2 Oracle mode reports Oracle DATE as JDBC TIMESTAMP. Liquibase still executes the
+      # production changelog here; Hibernate validation remains enabled in the real Oracle profile.
+      ddl-auto: none
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    contexts: schema
+  cloud:
+    discovery:
+      enabled: false
+eureka:
+  client:
+    enabled: false
+
+moneybags:
+  security:
+    enabled: false

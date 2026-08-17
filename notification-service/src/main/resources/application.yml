@@ -1,0 +1,77 @@
+spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  application:
+    name: NOTIFICATION-SERVICE
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+          audiences: ${OAUTH2_AUDIENCE:moneybags-api}
+  datasource:
+    url: ${NOTIFICATION_DB_URL:${MONEYBAGS_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
+    username: ${NOTIFICATION_DB_USERNAME:${MONEYBAGS_DB_USERNAME:moneybags}}
+    password: ${NOTIFICATION_DB_PASSWORD:${MONEYBAGS_DB_PASSWORD:moneybags}}
+    driver-class-name: oracle.jdbc.OracleDriver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_STARTTLS_ENABLED:true}
+
+server:
+  port: ${SERVER_PORT:8090}
+
+moneybags:
+  security:
+    enabled: ${SECURITY_ENABLED:true}
+  cif:
+    base-url: ${CIF_BASE_URL:http://CIF-SERVICE}
+  mock-cif:
+    email: ${MOCK_CIF_EMAIL:customer@example.test}
+  mail:
+    from-address: ${MAIL_FROM_ADDRESS:no-reply@moneybags.local}
+    provider: ${MAIL_PROVIDER:mailpit}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+management:
+  health:
+    mail:
+      enabled: ${MAIL_HEALTH_ENABLED:true}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  pattern:
+    console: '{"timestamp":"%d{ISO8601}","level":"%p","logger":"%logger{36}","correlationId":"%X{correlationId:-}","message":"%m"}%n'

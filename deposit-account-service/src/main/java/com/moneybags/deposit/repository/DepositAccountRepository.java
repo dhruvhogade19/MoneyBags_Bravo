@@ -1,6 +1,8 @@
 package com.moneybags.deposit.repository;
 
 import com.moneybags.deposit.domain.DomainTypes.AccountStatus;
+import com.moneybags.deposit.domain.DomainTypes.HolderRole;
+import com.moneybags.deposit.domain.DomainTypes.RecordStatus;
 import com.moneybags.deposit.entity.DepositAccount;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +16,9 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface DepositAccountRepository extends JpaRepository<DepositAccount, String> {
+    boolean existsByIdAndHoldersCustomerIdAndHoldersStatus(String id, String customerId, RecordStatus status);
+    boolean existsByIdAndHoldersCustomerIdAndHoldersRoleAndHoldersStatus(
+            String id, String customerId, HolderRole role, RecordStatus status);
     boolean existsByAccountNumber(String accountNumber);
 
     long countByCurrencyCodeAndStatus(String currencyCode, AccountStatus status);

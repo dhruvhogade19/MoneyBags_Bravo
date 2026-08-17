@@ -1,6 +1,7 @@
 package com.moneybags.deposit.fixeddeposit.repository;
 
 import com.moneybags.deposit.domain.DomainTypes.FixedDepositStatus;
+import com.moneybags.deposit.domain.DomainTypes.RecordStatus;
 import com.moneybags.deposit.fixeddeposit.entity.FixedDeposit;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -13,6 +14,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface FixedDepositRepository extends JpaRepository<FixedDeposit, String> {
+    boolean existsByIdAndAccountHoldersCustomerIdAndAccountHoldersStatus(
+            String id, String customerId, RecordStatus status);
     @EntityGraph(attributePaths = {"account", "account.holders"})
     Optional<FixedDeposit> findDetailedById(String id);
 

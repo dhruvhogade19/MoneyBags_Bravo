@@ -1,0 +1,55 @@
+spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  application:
+    name: cif-service
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+          audiences: ${OAUTH2_AUDIENCE:moneybags-api}
+
+  datasource:
+    url: ${CIF_DB_URL:${MONEYBAGS_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
+    username: ${CIF_DB_USERNAME:${MONEYBAGS_DB_USERNAME:moneybags}}
+    password: ${CIF_DB_PASSWORD:${MONEYBAGS_DB_PASSWORD:moneybags}}
+    driver-class-name: oracle.jdbc.OracleDriver
+
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8081
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+moneybags:
+  security:
+    enabled: ${SECURITY_ENABLED:true}

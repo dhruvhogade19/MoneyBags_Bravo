@@ -66,6 +66,12 @@ public final class CreditCardDtos {
     public record InterestRateResponse(Long accountId, BigDecimal purchaseInterestRate) {
     }
 
+    @Schema(description = "Trusted billing view of a credit-card account.")
+    public record BillingAccountDetails(Long accountId, Long cifId, String productCode,
+                                       BigDecimal purchaseInterestRate, BigDecimal outstandingAmount,
+                                       AccountStatus status) {
+    }
+
     @Schema(description = "End-of-day readiness and any closure blockers.")
     public record EodReadinessResponse(boolean readyForEod, long activeAccountCount, long blockedAccountCount,
                                        long pendingApplicationCount, List<String> closureBlockers) {

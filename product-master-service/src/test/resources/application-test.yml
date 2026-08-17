@@ -16,6 +16,10 @@ eureka:
   client:
     enabled: false
 
+moneybags:
+  security:
+    enabled: false
+
 springdoc:
   api-docs:
     enabled: true

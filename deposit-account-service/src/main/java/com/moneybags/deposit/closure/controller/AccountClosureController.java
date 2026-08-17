@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -30,12 +31,14 @@ public class AccountClosureController {
     }
 
     @PostMapping("/closure-quotes")
+    @PreAuthorize("@depositAuthorization.canManageAccount(authentication, #accountId)")
     public ClosureQuoteResponse quote(@PathVariable String accountId,
                                       @Valid @RequestBody ClosureQuoteRequest request) {
         return service.quote(accountId, request);
     }
 
     @PostMapping("/closure-requests")
+    @PreAuthorize("@depositAuthorization.canManageAccount(authentication, #accountId)")
     public ResponseEntity<ClosureRequestView> close(@PathVariable String accountId,
             @RequestHeader("Idempotency-Key") String key,
             @Valid @RequestBody CasaClosureRequest request, Authentication authentication) {
@@ -47,16 +50,19 @@ public class AccountClosureController {
     }
 
     @GetMapping("/closure-requests/{requestId}")
+    @PreAuthorize("@depositAuthorization.canAccessAccount(authentication, #accountId)")
     public ClosureRequestView get(@PathVariable String accountId, @PathVariable String requestId) {
         return service.get(accountId, requestId);
     }
 
     @GetMapping("/closure-requests")
+    @PreAuthorize("@depositAuthorization.canAccessAccount(authentication, #accountId)")
     public List<ClosureRequestView> history(@PathVariable String accountId) {
         return service.history(accountId);
     }
 
     @PostMapping("/closure-requests/{requestId}/cancel")
+    @PreAuthorize("@depositAuthorization.canManageAccount(authentication, #accountId)")
     public ClosureRequestView cancel(@PathVariable String accountId, @PathVariable String requestId,
             @RequestHeader("Idempotency-Key") String key, @Valid @RequestBody CancelClosureRequest request,
             Authentication authentication) {

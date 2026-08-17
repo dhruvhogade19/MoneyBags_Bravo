@@ -1,0 +1,50 @@
+package com.moneybags.cif.integration;
+
+import com.moneybags.cif.domain.event.CifCreatedEvent;
+import com.moneybags.cif.exception.KycServiceUnavailableException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+@Component
+public class KycInitiationListener {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(KycInitiationListener.class);
+
+    private final KycServiceClient kycServiceClient;
+    private final IdentityServiceClient identityServiceClient;
+
+    public KycInitiationListener(KycServiceClient kycServiceClient, IdentityServiceClient identityServiceClient) {
+        this.kycServiceClient = kycServiceClient;
+        this.identityServiceClient = identityServiceClient;
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void initiateKyc(CifCreatedEvent event) {
+        if (event.identityUserId() != null) {
+            try {
+                identityServiceClient.linkCustomer(event.identityUserId(),
+                        event.kycVerificationRequest().cifId(), event.tenantId());
+            } catch (Exception exception) {
+                log.error("CIF was created, but its consumer identity could not be linked. cifId={}, userId={}",
+                        event.kycVerificationRequest().cifId(), event.identityUserId(), exception);
+            }
+        }
+        try {
+            kycServiceClient.initiateKycVerification(
+                    event.kycVerificationRequest()
+            );
+        } catch (KycServiceUnavailableException exception) {
+            log.error(
+                    "CIF was created, but KYC initiation could not be sent. cifId={}",
+                    event.kycVerificationRequest().cifId(),
+                    exception
+            );
+        }
+    }
+}

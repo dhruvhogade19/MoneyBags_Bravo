@@ -6,11 +6,21 @@ spring:
     import: optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: api-gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+          audiences: ${OAUTH2_AUDIENCE:moneybags-api}
   cloud:
     gateway:
       server:
         webflux:
           routes:
+            - id: identity-access-service
+              uri: lb://identity-access-service
+              predicates:
+                - Path=/api/v1/identity/**
             - id: product-master-service
               uri: lb://product-master-service
               predicates:
@@ -18,7 +28,35 @@ spring:
             - id: deposit-account-service
               uri: lb://deposit-account-service
               predicates:
-                - Path=/api/deposit-accounts/**,/api/internal/deposit-accounts/**,/api/internal/deposit-payment-operations/**
+                - Path=/api/deposit-accounts/**
+            - id: payments-service
+              uri: lb://payments-service
+              predicates:
+                - Path=/api/v1/payments/**
+            - id: cif-service
+              uri: lb://cif-service
+              predicates:
+                - Path=/api/v1/cifs/**
+            - id: kyc-service
+              uri: lb://kyc-service
+              predicates:
+                - Path=/api/v1/kycs/**
+            - id: credit-card-service
+              uri: lb://credit-card-service
+              predicates:
+                - Path=/api/credit-cards/**
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/notifications/**
+            - id: bill-generation-service
+              uri: lb://bill-generation-service
+              predicates:
+                - Path=/api/v1/bills/**
+            - id: accounting-service
+              uri: lb://accounting-service
+              predicates:
+                - Path=/api/v1/journals/**,/api/v1/gl-accounts/**,/api/v1/accounting-rules/**,/api/v1/subledger-mappings/**,/api/v1/trial-balances/**,/api/v1/reconciliation/**,/api/v1/accounting-periods/**
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
           globalcors:
@@ -39,3 +77,7 @@ management:
     web:
       exposure:
         include: health,info,gateway
+
+moneybags:
+  security:
+    enabled: ${SECURITY_ENABLED:true}

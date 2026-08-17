@@ -26,9 +26,9 @@ This contract reconciles the supplied Moneybags scope and microservice API templ
 | Deposit Account Service | 8086 | `MONEYBAGS_DEPOSIT` | Deposit account identity and lifecycle, holder/nominee/mandate configuration, account-level limits, operational reservations, and balance read projections. |
 | Credit Card Service | 8085 | `MONEYBAGS_CREDIT_CARD` | Card applications, approved limits, card account identity/status, available-limit projection, outstanding amount, and account-level interest snapshots. |
 | Payments Service | 8087 | `MONEYBAGS_PAYMENT` | Payment requests, payment lifecycle, orchestration attempts, idempotency results, and peer-call outcome evidence. |
-| Accounting Service | 8089 | `MONEYBAGS_ACCOUNTING` | Immutable journals and lines, reversals, GL master, rule versions, mappings, posting idempotency, trial balances, financial reconciliation, and periods. |
+| Accounting Service | 8088 | `MONEYBAGS_ACCOUNTING` | Immutable journals and lines, reversals, GL master, rule versions, mappings, posting idempotency, account lifecycle projections, trial balances, financial reconciliation, and periods. |
 | Bill Generation Service | 8092 | `MONEYBAGS_BILLING` | Billing cycles, bill headers, line items, calculation snapshots, bill status, and generation audit. |
-| Statement Service | 8088 | `MONEYBAGS_STATEMENT` | Statement requests, generation status, immutable generated document metadata, file references, and generation audit. |
+| Statement Service | 8089 | `MONEYBAGS_STATEMENT` | Statement requests, generation status, immutable generated document metadata, file references, and generation audit. |
 | Notification Service | 8090 | `MONEYBAGS_NOTIFICATION` | Notification templates, notification requests, channel payload snapshots, delivery attempts, and delivery status. |
 | EOD / Reconciliation Orchestrator | 8091 | `MONEYBAGS_EOD` | Business date, EOD runs, step execution state, stable peer command references, orchestration exceptions, waivers, and close audit. |
 
@@ -90,7 +90,7 @@ flowchart LR
 | `/api/eod/**` | `/api/v1/eod/**` | EOD operator APIs follow the public version convention. |
 | `/internal/** (Accounting)` | `/internal/v1/**` | Accounting peer APIs use the common internal prefix. |
 
-## Workflow: Customer onboarding and KYC
+## Workflow: CIF creation and KYC
 
 1. Client creates CIF using POST /api/v1/cifs with Idempotency-Key.
 2. CIF persists the customer, then calls KYC POST /api/v1/kycs using the same correlation ID.
@@ -398,7 +398,7 @@ Orchestrates book transfers, credit-card payments, merchant payments, cancellati
 
 Maintains the authoritative double-entry record, accounting rules, GL accounts, subledger mappings, journals, trial balances, financial reconciliation, and accounting periods.
 
-**Owns:** Immutable journals and lines, reversals, GL master, rule versions, mappings, posting idempotency, trial balances, financial reconciliation, and periods.
+**Owns:** Immutable journals and lines, reversals, GL master, rule versions, mappings, posting idempotency, Accounting lifecycle projections, trial balances, financial reconciliation, and periods.
 
 **Does not own:** Payment lifecycle, customer/account truth, product definitions, bills, statements, or EOD orchestration.
 
@@ -409,6 +409,11 @@ Maintains the authoritative double-entry record, accounting rules, GL accounts, 
 | internal | `POST` | `/internal/v1/payment-postings/settlements` | Post a settled payment fact | `PaymentSettlementPostingRequest -> JournalResponse` |
 | internal | `POST` | `/internal/v1/payment-postings/refunds` | Post a completed refund fact | `PaymentRefundPostingRequest -> JournalResponse` |
 | internal | `GET` | `/internal/v1/payment-postings/by-reference/{externalReference}` | Resolve an uncertain posting outcome | `- -> PostingOutcomeResponse` |
+| internal | `POST` | `/internal/v1/fixed-deposit-postings` | Post a typed fixed-deposit financial fact | `FixedDepositPostingRequest -> JournalResponse` |
+| internal | `POST` | `/internal/v1/fixed-deposit-postings/{operation}` | Compatibility aliases for funding, accrual, payout, maturity, and premature closure | `FixedDepositPostingRequest -> JournalResponse` |
+| internal | `GET` | `/internal/v1/fixed-deposit-postings/by-reference/{postingReference}` | Resolve an uncertain fixed-deposit posting outcome | `- -> PostingOutcomeResponse` |
+| internal | `POST` | `/internal/v1/account-lifecycle-events` | Register a Deposit or Credit Card opening/closing fact without creating a journal | `AccountLifecycleEventRequest -> AccountLifecycleResponse` |
+| internal | `GET` | `/internal/v1/account-clearances/{accountType}/{accountReference}` | Check Accounting-owned balances and closure blockers | `- -> AccountClearanceResponse` |
 | internal | `GET` | `/internal/v1/account-balances/{accountReference}` | Get an authoritative journal-derived account balance | `- -> AccountBalanceResponse` |
 | internal | `GET` | `/internal/v1/ledger-entries` | List journal lines for an account and date range | `- -> LedgerEntryPage` |
 | internal | `POST` | `/internal/v1/bill-postings` | Post bill fees and interest as an immutable journal | `BillAccountingPostingRequest -> JournalResponse` |
@@ -570,11 +575,11 @@ Coordinates the business date and ordered synchronous end-of-day controls across
 
 | Concern | Rule |
 |---|---|
-| Security | Gateway validates end-user JWTs. Internal endpoints require service credentials and authorization scopes. PII is masked in responses/logs and encrypted at rest where required. |
+| Security | Production target: Gateway validates end-user JWTs and internal endpoints require service credentials/scopes. Accounting currently permits token-free local service integration when `SECURITY_ENABLED=false`; enable enforcement after shared service identities are available. PII is masked in responses/logs and encrypted at rest where required. |
 | Resilience | Default connect timeout 1 s and response timeout 3 s; no retry for non-idempotent calls; maximum two jittered retries for idempotent reads/commands; circuit breakers per dependency. |
 | Consistency | Local aggregate, audit, and idempotency result share one Oracle transaction. Cross-service failures use explicit FAILED/REVERSAL_PENDING states and compensating commands. |
 | Observability | Propagate X-Correlation-Id; emit structured logs, Actuator health, Prometheus timers/counters, dependency tags, and idempotent replay counters. |
-| Database | One Oracle user/schema per service; Flyway-only DDL; Hibernate ddl-auto=validate; no cross-schema foreign keys or SQL reads. |
+| Database | One Oracle user/schema per service; Accounting uses Liquibase-managed DDL; Hibernate ddl-auto=validate; no cross-schema foreign keys or SQL reads. |
 | Testing | Contract tests for every consumer/provider pair, H2 service tests, Oracle migration validation, and end-to-end happy/failure-path workflow tests. |
 
 ## Contract audit
@@ -582,8 +587,8 @@ Coordinates the business date and ordered synchronous end-of-day controls across
 Status: **PASS**
 
 - Services: 12
-- Endpoints: 128
-- Named schemas: 132
+- Endpoints: 133
+- Named schemas: 139
 - Resolved dependency calls: 39
 - Errors: 0
 - Warnings: 0
