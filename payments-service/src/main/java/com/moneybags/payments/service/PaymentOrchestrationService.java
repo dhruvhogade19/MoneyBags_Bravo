@@ -335,11 +335,12 @@ public class PaymentOrchestrationService {
         ? new AccountingInstrument(payment.getDestinationInstrumentType().name(), null,
             payment.getDestinationAccountId())
         : new AccountingInstrument(payment.getDestinationInstrumentType().name(),
-            payment.getDestinationAccountId());
+            accountingAccountReference(payment.getDestinationInstrumentType(),
+                payment.getDestinationAccountId()));
     AccountingSettlementRequest request = new AccountingSettlementRequest(payment.getPaymentId(),
         payment.getPaymentType().name(),
         new AccountingInstrument(payment.getSourceInstrumentType().name(),
-            payment.getSourceAccountId()),
+            accountingAccountReference(payment.getSourceInstrumentType(), payment.getSourceAccountId())),
         destination, payment.getAmount(), payment.getCurrencyCode(),
         Instant.now(), payment.getBusinessDate(), payment.getReference());
     String key = "PAYMENT:" + payment.getPaymentId() + ":ACCOUNTING";
@@ -357,6 +358,12 @@ public class PaymentOrchestrationService {
           payment.getCurrencyCode(), "POSTED", payment.getAmount(), payment.getAmount(),
           payment.getCorrelationId(), lookup.completedAt(), true, null);
     }
+  }
+
+  private static String accountingAccountReference(InstrumentType instrumentType, String accountId) {
+    if (instrumentType != InstrumentType.CREDIT_CARD_ACCOUNT || accountId == null
+        || accountId.startsWith("CC-")) return accountId;
+    return "CC-" + accountId;
   }
 
   private AccountingResponse postFixedDepositAccounting(Payment payment) {

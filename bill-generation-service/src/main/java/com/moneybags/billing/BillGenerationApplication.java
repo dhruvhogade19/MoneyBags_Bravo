@@ -325,7 +325,7 @@ public class BillGenerationApplication {
     record Fee(String type, BigDecimal amount, String frequency, boolean active) {
     }
 
-    record Card(String accountId, long cifId, String productCode, String status, BigDecimal outstanding) {
+    record Card(String accountId, String accountReference, long cifId, String productCode, String status, BigDecimal outstanding) {
     }
 
     record Activity(String type, String reference, String description, BigDecimal amount, OffsetDateTime occurredAt) {
@@ -337,7 +337,7 @@ public class BillGenerationApplication {
     interface UpstreamGateway {
         BillingInputs fetch(String accountId, LocalDate from, LocalDate to);
 
-        void postCalculatedCharges(String billId, String accountId, LocalDate businessDate, String currency, List<Activity> charges);
+        void postCalculatedCharges(String billId, String accountReference, LocalDate businessDate, String currency, List<Activity> charges);
     }
 
     @Component
@@ -346,10 +346,10 @@ public class BillGenerationApplication {
         public BillingInputs fetch(String accountId, LocalDate from, LocalDate to) {
             Product p = new Product("CC-PLAT-001", "INR", "V1", "V1", new BigDecimal("42.000000"), new BigDecimal("5.0000"), new BigDecimal("500.00"), 15, List.of(new Fee("ANNUAL_MEMBERSHIP", new BigDecimal("499.00"), "ANNUALLY", true), new Fee("LATE_PAYMENT", new BigDecimal("750.00"), "ONE_TIME", true)));
             OffsetDateTime when = from.plusDays(2).atStartOfDay().atOffset(ZoneOffset.UTC);
-            return new BillingInputs(p, new Card(accountId, 101L, p.code, "ACTIVE", new BigDecimal("10000.00")), List.of(new Activity("PURCHASE", "PUR-202608-001", "Seeded card purchase", new BigDecimal("5000.00"), when), new Activity("PAYMENT", "PAY-202608-001", "Seeded card payment", new BigDecimal("-2000.00"), when.plusDays(3))));
+            return new BillingInputs(p, new Card(accountId, "CC-" + accountId, 101L, p.code, "ACTIVE", new BigDecimal("10000.00")), List.of(new Activity("PURCHASE", "PUR-202608-001", "Seeded card purchase", new BigDecimal("5000.00"), when), new Activity("PAYMENT", "PAY-202608-001", "Seeded card payment", new BigDecimal("-2000.00"), when.plusDays(3))));
         }
 
-        public void postCalculatedCharges(String billId, String accountId, LocalDate date, String currency, List<Activity> charges) {
+        public void postCalculatedCharges(String billId, String accountReference, LocalDate date, String currency, List<Activity> charges) {
         }
     }
 
@@ -381,21 +381,31 @@ public class BillGenerationApplication {
                 throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "CARD_CIF_INVALID", "Credit Card returned an invalid cifId");
             }
             String productCode = (String) c.get("productCode");
+            String accountReference = (String) c.get("accountReference");
+            if (accountReference == null || accountReference.isBlank())
+                throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "CARD_REFERENCE_UNAVAILABLE", "Credit Card account response did not include accountReference");
             Map<String, Object> p = product.get().uri("/internal/v1/products/{code}/billing-details", productCode).retrieve().body(Map.class);
             if (p == null) throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "PRODUCT_UNAVAILABLE", "Product Master returned no product details");
             Map<String, Object> ir = (Map<String, Object>) p.get("interestRule");
             Map<String, Object> cr = (Map<String, Object>) p.get("creditCardRule");
             List<Map<String, Object>> fs = (List<Map<String, Object>>) p.getOrDefault("fees", List.of());
             List<Fee> fees = fs.stream().map(f -> new Fee((String) f.get("feeType"), decimal(f.get("feeAmount")), (String) f.get("frequency"), Boolean.TRUE.equals(f.get("active")))).toList();
-            Map<String, Object> page = accounting.get().uri(b -> b.path("/internal/v1/ledger-entries").queryParam("accountReference", "CC-" + accountId).queryParam("from", from).queryParam("to", to).queryParam("size", 500).build()).retrieve().body(Map.class);
+            Map<String, Object> page = accounting.get().uri(b -> b.path("/internal/v1/ledger-entries").queryParam("accountReference", accountReference).queryParam("from", from).queryParam("to", to).queryParam("size", 500).build()).retrieve().body(Map.class);
             List<Map<String, Object>> entries = page == null ? List.of() : (List<Map<String, Object>>) page.getOrDefault("content", List.of());
             List<Activity> acts = entries.stream().map(e -> new Activity(String.valueOf(e.getOrDefault("eventType", "PURCHASE")), String.valueOf(e.getOrDefault("journalNumber", UUID.randomUUID())), String.valueOf(e.getOrDefault("narration", "Ledger entry")), decimal(e.get("debitAmount")).subtract(decimal(e.get("creditAmount"))).abs(), OffsetDateTime.now(ZoneOffset.UTC))).toList();
-            return new BillingInputs(new Product(productCode, (String) p.get("currencyCode"), (String) ir.getOrDefault("policyVersion", "V1"), (String) ir.getOrDefault("policyVersion", "V1"), decimal(c.get("purchaseInterestRate")), decimal(cr.get("minimumPaymentPercentage")), decimal(cr.get("minimumPaymentAmount")), ((Number) cr.get("paymentDueDays")).intValue(), fees), new Card(accountId, cifId, productCode, (String) c.get("status"), decimal(c.get("outstandingAmount"))), acts);
+            return new BillingInputs(new Product(productCode, (String) p.get("currencyCode"), (String) ir.getOrDefault("policyVersion", "V1"), (String) ir.getOrDefault("policyVersion", "V1"), decimal(c.get("purchaseInterestRate")), decimal(cr.get("minimumPaymentPercentage")), decimal(cr.get("minimumPaymentAmount")), ((Number) cr.get("paymentDueDays")).intValue(), fees), new Card(accountId, accountReference, cifId, productCode, (String) c.get("status"), decimal(c.get("outstandingAmount"))), acts);
         }
 
-        public void postCalculatedCharges(String billId, String accountId, LocalDate date, String currency, List<Activity> charges) {
+        public void postCalculatedCharges(String billId, String accountReference, LocalDate date, String currency, List<Activity> charges) {
             if (charges.isEmpty()) return;
-            accounting.post().uri("/internal/v1/bill-postings").body(Map.of("billId", billId, "accountId", accountId, "billingPeriodStart", date.withDayOfMonth(1), "billingPeriodEnd", date.withDayOfMonth(date.lengthOfMonth()), "businessDate", date, "occurredAt", OffsetDateTime.now(ZoneOffset.UTC), "currencyCode", currency, "components", charges.stream().map(c -> Map.of("componentType", c.type(), "amount", c.amount(), "description", c.description())).toList())).retrieve().toBodilessEntity();
+            accounting.post().uri("/internal/v1/bill-postings")
+                    .headers(headers -> { headers.set("Idempotency-Key", "BILL-" + billId); headers.set("X-Correlation-Id", "BILLING-" + billId); })
+                    .body(Map.of("billId", billId, "accountId", accountReference, "billingPeriodStart", date.withDayOfMonth(1), "billingPeriodEnd", date.withDayOfMonth(date.lengthOfMonth()), "businessDate", date, "occurredAt", OffsetDateTime.now(ZoneOffset.UTC), "currencyCode", currency, "components", charges.stream().map(c -> Map.of("componentType", accountingComponentType(c.type()), "amount", c.amount(), "description", c.description())).toList()))
+                    .retrieve().toBodilessEntity();
+        }
+
+        private static String accountingComponentType(String billingComponentType) {
+            return "FEE".equals(billingComponentType) ? "LATE_FEE" : billingComponentType;
         }
 
         private static BigDecimal decimal(Object n) {
@@ -465,7 +475,7 @@ public class BillGenerationApplication {
             em.persist(new Idempotency("BILL_GENERATE", keyHash, requestHash, billId));
             em.persist(new Audit(billId));
             em.flush();
-            upstream.postCalculatedCharges(billId, request.accountId, request.businessDate, inputs.product.currency, lines.stream().filter(l -> "INTEREST".equals(l.type) || "FEE".equals(l.type)).toList());
+            upstream.postCalculatedCharges(billId, inputs.card.accountReference, request.businessDate, inputs.product.currency, lines.stream().filter(l -> "INTEREST".equals(l.type) || "FEE".equals(l.type)).toList());
             notifications.sendBillGenerated(inputs.card.cifId, billId, request.billingPeriod,
                     inputs.product.currency, net, bill.paymentDueDate);
             return toResponse(bill, lines);

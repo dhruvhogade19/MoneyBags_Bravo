@@ -5,8 +5,13 @@
   },
   "variable": [
     { "key": "eodBaseUrl", "value": "http://localhost:8091" },
-    { "key": "businessDate", "value": "2026-08-13" }
+    { "key": "businessDate", "value": "2026-08-13" },
+    { "key": "adminBearerToken", "value": "SET_ME_ADMIN_ACCESS_TOKEN", "type": "secret" }
   ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{adminBearerToken}}", "type": "string" }]
+  },
   "item": [
     {
       "name": "Current business date",

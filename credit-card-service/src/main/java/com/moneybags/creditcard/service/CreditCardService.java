@@ -148,7 +148,8 @@ public class CreditCardService {
     public BillingAccountDetails billingDetails(Long id) {
         var account = findAccount(id);
         return new BillingAccountDetails(account.id, account.cifId, account.productCode,
-                account.purchaseInterestRateSnapshot, account.outstandingAmount, account.status);
+                account.purchaseInterestRateSnapshot, account.outstandingAmount, account.status,
+                accountReference(account.id));
     }
 
     @Transactional
@@ -222,7 +223,7 @@ public class CreditCardService {
         }
 
         account.status = AccountStatus.CLOSURE_PENDING;
-        String accountReference = "CC-" + account.id;
+        String accountReference = accountReference(account.id);
         var clearance = accounting.clearance(accountReference);
         if (clearance == null || !clearance.accountingCleared()) return account(account);
 
@@ -264,6 +265,10 @@ public class CreditCardService {
         return accounts.lockById(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Credit-card account not found"));
     }
 
+    private static String accountReference(Long accountId) {
+        return "CC-" + accountId;
+    }
+
     private CreditCardHold findHoldForAccount(Long holdId, Long accountId) {
         var hold = holds.findById(holdId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Credit-card hold not found"));
@@ -280,7 +285,7 @@ public class CreditCardService {
     }
 
     private AccountResponse account(CreditCardAccount a) {
-        return new AccountResponse(a.id, a.applicationId, a.cifId, a.productCode, a.age, a.salary, a.cardNumber, a.sanctionedLimit, a.purchaseInterestRateSnapshot, a.availableLimit, a.outstandingAmount, a.status, a.openedAt);
+        return new AccountResponse(a.id, a.applicationId, a.cifId, a.productCode, a.age, a.salary, a.cardNumber, a.sanctionedLimit, a.purchaseInterestRateSnapshot, a.availableLimit, a.outstandingAmount, a.status, a.openedAt, accountReference(a.id));
     }
 
     private HoldResponse hold(CreditCardHold hold) {

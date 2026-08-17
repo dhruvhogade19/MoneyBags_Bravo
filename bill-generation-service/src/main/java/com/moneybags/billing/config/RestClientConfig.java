@@ -23,6 +23,12 @@ public class RestClientConfig {
         var factory=new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build());
         factory.setReadTimeout(Duration.ofSeconds(8));
         return RestClient.builder().baseUrl(url).requestFactory(factory).defaultHeader("Accept", "application/json")
-                .requestInterceptor((request, body, execution) -> { if (request.getHeaders().getFirst("Authorization") == null) request.getHeaders().setBearerAuth(tokens.token()); return execution.execute(request, body); }).build();
+                .requestInterceptor((request, body, execution) -> {
+                    if (request.getHeaders().getFirst("Authorization") == null) {
+                        String token = tokens.token();
+                        if (token != null && !token.isBlank()) request.getHeaders().setBearerAuth(token);
+                    }
+                    return execution.execute(request, body);
+                }).build();
     }
 }
