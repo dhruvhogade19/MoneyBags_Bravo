@@ -348,7 +348,7 @@ public class BillGenerationApplication {
     interface UpstreamGateway {
         BillingInputs fetch(String accountId, LocalDate from, LocalDate to);
 
-        void postCalculatedCharges(String billId, String accountReference, LocalDate businessDate, String currency, List<Activity> charges);
+        void postCalculatedCharges(String billId, String accountId, LocalDate businessDate, String currency, List<Activity> charges);
     }
 
     @Component
@@ -360,7 +360,7 @@ public class BillGenerationApplication {
             return new BillingInputs(p, new Card(accountId, "CC-" + accountId, 101L, p.code, "ACTIVE", new BigDecimal("10000.00")), List.of(new Activity("PURCHASE", "PUR-202608-001", "Seeded card purchase", new BigDecimal("5000.00"), when), new Activity("PAYMENT", "PAY-202608-001", "Seeded card payment", new BigDecimal("-2000.00"), when.plusDays(3))));
         }
 
-        public void postCalculatedCharges(String billId, String accountReference, LocalDate date, String currency, List<Activity> charges) {
+        public void postCalculatedCharges(String billId, String accountId, LocalDate date, String currency, List<Activity> charges) {
         }
     }
 
@@ -407,11 +407,11 @@ public class BillGenerationApplication {
             return new BillingInputs(new Product(productCode, (String) p.get("currencyCode"), (String) ir.getOrDefault("policyVersion", "V1"), (String) ir.getOrDefault("policyVersion", "V1"), decimal(c.get("purchaseInterestRate")), decimal(cr.get("minimumPaymentPercentage")), decimal(cr.get("minimumPaymentAmount")), ((Number) cr.get("paymentDueDays")).intValue(), fees), new Card(accountId, accountReference, cifId, productCode, (String) c.get("status"), decimal(c.get("outstandingAmount"))), acts);
         }
 
-        public void postCalculatedCharges(String billId, String accountReference, LocalDate date, String currency, List<Activity> charges) {
+        public void postCalculatedCharges(String billId, String accountId, LocalDate date, String currency, List<Activity> charges) {
             if (charges.isEmpty()) return;
             accounting.post().uri("/internal/v1/bill-postings")
                     .header("Idempotency-Key", "bill-" + billId + "-charges")
-                    .body(Map.of("billId", billId, "accountId", accountId, "billingPeriodStart", date.withDayOfMonth(1), "billingPeriodEnd", date.withDayOfMonth(date.lengthOfMonth()), "businessDate", date, "occurredAt", OffsetDateTime.now(ZoneOffset.UTC), "currencyCode", currency, "components", charges.stream().map(c -> Map.of("componentType", c.type(), "amount", c.amount(), "description", c.description())).toList()))
+                    .body((Object) Map.of("billId", billId, "accountId", accountId, "billingPeriodStart", date.withDayOfMonth(1), "billingPeriodEnd", date.withDayOfMonth(date.lengthOfMonth()), "businessDate", date, "occurredAt", OffsetDateTime.now(ZoneOffset.UTC), "currencyCode", currency, "components", charges.stream().map(c -> Map.of("componentType", c.type(), "amount", c.amount(), "description", c.description())).toList()))
                     .retrieve().toBodilessEntity();
         }
 

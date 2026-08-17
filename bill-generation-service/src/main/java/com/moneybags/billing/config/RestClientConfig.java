@@ -6,9 +6,6 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.cloud.client.loadbalancer.LoadBalanced;
-import org.springframework.cloud.netflix.eureka.http.EurekaClientHttpRequestFactorySupplier;
-import org.springframework.cloud.netflix.eureka.http.RestClientDiscoveryClientOptionalArgs;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -20,32 +17,20 @@ import org.springframework.web.client.RestClient;
 public class RestClientConfig {
     private final ClientCredentialsTokenProvider tokens;
     public RestClientConfig(ClientCredentialsTokenProvider tokens) { this.tokens = tokens; }
-    @Bean @Qualifier("billingProductRestClient") RestClient product(@Value("${moneybags.billing.product-base-url}") String url) { return client(url); }
-    @Bean @Qualifier("billingCreditCardRestClient") RestClient creditCard(@Value("${moneybags.billing.credit-card-base-url}") String url) { return client(url); }
-    @Bean @Qualifier("billingAccountingRestClient") RestClient accounting(@Value("${moneybags.billing.accounting-base-url}") String url) { return client(url); }
-    @Bean @Qualifier("billingNotificationRestClient") RestClient notification(@Value("${moneybags.billing.notification-base-url}") String url) { return client(url); }
-    private RestClient client(String url) {
-        var factory=new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build());
-        factory.setReadTimeout(Duration.ofSeconds(8));
-        return RestClient.builder().baseUrl(url).requestFactory(factory).defaultHeader("Accept", "application/json")
-                .requestInterceptor((request, body, execution) -> {
-                    if (request.getHeaders().getFirst("Authorization") == null) {
-                        String token = tokens.token();
-                        if (token != null && !token.isBlank()) request.getHeaders().setBearerAuth(token);
-                    }
-                    return execution.execute(request, body);
-                }).build();
-    }
-
     @Bean
-    @LoadBalanced
     RestClient.Builder billingRestClientBuilder(
             @Value("${moneybags.http.connect-timeout:3s}") Duration connectTimeout,
             @Value("${moneybags.http.read-timeout:8s}") Duration readTimeout) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(connectTimeout);
         factory.setReadTimeout(readTimeout);
-        return RestClient.builder().requestFactory(factory).defaultHeader(HttpHeaders.ACCEPT, "application/json")
+        // Eureka also consumes the load-balanced builder. Authentication belongs on
+        // the banking upstream clients only, never on discovery registration calls.
+        return RestClient.builder().requestFactory(factory).defaultHeader(HttpHeaders.ACCEPT, "application/json");
+    }
+
+    private RestClient upstreamClient(RestClient.Builder builder, String url) {
+        return builder.clone().baseUrl(url)
                 .requestInterceptor((request, body, execution) -> {
                     if (request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION) == null) {
                         String token = tokens.token();
@@ -58,11 +43,11 @@ public class RestClientConfig {
                                         .orElseGet(() -> UUID.randomUUID().toString()));
                     }
                     return execution.execute(request, body);
-                });
+                }).build();
     }
 
-    @Bean @Qualifier("billingProductRestClient") RestClient product(RestClient.Builder builder, @Value("${moneybags.billing.product-base-url}") String url) { return builder.clone().baseUrl(url).build(); }
-    @Bean @Qualifier("billingCreditCardRestClient") RestClient creditCard(RestClient.Builder builder, @Value("${moneybags.billing.credit-card-base-url}") String url) { return builder.clone().baseUrl(url).build(); }
-    @Bean @Qualifier("billingAccountingRestClient") RestClient accounting(RestClient.Builder builder, @Value("${moneybags.billing.accounting-base-url}") String url) { return builder.clone().baseUrl(url).build(); }
-    @Bean @Qualifier("billingNotificationRestClient") RestClient notification(RestClient.Builder builder, @Value("${moneybags.billing.notification-base-url}") String url) { return builder.clone().baseUrl(url).build(); }
+    @Bean @Qualifier("billingProductRestClient") RestClient product(RestClient.Builder builder, @Value("${moneybags.billing.product-base-url}") String url) { return upstreamClient(builder, url); }
+    @Bean @Qualifier("billingCreditCardRestClient") RestClient creditCard(RestClient.Builder builder, @Value("${moneybags.billing.credit-card-base-url}") String url) { return upstreamClient(builder, url); }
+    @Bean @Qualifier("billingAccountingRestClient") RestClient accounting(RestClient.Builder builder, @Value("${moneybags.billing.accounting-base-url}") String url) { return upstreamClient(builder, url); }
+    @Bean @Qualifier("billingNotificationRestClient") RestClient notification(RestClient.Builder builder, @Value("${moneybags.billing.notification-base-url}") String url) { return upstreamClient(builder, url); }
 }

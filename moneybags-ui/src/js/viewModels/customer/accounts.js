@@ -21,10 +21,26 @@ define([
     this.servicingBranchId = ko.observable('MB-DIGITAL');
     this.operatingInstruction = ko.observable('SINGLE');
     this.money = support.money; this.dateTime = support.dateTime; this.label = support.label; this.statusClass = support.statusClass;
+    this.eligibilityMessage = function (decision) {
+      if (!decision) return '';
+      if (decision.decisionCode === 'KYC_APPROVAL_REQUIRED') return 'KYC approval is required before you can open an account.';
+      if (decision.decisionCode === 'PRODUCT_ELIGIBILITY_FAILED') return 'The selected product is not eligible for this application.';
+      if (decision.decisionCode === 'UNSUPPORTED_ACCOUNT_TYPE') return 'Choose an active savings or current-account product.';
+      return decision.decisionCode || '';
+    };
 
     this.selectedProduct = ko.pureComputed(function () {
       return self.products().find(function (product) { return product.productCode === self.selectedProductCode(); }) || null;
     });
+    this.minimumOpeningAmount = function (product) {
+      var rule = product && product.amountRule;
+      return rule && rule.minimumOpeningBalance != null ? Number(rule.minimumOpeningBalance) : 0;
+    };
+    this.productLabel = function (product) {
+      if (!product) return '';
+      var minimum = self.minimumOpeningAmount(product);
+      return product.productName + ' (' + product.productCode + ') — minimum opening ₹' + minimum.toLocaleString('en-IN');
+    };
 
     this.load = function () {
       var id = self.requireCustomerId(); if (!id) return Promise.resolve();
@@ -48,11 +64,40 @@ define([
       }).catch(self.fail).finally(function () { self.loading(false); });
     };
 
+    this.activateAccount = function (summary) {
+      if (!summary || summary.status !== 'PENDING_ACTIVATION') return;
+      self.submitting(true); self.clearMessages();
+      return gatewayApi.commandDepositAccount(summary.accountId, 'activate', {
+        reasonCode: 'CUSTOMER_INITIAL_ACTIVATION',
+        reasonText: 'Activated by the primary customer for digital banking',
+        effectiveAt: new Date().toISOString()
+      }, summary.version).then(function (account) {
+        var replacement = {
+          accountId: account.accountId,
+          maskedAccountNumber: account.maskedAccountNumber,
+          productName: account.product && account.product.name,
+          currency: account.currency,
+          status: account.status,
+          availableBalance: account.balance && account.balance.available,
+          balanceAsOf: account.balance && account.balance.asOf,
+          servicingBranchId: account.servicingBranchId,
+          version: account.version
+        };
+        self.accounts.replace(summary, replacement);
+        self.selectedAccount(account);
+        self.successMessage('Your account is active and can now fund fixed deposits and repayments.');
+      }).catch(self.fail).finally(function () { self.submitting(false); });
+    };
+
     this.checkEligibility = function () {
       var id = self.requireCustomerId(); var product = self.selectedProduct();
       self.clearMessages(); self.eligibility(null);
       if (!id || !product || Number(self.openingAmount()) < 0) {
         self.errorMessage('Choose an account product and enter a valid opening amount.'); return;
+      }
+      var minimum = self.minimumOpeningAmount(product);
+      if (Number(self.openingAmount()) < minimum) {
+        self.errorMessage(product.productName + ' requires an opening amount of at least ₹' + minimum.toLocaleString('en-IN') + '.'); return;
       }
       self.submitting(true);
       return gatewayApi.checkDepositEligibility({

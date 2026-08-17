@@ -49,8 +49,10 @@ public class RestClientBankingReferenceGateway implements BankingReferenceGatewa
             boolean supported = "SAVINGS".equalsIgnoreCase(decision.subtype())
                     || "CURRENT".equalsIgnoreCase(decision.subtype());
             boolean eligible = customer.eligible() && decision.eligible() && supported;
-            String code = eligible ? "ELIGIBLE" : supported
-                    ? "REFERENCE_VALIDATION_FAILED" : "UNSUPPORTED_ACCOUNT_TYPE";
+            String code = eligible ? "ELIGIBLE"
+                    : !customer.eligible() ? "KYC_APPROVAL_REQUIRED"
+                    : !supported ? "UNSUPPORTED_ACCOUNT_TYPE"
+                    : "PRODUCT_ELIGIBILITY_FAILED";
             return new ValidationResult(eligible, code, decision.productName(), decision.subtype(),
                     OffsetDateTime.now());
         } catch (HttpClientErrorException ex) {

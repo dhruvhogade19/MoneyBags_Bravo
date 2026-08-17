@@ -10,6 +10,7 @@ $servicePorts = @(
     @{ Name = "deposit-account-service"; Port = 8086 },
     @{ Name = "credit-card-service"; Port = 8084 },
     @{ Name = "accounting-service"; Port = 8088 },
+    @{ Name = "statements-service"; Port = 8089 },
     @{ Name = "notification-service"; Port = 8090 },
     @{ Name = "bill-generation-service"; Port = 8087 },
     @{ Name = "ui-bff"; Port = 8000 },

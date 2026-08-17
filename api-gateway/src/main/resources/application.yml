@@ -53,6 +53,10 @@ spring:
               uri: lb://bill-generation-service
               predicates:
                 - Path=/api/v1/bills/**
+            - id: statements-service
+              uri: lb://statements-service
+              predicates:
+                - Path=/api/v1/statements/**
             - id: accounting-service
               uri: lb://accounting-service
               predicates:

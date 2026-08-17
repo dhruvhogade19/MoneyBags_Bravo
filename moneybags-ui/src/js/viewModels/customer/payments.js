@@ -14,11 +14,20 @@ define([
     this.payments = ko.observableArray([]); this.accounts = ko.observableArray([]); this.cards = ko.observableArray([]); this.bills = ko.observableArray([]);
     this.selectedPayment = ko.observable(null); this.mode = ko.observable('book');
     this.sourceAccountId = ko.observable(''); this.targetAccountId = ko.observable(''); this.transferAmount = ko.observable(null); this.transferReference = ko.observable('');
+    this.merchantCardAccountId = ko.observable(''); this.merchantId = ko.observable(''); this.merchantAmount = ko.observable(null); this.merchantReference = ko.observable('');
     this.repaymentSourceId = ko.observable(''); this.repaymentBillId = ko.observable(''); this.repaymentAmount = ko.observable(null); this.repaymentReference = ko.observable('Card bill repayment');
     this.money = support.money; this.dateTime = support.dateTime; this.label = support.label; this.statusClass = support.statusClass;
+    this.paymentTimestamp = function (payment) {
+      return payment && (payment.createdAt || payment.createdOn || payment.updatedAt || payment.settledAt);
+    };
 
     this.selectedSource = ko.pureComputed(function () { return self.accounts().find(function (item) { return item.accountId === self.sourceAccountId(); }); });
     this.selectedBill = ko.pureComputed(function () { return self.bills().find(function (item) { return item.billId === self.repaymentBillId(); }); });
+    this.activeAccounts = ko.pureComputed(function () { return self.accounts().filter(function (item) { return item.status === 'ACTIVE'; }); });
+    this.activeCards = ko.pureComputed(function () { return self.cards().filter(function (item) { return item.status === 'ACTIVE'; }); });
+    this.cardLabel = function (card) {
+      return (card.cardNumber || ('Card account ' + card.accountId)) + ' — available ' + self.money(card.availableLimit, 'INR');
+    };
 
     this.load = function () {
       var id = self.requireCustomerId(); if (!id) return Promise.resolve(); self.loading(true); self.errorMessage('');
@@ -52,7 +61,7 @@ define([
     };
 
     this.repayCard = function () {
-      var id = self.requireCustomerId(); var source = self.accounts().find(function (item) { return item.accountId === self.repaymentSourceId(); }); var bill = self.selectedBill();
+      var id = self.requireCustomerId(); var source = self.activeAccounts().find(function (item) { return item.accountId === self.repaymentSourceId(); }); var bill = self.selectedBill();
       if (!id || !source || !bill || Number(self.repaymentAmount()) <= 0) { self.errorMessage('Choose a bill and source account, then enter a positive amount.'); return; }
       self.submitting(true); self.clearMessages();
       return gatewayApi.createCardRepayment({ requestorCustomerId: Number(id), billId: bill.billId,
@@ -61,6 +70,25 @@ define([
       }).then(function (payment) {
         self.payments.unshift(payment); self.selectedPayment(payment); self.mode('detail'); self.successMessage('Repayment request completed with the status shown below.');
       }).catch(self.fail).finally(function () { self.submitting(false); });
+    };
+
+    this.payMerchant = function () {
+      var id = self.requireCustomerId();
+      var card = self.activeCards().find(function (item) { return String(item.accountId) === String(self.merchantCardAccountId()); });
+      if (!id || !card || !self.merchantId().trim() || Number(self.merchantAmount()) <= 0) {
+        self.errorMessage('Choose an active card, enter a merchant ID, and provide a positive amount.'); return;
+      }
+      self.submitting(true); self.clearMessages();
+      return gatewayApi.createMerchantPayment({
+        requestorCustomerId: Number(id), creditCardAccountId: String(card.accountId),
+        merchantId: self.merchantId().trim(), amount: Number(self.merchantAmount()), currencyCode: 'INR',
+        reference: self.merchantReference().trim() || null
+      }).then(function (payment) {
+        self.payments.unshift(payment); self.selectedPayment(payment); self.mode('detail');
+        self.successMessage('Card payment captured. It is available to bill generation and payment history.');
+        return gatewayApi.listCreditCardAccounts(Number(id));
+      }).then(function (cards) { if (cards) self.cards(support.asArray(cards)); })
+        .catch(self.fail).finally(function () { self.submitting(false); });
     };
 
     var baseConnected = this.connected; this.connected = function () { baseConnected(); return self.load(); };

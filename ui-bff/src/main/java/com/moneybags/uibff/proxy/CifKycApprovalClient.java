@@ -41,6 +41,10 @@ class CifKycApprovalClient {
         } catch (Exception exception) {
             throw verificationUnavailable();
         }
+        if (response.status() == HttpStatus.UNAUTHORIZED) {
+            throw new BffApiException(HttpStatus.UNAUTHORIZED,
+                    "Your banking session has expired. Sign out and sign in again.");
+        }
         if (!response.status().is2xxSuccessful()) throw verificationUnavailable();
 
         try {

@@ -41,10 +41,12 @@ moneybags:
   billing:
     stub-upstream-clients: ${STUB_UPSTREAM_CLIENTS:false}
     stub-notification-client: ${STUB_NOTIFICATION_CLIENT:${STUB_UPSTREAM_CLIENTS:false}}
-    product-base-url: ${PRODUCT_URL:http://product-master-service}
-    credit-card-base-url: ${CREDIT_CARD_URL:http://credit-card-service}
-    accounting-base-url: ${ACCOUNTING_URL:http://accounting-service}
-    notification-base-url: ${NOTIFICATION_URL:http://notification-service}
+    # Local defaults keep this service independently startable; deployed
+    # environments override these variables with their service endpoints.
+    product-base-url: ${PRODUCT_URL:http://localhost:8083}
+    credit-card-base-url: ${CREDIT_CARD_URL:http://localhost:8084}
+    accounting-base-url: ${ACCOUNTING_URL:http://localhost:8088}
+    notification-base-url: ${NOTIFICATION_URL:http://localhost:8090}
 springdoc:
   swagger-ui.path: /swagger-ui.html
 management:

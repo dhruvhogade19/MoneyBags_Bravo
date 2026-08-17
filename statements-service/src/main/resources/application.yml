@@ -1,0 +1,58 @@
+server:
+  port: 8089
+  shutdown: graceful
+
+spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  application:
+    name: statements-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+          audiences: ${OAUTH2_AUDIENCE:moneybags-api}
+  datasource:
+    url: ${MONEYBAGS_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}
+    username: ${MONEYBAGS_DB_USERNAME:moneybags}
+    password: ${MONEYBAGS_DB_PASSWORD:moneybags}
+    driver-class-name: oracle.jdbc.OracleDriver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+eureka:
+  client:
+    enabled: ${EUREKA_ENABLED:true}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+moneybags:
+  security:
+    enabled: ${SECURITY_ENABLED:true}
+  statements:
+    stub-upstream-clients: ${STUB_UPSTREAM_CLIENTS:false}
+  clients:
+    accounting:
+      base-url: ${ACCOUNTING_URL:http://accounting-service}
+    deposit:
+      base-url: ${DEPOSIT_ACCOUNT_URL:http://deposit-account-service}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
