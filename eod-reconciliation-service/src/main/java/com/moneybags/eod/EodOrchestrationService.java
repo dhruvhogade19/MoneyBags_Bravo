@@ -10,27 +10,34 @@ import java.util.*;
 
 @Service
 class EodOrchestrationService {
-    static final List<StepDefinition> STEPS = List.of(
-            new StepDefinition("PAYMENTS_CUTOFF", 1, "payments-service", "POST", "/internal/v1/payments/eod/cutoff"),
-            new StepDefinition("PAYMENTS_DRAIN", 2, "payments-service", "POST", "/internal/v1/payments/eod/drain"),
-            new StepDefinition("CREDIT_CARD_READINESS", 3, "credit-card-service", "GET", "/internal/v1/credit-card-accounts/eod/readiness"),
-            new StepDefinition("DEPOSIT_READINESS", 4, "deposit-account-service", "GET", "/internal/v1/deposit-accounts/eod/readiness"),
-            new StepDefinition("DEPOSIT_ACCRUALS", 5, "deposit-account-service", "POST", "/internal/v1/deposit-accounts/eod/accruals"),
-            new StepDefinition("FIXED_DEPOSIT_READINESS", 6, "deposit-account-service", "GET", "/internal/v1/deposit-accounts/eod/fixed-deposit-readiness"),
-            new StepDefinition("FIXED_DEPOSIT_ACCRUALS", 7, "deposit-account-service", "POST", "/internal/v1/deposit-accounts/eod/fixed-deposit-accruals"),
-            new StepDefinition("FIXED_DEPOSIT_MATURITIES", 8, "deposit-account-service", "POST", "/internal/v1/deposit-accounts/eod/fixed-deposit-maturities"),
-            new StepDefinition("BILLS_CLOSE", 9, "bill-generation-service", "POST", "/internal/v1/bills/eod/close"),
-            new StepDefinition("TRIAL_BALANCE", 10, "accounting-service", "POST", "/internal/v1/trial-balances"),
-            new StepDefinition("PAYMENTS_RECONCILIATION", 11, "accounting-service", "POST", "/internal/v1/eod/reconciliation/runs"),
-            new StepDefinition("FIXED_DEPOSIT_RECONCILIATION", 12, "accounting-service", "POST", "/internal/v1/accounting/fixed-deposit-reconciliation"),
-            new StepDefinition("STATEMENTS_GENERATE", 13, "statements-service", "POST", "/internal/v1/statements/eod/generate"),
-            new StepDefinition("NOTIFICATIONS_SEND", 14, "notification-service", "POST", "/internal/v1/notifications"),
-            new StepDefinition("ACCOUNTING_PERIOD_CLOSE", 15, "accounting-service", "POST", "/internal/v1/accounting-periods/{businessDate}/close"),
-            new StepDefinition("ACCOUNTING_PERIOD_OPEN", 16, "accounting-service", "POST", "/internal/v1/accounting-periods/{businessDate}/open")
+    static final List<StepDefinition> CORE_STEPS = List.of(
+            new StepDefinition("ACCOUNTING_PERIOD_OPEN_CURRENT", 1, "accounting-service", "POST", "/internal/v1/accounting-periods/{businessDate}/open"),
+            new StepDefinition("PAYMENTS_CUTOFF", 2, "payments-service", "POST", "/internal/v1/payments/eod/cutoff"),
+            new StepDefinition("PAYMENTS_DRAIN", 3, "payments-service", "POST", "/internal/v1/payments/eod/drain"),
+            new StepDefinition("CREDIT_CARD_READINESS", 4, "credit-card-service", "GET", "/internal/v1/credit-card-accounts/eod/readiness"),
+            new StepDefinition("DEPOSIT_READINESS", 5, "deposit-account-service", "GET", "/internal/v1/deposit-accounts/eod/readiness"),
+            new StepDefinition("DEPOSIT_ACCRUALS", 6, "deposit-account-service", "POST", "/internal/v1/deposit-accounts/eod/accruals"),
+            new StepDefinition("FIXED_DEPOSIT_READINESS", 7, "deposit-account-service", "GET", "/internal/v1/deposit-accounts/eod/fixed-deposit-readiness"),
+            new StepDefinition("FIXED_DEPOSIT_ACCRUALS", 8, "deposit-account-service", "POST", "/internal/v1/deposit-accounts/eod/fixed-deposit-accruals"),
+            new StepDefinition("FIXED_DEPOSIT_MATURITIES", 9, "deposit-account-service", "POST", "/internal/v1/deposit-accounts/eod/fixed-deposit-maturities"),
+            new StepDefinition("BILLS_CLOSE", 10, "bill-generation-service", "POST", "/internal/v1/bills/eod/close"),
+            new StepDefinition("TRIAL_BALANCE", 11, "accounting-service", "POST", "/internal/v1/trial-balances"),
+            new StepDefinition("PAYMENTS_RECONCILIATION", 12, "accounting-service", "POST", "/internal/v1/eod/reconciliation/runs"),
+            new StepDefinition("FIXED_DEPOSIT_RECONCILIATION", 13, "accounting-service", "POST", "/internal/v1/accounting/fixed-deposit-reconciliation")
+    );
+    static final List<StepDefinition> STATEMENT_STEPS = List.of(
+            new StepDefinition("STATEMENTS_GENERATE", 14, "statements-service", "POST", "/internal/v1/statements/eod/generate"),
+            new StepDefinition("NOTIFICATIONS_SEND", 15, "notification-service", "POST", "/internal/v1/notifications")
+    );
+    static final List<StepDefinition> COMPLETION_STEPS = List.of(
+            new StepDefinition("ACCOUNTING_PERIOD_CLOSE", 16, "accounting-service", "POST", "/internal/v1/accounting-periods/{businessDate}/close"),
+            new StepDefinition("ACCOUNTING_PERIOD_OPEN_NEXT", 17, "accounting-service", "POST", "/internal/v1/accounting-periods/{businessDate}/open"),
+            new StepDefinition("PAYMENTS_REOPEN", 18, "payments-service", "POST", "/internal/v1/payments/eod/reopen")
     );
 
     private final PeerOperations peers;
     private final String currency;
+    private final List<StepDefinition> steps;
     private final Map<String, RunState> runs = new LinkedHashMap<>();
     private final Map<String, String> idempotency = new HashMap<>();
     private LocalDate businessDate;
@@ -39,8 +46,17 @@ class EodOrchestrationService {
 
     EodOrchestrationService(PeerOperations peers,
                             @Value("${moneybags.eod.initial-business-date:2026-08-13}") LocalDate initialDate,
-                            @Value("${moneybags.eod.currency:INR}") String currency) {
+                            @Value("${moneybags.eod.currency:INR}") String currency,
+                            @Value("${moneybags.eod.statements-enabled:false}") boolean statementsEnabled) {
         this.peers = peers; this.businessDate = initialDate; this.currency = currency;
+        List<StepDefinition> configuredSteps = new ArrayList<>(CORE_STEPS);
+        if (statementsEnabled) configuredSteps.addAll(STATEMENT_STEPS);
+        configuredSteps.addAll(COMPLETION_STEPS);
+        this.steps = java.util.stream.IntStream.range(0, configuredSteps.size())
+                .mapToObj(index -> {
+                    StepDefinition step = configuredSteps.get(index);
+                    return new StepDefinition(step.code(), index + 1, step.providerService(), step.method(), step.path());
+                }).toList();
     }
 
     synchronized BusinessDateResponse businessDate() {
@@ -54,7 +70,7 @@ class EodOrchestrationService {
         if (!requestedDate.equals(businessDate) || !"OPEN".equals(dateStatus))
             throw new EodConflictException("Business date is not open for EOD processing: " + requestedDate);
         RunState run = new RunState(UUID.randomUUID().toString(), requestedDate, request.startedBy());
-        STEPS.forEach(step -> run.steps.add(new StepState(step)));
+        steps.forEach(step -> run.steps.add(new StepState(step)));
         runs.put(run.id, run); idempotency.put(key, run.id); dateStatus = "EOD_IN_PROGRESS";
         executeFrom(run, 0);
         return response(run);
@@ -137,7 +153,7 @@ class EodOrchestrationService {
     }
 
     private int indexOf(String stepCode) {
-        for (int i = 0; i < STEPS.size(); i++) if (STEPS.get(i).code().equalsIgnoreCase(stepCode)) return i;
+        for (int i = 0; i < steps.size(); i++) if (steps.get(i).code().equalsIgnoreCase(stepCode)) return i;
         return -1;
     }
 

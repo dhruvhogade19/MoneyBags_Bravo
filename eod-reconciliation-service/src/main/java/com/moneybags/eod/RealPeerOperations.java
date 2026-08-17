@@ -40,7 +40,7 @@ class RealPeerOperations implements PeerOperations {
             Map<String, Object> result = switch (step.code()) {
                 case "PAYMENTS_CUTOFF" -> post(step, context, Map.of(
                         "businessDate", context.businessDate(), "commandReference", reference(context, step)));
-                case "PAYMENTS_DRAIN" -> post(step, context, null);
+                case "PAYMENTS_DRAIN", "PAYMENTS_REOPEN" -> post(step, context, null);
                 case "CREDIT_CARD_READINESS", "DEPOSIT_READINESS", "FIXED_DEPOSIT_READINESS" -> get(step, context);
                 case "DEPOSIT_ACCRUALS" -> post(step, context, Map.of(
                         "eodRunId", context.runId(), "commandReference", reference(context, step),
@@ -64,8 +64,8 @@ class RealPeerOperations implements PeerOperations {
                         "sourceReference", context.runId(), "templateVariables", Map.of(
                                 "statementId", statementReference(outputs, context),
                                 "statementPeriod", context.businessDate().toString())));
-                case "ACCOUNTING_PERIOD_CLOSE" -> period(step, context, context.businessDate());
-                case "ACCOUNTING_PERIOD_OPEN" -> period(step, context, context.businessDate().plusDays(1));
+                case "ACCOUNTING_PERIOD_OPEN_CURRENT", "ACCOUNTING_PERIOD_CLOSE" -> period(step, context, context.businessDate());
+                case "ACCOUNTING_PERIOD_OPEN_NEXT" -> period(step, context, context.businessDate().plusDays(1));
                 default -> throw new PeerOperationException("UNKNOWN_STEP", "Unsupported EOD step: " + step.code(), Map.of());
             };
             validate(step, result);
@@ -148,6 +148,7 @@ class RealPeerOperations implements PeerOperations {
     private void validate(StepDefinition step, Map<String, Object> result) {
         switch (step.code()) {
             case "PAYMENTS_DRAIN" -> require(result, longValue(result, "pendingPayments") == 0 && "DRAINED".equals(text(result, "status")), "PAYMENTS_NOT_DRAINED");
+            case "PAYMENTS_REOPEN" -> require(result, bool(result, "newPaymentIntake") && "OPEN".equals(text(result, "status")), "PAYMENTS_NOT_REOPENED");
             case "CREDIT_CARD_READINESS" -> require(result, bool(result, "readyForEod"), "CREDIT_CARD_NOT_READY");
             case "DEPOSIT_READINESS", "FIXED_DEPOSIT_READINESS" -> require(result, bool(result, "ready"), "DEPOSIT_NOT_READY");
             case "BILLS_CLOSE" -> require(result, longValue(result, "failedCount") == 0, "BILL_CLOSE_FAILED");
@@ -158,7 +159,7 @@ class RealPeerOperations implements PeerOperations {
                     !"FAILED".equalsIgnoreCase(text(result, "status")) && longValue(result, "failedCount") == 0,
                     "DELIVERY_FAILED");
             case "ACCOUNTING_PERIOD_CLOSE" -> require(result, "CLOSED".equals(text(result, "status")), "PERIOD_NOT_CLOSED");
-            case "ACCOUNTING_PERIOD_OPEN" -> require(result, "OPEN".equals(text(result, "status")), "PERIOD_NOT_OPEN");
+            case "ACCOUNTING_PERIOD_OPEN_CURRENT", "ACCOUNTING_PERIOD_OPEN_NEXT" -> require(result, "OPEN".equals(text(result, "status")), "PERIOD_NOT_OPEN");
             default -> { }
         }
     }

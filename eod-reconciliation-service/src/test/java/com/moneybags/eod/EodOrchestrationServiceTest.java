@@ -20,14 +20,21 @@ class EodOrchestrationServiceTest {
             invoked.add(step.method() + " " + step.path());
             return Map.of("source", step.providerService(), "step", step.code());
         };
-        EodOrchestrationService service = new EodOrchestrationService(peers, DATE, "INR");
+        EodOrchestrationService service = new EodOrchestrationService(peers, DATE, "INR", false);
 
         var response = service.start("eod-2026-08-13", new StartEodRunRequest(DATE, "operations-user"));
 
         assertThat(response.status()).isEqualTo("COMPLETED");
         assertThat(response.steps()).hasSize(16).allMatch(step -> step.status().equals("COMPLETED"));
-        assertThat(invoked).containsExactlyElementsOf(EodOrchestrationService.STEPS.stream()
+        assertThat(response.steps()).extracting(step -> step.sequence()).containsExactlyElementsOf(
+                java.util.stream.IntStream.rangeClosed(1, 16).boxed().toList());
+        List<StepDefinition> expectedSteps = new ArrayList<>(EodOrchestrationService.CORE_STEPS);
+        expectedSteps.addAll(EodOrchestrationService.COMPLETION_STEPS);
+        assertThat(invoked).containsExactlyElementsOf(expectedSteps.stream()
                 .map(step -> step.method() + " " + step.path()).toList());
+        assertThat(response.steps()).extracting(step -> step.stepCode())
+                .startsWith("ACCOUNTING_PERIOD_OPEN_CURRENT", "PAYMENTS_CUTOFF")
+                .endsWith("ACCOUNTING_PERIOD_CLOSE", "ACCOUNTING_PERIOD_OPEN_NEXT", "PAYMENTS_REOPEN");
         assertThat(service.businessDate().businessDate()).isEqualTo(DATE.plusDays(1));
         assertThat(service.businessDate().status()).isEqualTo("OPEN");
     }
@@ -45,7 +52,7 @@ class EodOrchestrationServiceTest {
             }
             return Map.of("step", step.code());
         };
-        EodOrchestrationService service = new EodOrchestrationService(peers, DATE, "INR");
+        EodOrchestrationService service = new EodOrchestrationService(peers, DATE, "INR", false);
 
         var failed = service.start("retry-key", new StartEodRunRequest(DATE, "operations-user"));
         assertThat(failed.status()).isEqualTo("FAILED");
@@ -59,5 +66,21 @@ class EodOrchestrationServiceTest {
                 assertThat(exception.status()).isEqualTo("RESOLVED"));
         assertThat(service.start("retry-key", new StartEodRunRequest(DATE, "ignored")).runId())
                 .isEqualTo(failed.runId());
+    }
+
+    @Test
+    void includesStatementAndNotificationStepsOnlyWhenTheStatementsServiceIsEnabled() {
+        List<String> invoked = new ArrayList<>();
+        PeerOperations peers = (step, context, outputs) -> {
+            invoked.add(step.code());
+            return Map.of("step", step.code());
+        };
+        EodOrchestrationService service = new EodOrchestrationService(peers, DATE, "INR", true);
+
+        var response = service.start("statements-enabled", new StartEodRunRequest(DATE, "operations-user"));
+
+        assertThat(response.steps()).hasSize(18);
+        assertThat(invoked).containsSubsequence("STATEMENTS_GENERATE", "NOTIFICATIONS_SEND",
+                "ACCOUNTING_PERIOD_CLOSE", "ACCOUNTING_PERIOD_OPEN_NEXT", "PAYMENTS_REOPEN");
     }
 }

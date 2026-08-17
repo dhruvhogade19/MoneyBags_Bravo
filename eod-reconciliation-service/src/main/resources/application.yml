@@ -6,6 +6,12 @@ spring:
     import: optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: eod-reconciliation-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+          audiences: ${OAUTH2_AUDIENCE:moneybags-api}
 eureka:
   client:
     enabled: ${EUREKA_ENABLED:true}
@@ -25,6 +31,8 @@ moneybags:
     initial-business-date: ${EOD_INITIAL_BUSINESS_DATE:2026-08-13}
     currency: ${EOD_CURRENCY:INR}
     notification-cif-id: ${EOD_NOTIFICATION_CIF_ID:101}
+    # Enable only when a Statements service is deployed on STATEMENTS_URL.
+    statements-enabled: ${EOD_STATEMENTS_ENABLED:false}
   clients:
     payments:
       base-url: ${PAYMENTS_URL:http://localhost:8085}
