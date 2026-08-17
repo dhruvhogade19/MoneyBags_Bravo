@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.Period;
 
 @Service
 @Transactional
@@ -154,6 +156,7 @@ public class CifServiceImpl implements CifService {
     }
 
     private void validateUniqueFieldsForCreate(CreateCifRequest request) {
+        requireEmail(request.email());
         if (cifRepository.existsByEmail(request.email())) {
             throw new DuplicateResourceException("Email is already registered");
         }
@@ -175,6 +178,7 @@ public class CifServiceImpl implements CifService {
             Long cifId,
             UpdateCifRequest request
     ) {
+        requireEmail(request.email());
         if (cifRepository.existsByEmailAndCifIdNot(request.email(), cifId)) {
             throw new DuplicateResourceException("Email is already registered");
         }
@@ -221,7 +225,7 @@ public class CifServiceImpl implements CifService {
         cif.setFirstName(request.firstName());
         cif.setLastName(request.lastName());
         cif.setDob(request.dob());
-        cif.setAge(request.age());
+        cif.setAge(ageFrom(request.dob()));
         cif.setEmail(request.email());
         cif.setNumber(request.number());
         cif.setAddress(request.address());
@@ -238,7 +242,7 @@ public class CifServiceImpl implements CifService {
         cif.setFirstName(request.firstName());
         cif.setLastName(request.lastName());
         cif.setDob(request.dob());
-        cif.setAge(request.age());
+        cif.setAge(ageFrom(request.dob()));
         cif.setEmail(request.email());
         cif.setNumber(request.number());
         cif.setAddress(request.address());
@@ -264,6 +268,16 @@ public class CifServiceImpl implements CifService {
                 cif.getPanNumber(),
                 cif.getAadhaarNumber()
         );
+    }
+
+    private static void requireEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new InvalidCifRequestException("Email is required from the signed-in identity");
+        }
+    }
+
+    private static int ageFrom(LocalDate dob) {
+        return Period.between(dob, LocalDate.now()).getYears();
     }
 
     private CifResponse toCifResponse(Cif cif) {

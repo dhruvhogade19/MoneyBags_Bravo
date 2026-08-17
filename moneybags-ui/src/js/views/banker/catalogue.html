@@ -1,0 +1,24 @@
+<section class="mb-ops">
+  <div class="mb-container">
+    <header class="mb-ops__header"><div><p class="mb-eyebrow">Product Master</p><h1>Catalogue, pricing, and policy.</h1><p>Manage reusable deposit and credit-card definitions without crossing into account or card lifecycle ownership.</p></div><span class="mb-ops__badge">Admin-only authoring</span></header>
+    <!-- ko if: accessDenied --><div class="mb-ops__state mb-ops__state--error" role="alert"><h2>Bank admin access required</h2><p>Product authoring is restricted to BANK_ADMIN. The public catalogue remains available separately.</p></div><!-- /ko -->
+    <!-- ko ifnot: accessDenied -->
+    <div class="mb-ops__toolbar"><div class="mb-ops__actions"><button class="mb-button mb-button-primary" type="button" data-bind="click: function () { try { sessionStorage.removeItem('moneybags-admin-product-code'); } catch (ignore) {} navigate('banker-catalogue-editor'); }">Create product</button><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('banker-catalogue-pricing'); }">Pricing</button><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('banker-catalogue-benchmarks'); }">Benchmarks</button></div><span class="mb-ops__muted" data-bind="text: products().length + ' product(s) shown'"></span></div>
+    <form class="mb-ops__panel mb-ops__form" data-bind="submit: load" aria-label="Product filters">
+      <div class="mb-ops__field"><label for="catalogue-category">Category</label><select id="catalogue-category" data-bind="value: category"><option value="">All</option><option>DEPOSIT</option><option>CREDIT_CARD</option></select></div>
+      <div class="mb-ops__field"><label for="catalogue-subtype">Subtype</label><select id="catalogue-subtype" data-bind="value: subtype"><option value="">All</option><option>SAVINGS</option><option>CURRENT</option><option>FIXED_DEPOSIT</option><option>CREDIT_CARD</option></select></div>
+      <div class="mb-ops__field"><label for="catalogue-status">Status</label><select id="catalogue-status" data-bind="value: status"><option value="">All</option><option>DRAFT</option><option>ACTIVE</option><option>INACTIVE</option><option>DISCONTINUED</option></select></div>
+      <div class="mb-ops__field"><label for="catalogue-name">Product name</label><input id="catalogue-name" data-bind="value: productName" /></div>
+      <div class="mb-ops__field--wide"><button class="mb-button mb-button-outline" type="submit" data-bind="disable: state.loading">Apply filters</button></div>
+    </form>
+    <!-- ko if: state.loading --><div class="mb-ops__state" role="status">Loading products…</div><!-- /ko -->
+    <!-- ko if: state.error --><div class="mb-ops__state mb-ops__state--error" role="alert" data-bind="text: state.error"></div><!-- /ko -->
+    <!-- ko if: actionState.error --><div class="mb-ops__state mb-ops__state--error" role="alert" data-bind="text: actionState.error"></div><!-- /ko -->
+    <!-- ko if: actionState.success --><div class="mb-ops__state mb-ops__state--success" role="status" data-bind="text: actionState.success"></div><!-- /ko -->
+    <!-- ko if: products().length -->
+    <div class="mb-ops__table-wrap"><table class="mb-ops__table"><caption class="oj-helper-hidden-accessible">Product Master catalogue</caption><thead><tr><th>Code</th><th>Product</th><th>Category</th><th>Effective</th><th>Status</th><th>Actions</th></tr></thead><tbody data-bind="foreach: products"><tr><td><strong data-bind="text: productCode"></strong></td><td><span data-bind="text: productName"></span><br><small class="mb-ops__muted" data-bind="text: subtype"></small></td><td data-bind="text: category"></td><td data-bind="text: effectiveFrom"></td><td><span class="mb-ops__status" data-bind="text: status, css: { 'mb-ops__status--good': status === 'ACTIVE', 'mb-ops__status--warn': status === 'DRAFT' }"></span></td><td><div class="mb-ops__actions"><button class="mb-ops__link" type="button" data-bind="click: $parent.openEditor">Edit</button><button class="mb-ops__link" type="button" data-bind="click: $parent.openPricing">Pricing</button><button class="mb-ops__link" type="button" data-bind="click: function () { $parent.changeStatus($data, status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'); }, text: status === 'ACTIVE' ? 'Deactivate' : 'Activate', disable: $parent.actionState.loading"></button></div></td></tr></tbody></table></div>
+    <!-- /ko -->
+    <!-- ko ifnot: products().length --><div class="mb-ops__state mb-ops__state--empty">No products match the current filters.</div><!-- /ko -->
+    <!-- /ko -->
+  </div>
+</section>

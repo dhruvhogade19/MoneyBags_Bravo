@@ -1,0 +1,42 @@
+<section class="mb-ops">
+  <div class="mb-container">
+    <header class="mb-ops__header"><div><p class="mb-eyebrow">Verification operations</p><h1>KYC review queue</h1><p>Review document metadata, record document verification, and make an auditable final customer decision.</p></div><span class="mb-ops__badge">BANK_ADMIN</span></header>
+    <!-- ko if: accessDenied --><div class="mb-ops__state mb-ops__state--error" role="alert"><h2>Bank admin access required</h2><p>KYC review is restricted to BANK_ADMIN.</p></div><!-- /ko -->
+    <!-- ko ifnot: accessDenied -->
+    <form class="mb-ops__panel mb-ops__form" data-bind="submit: loadQueue" aria-label="KYC queue filters">
+      <div class="mb-ops__field"><label for="kyc-status-filter">Status</label><select id="kyc-status-filter" data-bind="value: statusFilter"><option value="PENDING">Pending</option><option value="FLAGGED">Flagged</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="ALL">All statuses</option></select></div>
+      <div class="mb-ops__field"><label for="kyc-cif-filter">CIF ID (optional)</label><input id="kyc-cif-filter" inputmode="numeric" data-bind="value: cifFilter" /></div>
+      <div class="mb-ops__field--wide mb-ops__actions"><button class="mb-button mb-button-primary" type="submit" data-bind="disable: queueState.loading">Refresh queue</button></div>
+    </form>
+    <!-- ko if: queueState.loading --><div class="mb-ops__state" role="status">Loading KYC queue…</div><!-- /ko -->
+    <!-- ko if: queueState.error --><div class="mb-ops__state mb-ops__state--error" role="alert" data-bind="text: queueState.error"></div><!-- /ko -->
+
+    <div class="mb-ops__section-title"><h2>Cases</h2><span class="mb-ops__muted" data-bind="text: queue().length + ' shown'"></span></div>
+    <!-- ko if: queue().length -->
+    <div class="mb-ops__table-wrap"><table class="mb-ops__table"><caption class="oj-helper-hidden-accessible">KYC work queue</caption><thead><tr><th>KYC</th><th>Customer</th><th>CIF</th><th>Status</th><th>Initiated</th><th>Action</th></tr></thead><tbody data-bind="foreach: queue"><tr><td data-bind="text: kycId"></td><td data-bind="text: customerName"></td><td data-bind="text: cifId"></td><td><span class="mb-ops__status" data-bind="text: kycStatus, css: { 'mb-ops__status--good': kycStatus === 'APPROVED', 'mb-ops__status--warn': kycStatus === 'FLAGGED' }"></span></td><td data-bind="text: $parent.date(initiatedAt)"></td><td><button class="mb-ops__link" type="button" data-bind="click: $parent.openCase">Review case</button></td></tr></tbody></table></div>
+    <!-- /ko -->
+    <!-- ko ifnot: queue().length --><div class="mb-ops__state mb-ops__state--empty">No KYC cases match these filters.</div><!-- /ko -->
+
+    <!-- ko if: caseState.loading --><div class="mb-ops__state" role="status">Loading or updating the selected case…</div><!-- /ko -->
+    <!-- ko if: caseState.error --><div class="mb-ops__state mb-ops__state--error" role="alert" data-bind="text: caseState.error"></div><!-- /ko -->
+    <!-- ko if: caseState.success --><div class="mb-ops__state mb-ops__state--success" role="status" data-bind="text: caseState.success"></div><!-- /ko -->
+
+    <!-- ko with: selectedCase -->
+    <div class="mb-ops__section-title"><h2>Case <span data-bind="text: kycId"></span></h2><span class="mb-ops__status" data-bind="text: kycStatus"></span></div>
+    <div class="mb-ops__split">
+      <article class="mb-ops__panel"><h3>Customer context</h3><dl class="mb-ops__dl"><div><dt>Name</dt><dd data-bind="text: customerName"></dd></div><div><dt>CIF ID</dt><dd data-bind="text: cifId"></dd></div><div><dt>Email</dt><dd data-bind="text: email"></dd></div><div><dt>Mobile</dt><dd data-bind="text: mobileNumber"></dd></div><div><dt>PAN</dt><dd data-bind="text: $parent.mask(panNumber, 4)"></dd></div><div><dt>Aadhaar</dt><dd data-bind="text: $parent.mask(aadhaarNumber, 4)"></dd></div><div><dt>CIF sync</dt><dd data-bind="text: cifSyncStatus"></dd></div><div><dt>Notification</dt><dd data-bind="text: notificationSyncStatus"></dd></div></dl></article>
+      <article class="mb-ops__panel"><h3>Reviewer decision</h3><div class="mb-ops__field"><label for="kyc-review-note">Mismatch / rejection reason</label><textarea id="kyc-review-note" data-bind="value: $parent.rejectionReason" placeholder="Required for rejection"></textarea></div><div class="mb-ops__actions"><button class="mb-button mb-button-primary" type="button" data-bind="click: function () { $parent.decide('APPROVED'); }, enable: $parent.canDecide">Approve KYC</button><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { $parent.decide('REJECTED'); }, enable: $parent.canDecide">Reject KYC</button></div></article>
+    </div>
+    <!-- /ko -->
+
+    <!-- ko if: selectedCase -->
+    <div class="mb-ops__section-title"><h2>Documents</h2><span class="mb-ops__muted">Verify metadata and content through the approved reviewer channel</span></div>
+    <div class="mb-ops__panel"><div class="mb-ops__field"><label for="document-review-note">Verification remarks</label><textarea id="document-review-note" data-bind="value: verificationRemarks" placeholder="Required when marking mismatch"></textarea></div></div>
+    <!-- ko if: documents().length -->
+    <div class="mb-ops__table-wrap"><table class="mb-ops__table"><caption class="oj-helper-hidden-accessible">Documents for selected KYC case</caption><thead><tr><th>Type</th><th>File</th><th>Size</th><th>Status</th><th>Reviewed by</th><th>Actions</th></tr></thead><tbody data-bind="foreach: documents"><tr><td data-bind="text: documentType"></td><td data-bind="text: originalFileName"></td><td data-bind="text: Math.ceil(fileSizeBytes / 1024) + ' KB'"></td><td><span class="mb-ops__status" data-bind="text: verificationStatus"></span></td><td data-bind="text: verifiedBy || '—'"></td><td><div class="mb-ops__actions"><button class="mb-ops__link" type="button" data-bind="click: function () { $parent.verifyDocument($data, 'VERIFIED'); }">Mark verified</button><button class="mb-ops__link" type="button" data-bind="click: function () { $parent.verifyDocument($data, 'MISMATCH'); }">Mark mismatch</button></div></td></tr></tbody></table></div>
+    <!-- /ko -->
+    <!-- ko ifnot: documents().length --><div class="mb-ops__state mb-ops__state--empty">No documents have been uploaded for this case.</div><!-- /ko -->
+    <!-- /ko -->
+    <!-- /ko -->
+  </div>
+</section>

@@ -12,7 +12,10 @@ import com.moneybags.billing.BillGenerationApplication.GenerateRequest;
 import com.moneybags.billing.BillGenerationApplication.PaymentSettlementRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,9 +31,12 @@ import java.util.Map;
 @RequestMapping
 public class BillController {
     private final BillingService service;
+    private final boolean securityEnabled;
 
-    public BillController(BillingService service) {
+    public BillController(BillingService service,
+                          @Value("${moneybags.security.enabled:true}") boolean securityEnabled) {
         this.service = service;
+        this.securityEnabled = securityEnabled;
     }
 
     @GetMapping("/")
@@ -39,7 +45,7 @@ public class BillController {
                 "service", "bill-generation-service", "status", "UP",
                 "documentation", "/swagger-ui.html", "health", "/actuator/health",
                 "generateBill", "POST /internal/v1/bills/generate",
-                "findBills", "GET /internal/v1/bills", "getBill", "GET /api/v1/bills/{billId}");
+                "findBills", "GET /api/v1/bills", "getBill", "GET /api/v1/bills/{billId}");
     }
 
     @PostMapping("/internal/v1/bills/generate")
@@ -49,8 +55,22 @@ public class BillController {
     }
 
     @GetMapping("/api/v1/bills/{billId}")
-    BillResponse get(@PathVariable String billId) {
-        return service.get(billId);
+    BillResponse get(@PathVariable String billId, Authentication authentication) {
+        Access access = access(authentication);
+        return service.getForCustomer(billId, access.cifId(), access.privileged());
+    }
+
+    @GetMapping("/api/v1/bills")
+    BillPage customerSearch(@RequestParam(required = false) String accountId,
+                            @RequestParam(required = false) String billingPeriod,
+                            @RequestParam(required = false) String status,
+                            @RequestParam(defaultValue = "0") int page,
+                            @RequestParam(defaultValue = "20") int size,
+                            Authentication authentication) {
+        validatePage(page, size);
+        Access access = access(authentication);
+        return service.searchForCustomer(access.cifId(), access.privileged(), accountId, billingPeriod, status,
+                page, size);
     }
 
     @GetMapping("/internal/v1/bills/{billId}")
@@ -64,9 +84,7 @@ public class BillController {
                     @RequestParam(required = false) String status,
                     @RequestParam(defaultValue = "0") int page,
                     @RequestParam(defaultValue = "20") int size) {
-        if (page < 0 || size < 1 || size > 100) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PAGE", "page must be >= 0 and size must be 1..100");
-        }
+        validatePage(page, size);
         return service.search(accountId, billingPeriod, status, page, size);
     }
 
@@ -92,4 +110,30 @@ public class BillController {
                         @Valid @RequestBody CloseRequest request) {
         return service.close(request);
     }
+
+    private void validatePage(int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PAGE",
+                    "page must be >= 0 and size must be 1..100");
+        }
+    }
+
+    private Access access(Authentication authentication) {
+        if (!securityEnabled) return new Access(null, true);
+        boolean privileged = authentication != null && authentication.getAuthorities().stream().anyMatch(authority ->
+                authority.getAuthority().equals("ROLE_BANK_ADMIN")
+                        || authority.getAuthority().equals("SCOPE_billing:admin"));
+        if (privileged) return new Access(null, true);
+        if (!(authentication instanceof JwtAuthenticationToken jwt)) return new Access(null, false);
+        String claim = jwt.getToken().getClaimAsString("customer_id");
+        if (claim == null || claim.isBlank()) return new Access(null, false);
+        try {
+            return new Access(Long.valueOf(claim), false);
+        } catch (NumberFormatException invalidCustomerId) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "CUSTOMER_CONTEXT_INVALID",
+                    "The authenticated customer context is invalid");
+        }
+    }
+
+    private record Access(Long cifId, boolean privileged) {}
 }

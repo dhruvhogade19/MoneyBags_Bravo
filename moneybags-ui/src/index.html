@@ -5,7 +5,7 @@
     <meta http-equiv="x-ua-compatible" content="IE=edge" />
     <meta charset="utf-8" />
     <meta name="viewport" content="viewport-fit=cover, initial-scale=1.0" />
-    <meta name="theme-color" content="#faf7f1" />
+    <meta name="theme-color" content="#ef9bb4" />
     <link rel="icon" type="image/x-icon" href="css/images/JET-Favicon-Red-32x32.png" />
 
     <script>
@@ -26,9 +26,10 @@
     <!-- endinjector -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/app.css" type="text/css" />
     <link rel="stylesheet" href="css/theme-presets.css" type="text/css" />
+    <link rel="stylesheet" href="css/workspaces.css" type="text/css" />
   </head>
   <body class="mb-body">
     <div id="globalBody">
@@ -38,15 +39,20 @@
         <header class="mb-header" role="banner">
           <div class="mb-container mb-header-inner">
             <button class="mb-brand" type="button" data-bind="click: function () { navigate('landing'); }" aria-label="MoneyBag home">
-              <span class="mb-brand-mark" aria-hidden="true">✦</span>
+              <span class="mb-brand-mark" aria-hidden="true">M</span>
               <span class="mb-brand-name">MoneyBag</span>
             </button>
 
             <nav class="mb-desktop-nav" aria-label="Primary navigation">
               <button type="button" data-bind="click: function () { navigate('landing'); }, css: { 'is-active': currentPath() === 'landing' }">Home</button>
-              <button type="button" data-bind="click: function () { navigate('products'); }, css: { 'is-active': currentPath() === 'products' }">Products</button>
+              <button type="button" data-bind="click: function () { navigate('products'); }, css: { 'is-active': currentPath() === 'products' || currentPath() === 'product-detail' }">Products</button>
+              <!-- ko if: isCustomer -->
+              <button type="button" data-bind="click: function () { navigate(needsProfile() ? 'customer-profile' : 'customer-dashboard'); }, css: { 'is-active': pathStartsWith('customer-') }">My banking</button>
+              <!-- /ko -->
+              <!-- ko if: isAdmin -->
+              <button type="button" data-bind="click: function () { navigate('banker-dashboard'); }, css: { 'is-active': pathStartsWith('banker-') }">Operations</button>
+              <!-- /ko -->
               <button type="button" data-bind="click: function () { navigate('security'); }, css: { 'is-active': currentPath() === 'security' }">Security</button>
-              <button type="button" data-bind="click: function () { navigate('about'); }, css: { 'is-active': currentPath() === 'about' }">About</button>
             </nav>
 
             <div class="mb-header-actions">
@@ -55,8 +61,21 @@
                 <span class="mb-theme-icon" aria-hidden="true" data-bind="text: themeIcon"></span>
                 <span data-bind="text: themeToggleText"></span>
               </button>
-              <button class="mb-button mb-button-quiet mb-secondary-action" type="button" data-bind="click: function () { navigate('customer-dashboard'); }">Sign in</button>
-              <button class="mb-button mb-button-primary mb-primary-action" type="button" data-bind="click: function () { navigate('customer-accounts'); }">Open account</button>
+
+              <!-- ko ifnot: isAuthenticated -->
+              <button class="mb-button mb-button-quiet mb-secondary-action" type="button" data-bind="click: signInAdmin">Bank admin</button>
+              <button class="mb-button mb-button-quiet mb-secondary-action" type="button" data-bind="click: signInCustomer">Sign in</button>
+              <button class="mb-button mb-button-primary mb-primary-action" type="button" data-bind="click: openAccount">Open account</button>
+              <!-- /ko -->
+
+              <!-- ko if: isAuthenticated -->
+              <div class="mb-user-chip" data-bind="attr: { title: currentUser() && currentUser().username }">
+                <span class="mb-user-avatar" aria-hidden="true" data-bind="text: displayName().charAt(0).toUpperCase()"></span>
+                <span><strong data-bind="text: displayName"></strong><small data-bind="text: workspaceLabel"></small></span>
+              </div>
+              <button class="mb-button mb-button-quiet mb-secondary-action" type="button" data-bind="click: signOut">Sign out</button>
+              <!-- /ko -->
+
               <button class="mb-menu-button" type="button" data-bind="click: toggleMobileMenu, attr: { 'aria-expanded': mobileMenuOpen }" aria-label="Toggle navigation">
                 <span></span><span></span><span></span>
               </button>
@@ -66,11 +85,52 @@
           <nav class="mb-mobile-nav" aria-label="Mobile navigation" data-bind="css: { 'is-open': mobileMenuOpen }">
             <button type="button" data-bind="click: function () { navigate('landing'); }">Home</button>
             <button type="button" data-bind="click: function () { navigate('products'); }">Products</button>
+            <!-- ko if: isCustomer --><button type="button" data-bind="click: function () { navigate(needsProfile() ? 'customer-profile' : 'customer-dashboard'); }">My banking</button><!-- /ko -->
+            <!-- ko if: isAdmin --><button type="button" data-bind="click: function () { navigate('banker-dashboard'); }">Operations</button><!-- /ko -->
             <button type="button" data-bind="click: function () { navigate('security'); }">Security</button>
-            <button type="button" data-bind="click: function () { navigate('customer-dashboard'); }">Customer space</button>
-            <button type="button" data-bind="click: function () { navigate('banker-dashboard'); }">Banker workspace</button>
+            <!-- ko ifnot: isAuthenticated --><button type="button" data-bind="click: signInCustomer">Customer sign in</button><button type="button" data-bind="click: signInAdmin">Bank admin sign in</button><!-- /ko -->
+            <!-- ko if: isAuthenticated --><button type="button" data-bind="click: signOut">Sign out</button><!-- /ko -->
           </nav>
+
+          <!-- ko if: isCustomer -->
+          <nav class="mb-workspace-nav" aria-label="Customer workspace">
+            <div class="mb-container">
+              <button type="button" data-bind="click: function () { navigate('customer-dashboard'); }, css: { 'is-active': currentPath() === 'customer-dashboard' }">Overview</button>
+              <button type="button" data-bind="click: function () { navigate('customer-profile'); }, css: { 'is-active': currentPath() === 'customer-profile' }">Profile</button>
+              <button type="button" data-bind="click: function () { navigate('customer-kyc'); }, css: { 'is-active': currentPath() === 'customer-kyc' }">KYC</button>
+              <button type="button" data-bind="click: function () { navigate('customer-accounts'); }, css: { 'is-active': currentPath() === 'customer-accounts' }">Accounts</button>
+              <button type="button" data-bind="click: function () { navigate('customer-deposits'); }, css: { 'is-active': currentPath() === 'customer-deposits' }">Fixed deposits</button>
+              <button type="button" data-bind="click: function () { navigate('customer-cards'); }, css: { 'is-active': currentPath() === 'customer-cards' }">Cards</button>
+              <button type="button" data-bind="click: function () { navigate('customer-payments'); }, css: { 'is-active': currentPath() === 'customer-payments' }">Payments</button>
+              <button type="button" data-bind="click: function () { navigate('customer-bills'); }, css: { 'is-active': currentPath() === 'customer-bills' }">Bills</button>
+              <button type="button" data-bind="click: function () { navigate('customer-statements'); }, css: { 'is-active': currentPath() === 'customer-statements' }">Statements</button>
+              <button type="button" data-bind="click: function () { navigate('customer-notifications'); }, css: { 'is-active': currentPath() === 'customer-notifications' }">Inbox</button>
+            </div>
+          </nav>
+          <!-- /ko -->
+
+          <!-- ko if: isAdmin -->
+          <nav class="mb-workspace-nav" aria-label="Bank admin workspace">
+            <div class="mb-container">
+              <button type="button" data-bind="click: function () { navigate('banker-dashboard'); }, css: { 'is-active': currentPath() === 'banker-dashboard' }">Overview</button>
+              <button type="button" data-bind="click: function () { navigate('banker-customers'); }, css: { 'is-active': currentPath() === 'banker-customers' }">Customers</button>
+              <button type="button" data-bind="click: function () { navigate('banker-kyc'); }, css: { 'is-active': currentPath() === 'banker-kyc' }">KYC</button>
+              <button type="button" data-bind="click: function () { navigate('banker-accounts'); }, css: { 'is-active': currentPath() === 'banker-accounts' }">Deposits</button>
+              <button type="button" data-bind="click: function () { navigate('banker-cards'); }, css: { 'is-active': currentPath() === 'banker-cards' }">Cards</button>
+              <button type="button" data-bind="click: function () { navigate('banker-catalogue'); }, css: { 'is-active': pathStartsWith('banker-catalogue') }">Products</button>
+              <button type="button" data-bind="click: function () { navigate('banker-payments'); }, css: { 'is-active': currentPath() === 'banker-payments' }">Payments</button>
+              <button type="button" data-bind="click: function () { navigate('banker-billing'); }, css: { 'is-active': currentPath() === 'banker-billing' }">Bills</button>
+              <button type="button" data-bind="click: function () { navigate('banker-accounting'); }, css: { 'is-active': currentPath() === 'banker-accounting' }">Accounting</button>
+              <button type="button" data-bind="click: function () { navigate('banker-eod'); }, css: { 'is-active': currentPath() === 'banker-eod' }">EOD</button>
+              <button type="button" data-bind="click: function () { navigate('banker-iam'); }, css: { 'is-active': currentPath() === 'banker-iam' }">IAM</button>
+            </div>
+          </nav>
+          <!-- /ko -->
         </header>
+
+        <div class="mb-route-notice" data-bind="visible: routeNotice" role="status">
+          <div class="mb-container"><span data-bind="text: routeNotice"></span><button type="button" data-bind="click: dismissNotice" aria-label="Dismiss message">Dismiss</button></div>
+        </div>
 
         <main id="main-content" class="mb-main" role="main">
           <oj-module config="[[moduleAdapter.koObservableConfig]]"></oj-module>
@@ -79,15 +139,16 @@
         <footer class="mb-footer" role="contentinfo">
           <div class="mb-container mb-footer-inner">
             <div>
-              <div class="mb-footer-brand"><span class="mb-brand-mark" aria-hidden="true">✦</span> MoneyBag</div>
+              <div class="mb-footer-brand"><span class="mb-brand-mark" aria-hidden="true">M</span> MoneyBag</div>
               <p>Banking, thoughtfully organised.</p>
             </div>
             <div class="mb-footer-links">
+              <button type="button" data-bind="click: function () { navigate('products'); }">Products</button>
               <button type="button" data-bind="click: function () { navigate('security'); }">Security</button>
-              <button type="button" data-bind="click: function () { navigate('about'); }">About us</button>
-              <button type="button" data-bind="click: function () { navigate('banker-dashboard'); }">Banker sign in</button>
+              <button type="button" data-bind="click: function () { navigate('about'); }">About</button>
+              <!-- ko ifnot: isAuthenticated --><button type="button" data-bind="click: signInAdmin">Bank admin sign in</button><!-- /ko -->
             </div>
-            <p class="mb-footer-copy">&copy; <span data-bind="text: year"></span> MoneyBag. UI prototype.</p>
+            <p class="mb-footer-copy">&copy; <span data-bind="text: year"></span> MoneyBag.</p>
           </div>
         </footer>
       </div>

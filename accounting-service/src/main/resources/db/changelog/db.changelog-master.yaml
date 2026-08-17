@@ -44,3 +44,47 @@ databaseChangeLog:
             path: db/changelog/changes/003-enable-credit-card-merchant-payment.sql
             splitStatements: true
             stripComments: true
+
+  - changeSet:
+      id: 004-create-financial-reconciliation
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: FIN_RECON_RUN
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/004-create-financial-reconciliation.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 005-repair-idempotency-record
+      author: moneybags
+      dbms: oracle
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: IDEMPOTENCY_RECORD
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/005-repair-idempotency-record.sql
+            splitStatements: false
+            stripComments: true
+
+  - changeSet:
+      id: 006-create-trial-balance
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: TRIAL_BALANCE_RUN
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/006-create-trial-balance.sql
+            splitStatements: true
+            stripComments: true
+  - include:
+      file: db/changelog/changes/007-add-trial-balance-run-metadata.yaml

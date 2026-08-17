@@ -1,0 +1,25 @@
+<section class="mb-feature-page mb-onboarding-page">
+  <div class="mb-container mb-narrow-container">
+    <header class="mb-page-heading">
+      <div><p class="mb-eyebrow">Customer registration</p><h1>Create your secure sign-in.</h1><p class="mb-hero-lead">Start with your email and password. After signing in, you will create your customer profile and begin KYC.</p></div>
+      <ol class="mb-progress-steps" aria-label="Onboarding progress"><li class="is-active">1. Sign-in</li><li>2. Customer profile</li><li>3. KYC review</li></ol>
+    </header>
+    <div class="mb-alert mb-alert-error" data-bind="visible: errorMessage, text: errorMessage" role="alert"></div>
+
+    <section class="mb-panel mb-form-panel" data-bind="visible: !success()" aria-labelledby="register-signin-heading">
+      <h2 id="register-signin-heading">Choose your sign-in</h2><p class="mb-form-intro">Your customer identity is created with the Customer role only. Product access remains unavailable until profile creation and KYC approval.</p>
+      <div class="mb-form-grid">
+        <oj-input-text required label-hint="Email" value="{{email}}" type="email" autocomplete="email"></oj-input-text>
+        <oj-input-password required label-hint="Password" value="{{password}}" autocomplete="new-password" help.instruction="Use at least 12 characters."></oj-input-password>
+        <oj-input-password required label-hint="Confirm password" value="{{confirmPassword}}" autocomplete="new-password"></oj-input-password>
+      </div>
+      <div class="mb-form-actions"><button class="mb-button mb-button-primary" type="button" data-bind="click: submit, disable: submitting"><span data-bind="text: submitting() ? 'Creating sign-in...' : 'Create sign-in'"></span></button></div>
+    </section>
+
+    <section class="mb-success-panel" data-bind="visible: success" role="status" aria-live="polite">
+      <span class="mb-success-mark" aria-hidden="true">OK</span><p class="mb-eyebrow">Sign-in created</p><h2>Now complete your customer profile.</h2><p>KYC has not started yet. Sign in with your new details, open Profile, and submit the identity information that starts KYC.</p>
+      <dl class="mb-key-values"><div><dt>Registration status</dt><dd>Pending profile</dd></div><div><dt>Banking access</dt><dd>Not enabled</dd></div></dl>
+      <button class="mb-button mb-button-primary" type="button" data-bind="click: signIn">Sign in and continue</button>
+    </section>
+  </div>
+</section>

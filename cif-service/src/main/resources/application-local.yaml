@@ -1,0 +1,5 @@
+spring:
+  liquibase:
+    contexts: local
+  jpa:
+    show-sql: false

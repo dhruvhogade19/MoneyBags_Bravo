@@ -29,7 +29,7 @@ html[data-mb-palette="vela"][data-mb-theme="light"] {
   --mb-border-strong: #cc7c6f;
   --mb-success: #26704d;
   --mb-focus: #8b1f39;
-  --mb-header-bg: rgb(254 251 249 / 90%);
+  --mb-header-bg: rgb(239 155 180 / 94%);
   --mb-shadow-soft: 0 10px 30px rgb(82 24 40 / 8%);
   --mb-shadow: 0 18px 42px rgb(82 24 40 / 12%);
   --mb-accent-shadow: 0 8px 18px rgb(139 31 57 / 20%);
@@ -63,7 +63,7 @@ html[data-mb-palette="vela"][data-mb-theme="dark"] {
   --mb-border-strong: #cc7c6f;
   --mb-success: #79cc9f;
   --mb-focus: #ffd0c5;
-  --mb-header-bg: rgb(37 26 31 / 90%);
+  --mb-header-bg: rgb(102 39 62 / 96%);
   --mb-shadow-soft: 0 10px 30px rgb(0 0 0 / 22%);
   --mb-shadow: 0 18px 42px rgb(0 0 0 / 36%);
   --mb-accent-shadow: 0 8px 18px rgb(165 50 70 / 24%);

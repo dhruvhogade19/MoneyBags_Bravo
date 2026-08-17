@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: accounting-007
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: TRIAL_BALANCE_RUN
+                columnName: BALANCED_FLAG
+      changes:
+        - addColumn:
+            tableName: TRIAL_BALANCE_RUN
+            columns:
+              - column:
+                  name: BALANCED_FLAG
+                  type: NUMBER(1)
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+              - column:
+                  name: GENERATED_BY
+                  type: VARCHAR2(100)
+                  defaultValue: SYSTEM
+                  constraints:
+                    nullable: false

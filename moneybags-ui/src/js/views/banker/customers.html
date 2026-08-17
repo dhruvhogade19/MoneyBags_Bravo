@@ -1,0 +1,56 @@
+<section class="mb-ops">
+  <div class="mb-container">
+    <header class="mb-ops__header">
+      <div><p class="mb-eyebrow">Customer servicing</p><h1>Customer 360</h1><p>Find a customer by CIF ID and assemble their profile, verification, deposit, card, and recent payment context.</p></div>
+      <span class="mb-ops__badge">Exact CIF lookup</span>
+    </header>
+
+    <!-- ko if: accessDenied --><div class="mb-ops__state mb-ops__state--error" role="alert"><h2>Bank admin access required</h2><p>Customer servicing is restricted to BANK_ADMIN.</p></div><!-- /ko -->
+    <!-- ko ifnot: accessDenied -->
+    <div class="mb-ops__notice"><strong>Why an exact ID?</strong><p>CIF Service does not expose a customer name or email search API. This page avoids inventing one and uses the authorised `GET /api/v1/cifs/{cifId}` contract.</p></div>
+    <form class="mb-ops__panel mb-ops__form" data-bind="submit: lookup" aria-label="Customer lookup">
+      <div class="mb-ops__field"><label for="banker-cif-id">CIF ID</label><input id="banker-cif-id" inputmode="numeric" autocomplete="off" required data-bind="value: cifId, valueUpdate: 'input'" placeholder="For example, 101" /></div>
+      <div class="mb-ops__field"><span>Action</span><button class="mb-button mb-button-primary" type="submit" data-bind="disable: state.loading">Find customer</button></div>
+    </form>
+
+    <!-- ko if: state.loading --><div class="mb-ops__state" role="status">Loading customer information…</div><!-- /ko -->
+    <!-- ko if: state.error --><div class="mb-ops__state mb-ops__state--error" role="alert" data-bind="text: state.error"></div><!-- /ko -->
+    <!-- ko if: state.success --><div class="mb-ops__state mb-ops__state--success" role="status" data-bind="text: state.success"></div><!-- /ko -->
+    <!-- ko if: partialWarning --><div class="mb-ops__state mb-ops__state--error" role="status" data-bind="text: partialWarning"></div><!-- /ko -->
+
+    <!-- ko with: customer -->
+    <div class="mb-ops__section-title"><h2 data-bind="text: firstName + ' ' + lastName"></h2><span class="mb-ops__status" data-bind="text: kycStatus, css: { 'mb-ops__status--good': kycStatus === 'APPROVED', 'mb-ops__status--warn': kycStatus !== 'APPROVED' }"></span></div>
+    <article class="mb-ops__panel">
+      <dl class="mb-ops__dl">
+        <div><dt>CIF ID</dt><dd data-bind="text: cifId"></dd></div><div><dt>Date of birth</dt><dd data-bind="text: dob"></dd></div>
+        <div><dt>Email</dt><dd data-bind="text: email"></dd></div><div><dt>Mobile</dt><dd data-bind="text: number"></dd></div>
+        <div><dt>Employment</dt><dd data-bind="text: employmentType"></dd></div><div><dt>Salary</dt><dd data-bind="text: $parent.money(salary, 'INR')"></dd></div>
+        <div><dt>PAN</dt><dd data-bind="text: $parent.mask(panNumber, 4)"></dd></div><div><dt>Aadhaar</dt><dd data-bind="text: $parent.mask(aadhaarNumber, 4)"></dd></div>
+        <div class="mb-ops__field--wide"><dt>Address</dt><dd data-bind="text: address"></dd></div>
+      </dl>
+    </article>
+    <!-- /ko -->
+
+    <!-- ko if: customer -->
+    <div class="mb-ops__metrics" aria-label="Customer relationship summary">
+      <article class="mb-ops__metric"><small>KYC records</small><strong data-bind="text: kycs().length"></strong></article>
+      <article class="mb-ops__metric"><small>Deposit accounts</small><strong data-bind="text: depositAccounts().length"></strong></article>
+      <article class="mb-ops__metric"><small>Card accounts</small><strong data-bind="text: cardAccounts().length"></strong></article>
+      <article class="mb-ops__metric"><small>Recent payments</small><strong data-bind="text: payments().length"></strong></article>
+    </div>
+
+    <div class="mb-ops__grid">
+      <article class="mb-ops__card"><h3>Verification</h3><p data-bind="text: kycs().length ? 'Latest status: ' + kycs()[0].kycStatus : 'No KYC record was returned.'"></p><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('banker-kyc'); }">Open KYC queue</button></article>
+      <article class="mb-ops__card"><h3>Deposit accounts</h3><p data-bind="text: depositAccounts().length ? depositAccounts().length + ' account(s) found.' : 'No deposit accounts found.'"></p><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('banker-accounts'); }">Account operations</button></article>
+      <article class="mb-ops__card"><h3>Credit cards</h3><p data-bind="text: cardAccounts().length + ' account(s), ' + cardApplications().length + ' application(s).' "></p><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('banker-cards'); }">Card operations</button></article>
+    </div>
+
+    <div class="mb-ops__section-title"><h2>Recent payments</h2><button class="mb-ops__link" type="button" data-bind="click: function () { navigate('banker-payments'); }">Open payment operations</button></div>
+    <!-- ko if: payments().length -->
+    <div class="mb-ops__table-wrap"><table class="mb-ops__table"><caption class="oj-helper-hidden-accessible">Recent customer payments</caption><thead><tr><th>Payment</th><th>Type</th><th>Amount</th><th>Status</th><th>Created</th></tr></thead><tbody data-bind="foreach: payments"><tr><td data-bind="text: paymentId"></td><td data-bind="text: paymentType"></td><td data-bind="text: $parent.money(amount, currencyCode)"></td><td><span class="mb-ops__status" data-bind="text: status"></span></td><td data-bind="text: $parent.date(createdAt)"></td></tr></tbody></table></div>
+    <!-- /ko -->
+    <!-- ko ifnot: payments().length --><div class="mb-ops__state mb-ops__state--empty">No recent payments were returned for this CIF.</div><!-- /ko -->
+    <!-- /ko -->
+    <!-- /ko -->
+  </div>
+</section>

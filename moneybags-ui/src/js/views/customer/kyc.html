@@ -1,0 +1,36 @@
+<section class="mb-feature-page">
+  <div class="mb-container">
+    <header class="mb-page-heading"><div><p class="mb-eyebrow">Customer workspace</p><h1>KYC and verification</h1><p class="mb-hero-lead">After your profile is created, upload the four required documents here. A bank administrator can decide your KYC only after all four are on file.</p></div></header>
+    <div class="mb-state-card" data-bind="visible: loading" role="status"><oj-progress-circle size="sm" value="-1"></oj-progress-circle><span>Checking your verification...</span></div>
+    <div class="mb-alert mb-alert-error" data-bind="visible: errorMessage, text: errorMessage" role="alert"></div><div class="mb-alert mb-alert-success" data-bind="visible: successMessage, text: successMessage" role="status"></div>
+
+    <div class="mb-empty-state" data-bind="visible: !loading() && !errorMessage() && !currentCase()"><h2>No KYC case is linked yet.</h2><p>Your case is normally created when onboarding completes. Refresh shortly or check your profile reference.</p><button class="mb-button mb-button-outline" type="button" data-bind="click: load">Refresh status</button></div>
+
+    <div class="mb-two-column-layout" data-bind="visible: currentCase, with: currentCase">
+      <section class="mb-panel" aria-labelledby="kyc-status-heading">
+        <div class="mb-panel-heading"><div><p class="mb-eyebrow">Case <span data-bind="text: kycId"></span></p><h2 id="kyc-status-heading">Review status</h2></div><span class="mb-status" data-bind="text: $parent.label(kycStatus), css: $parent.statusClass(kycStatus)"></span></div>
+        <ol class="mb-timeline">
+          <li class="is-complete"><span></span><div><strong>Profile received</strong><small data-bind="text: $parent.dateTime(initiatedAt)"></small></div></li>
+          <li data-bind="css: { 'is-complete': $parent.documents().length > 0, 'is-current': $parent.documents().length === 0 }"><span></span><div><strong>Documents uploaded</strong><small data-bind="text: $parent.documents().length + ' document(s) on file'"></small></div></li>
+          <li data-bind="css: { 'is-complete': kycStatus === 'APPROVED' || kycStatus === 'REJECTED', 'is-current': kycStatus !== 'APPROVED' && kycStatus !== 'REJECTED' }"><span></span><div><strong>Administrator decision</strong><small data-bind="text: decision ? $parent.label(decision) : 'Waiting for review'"></small></div></li>
+        </ol>
+        <div class="mb-alert mb-alert-warning" data-bind="visible: $parent.missingDocumentCount() > 0"><strong>Documents still required</strong><p data-bind="text: $parent.documentProgress"></p><ul class="mb-checklist" data-bind="foreach: $parent.requiredDocuments"><li data-bind="css: { 'is-complete': $parents[1].isUploaded(code) }"><span data-bind="text: $parents[1].isUploaded(code) ? '✓' : '○'"></span><span data-bind="text: label"></span><small data-bind="text: $parents[1].isUploaded(code) ? 'Uploaded' : 'Upload required'"></small></li></ul></div>
+        <div class="mb-alert mb-alert-warning" data-bind="visible: rejectionReason || mismatchReason"><strong>Review note</strong><p data-bind="text: rejectionReason || mismatchReason"></p></div>
+      </section>
+
+      <section class="mb-panel mb-form-panel" aria-labelledby="kyc-upload-heading">
+        <h2 id="kyc-upload-heading">Upload a document</h2><p>Upload each required type once: PAN, Aadhaar, address proof, and salary proof. PDF, PNG, or JPEG are accepted.</p>
+        <label class="mb-native-field"><span>Document type</span><select data-bind="value: $parent.documentType"><option value="PAN">PAN</option><option value="AADHAAR">Aadhaar</option><option value="ADDRESS_PROOF">Address proof</option><option value="SALARY_PROOF">Salary proof</option></select></label>
+        <oj-file-picker accept='[".pdf",".png",".jpg",".jpeg"]' selection-mode="single" on-oj-select="[[$parent.selectFiles]]"><div slot="trigger" class="mb-upload-trigger"><strong>Choose a document</strong><span>Browse a file from your device</span></div></oj-file-picker>
+        <p class="mb-selected-file" data-bind="text: $parent.fileName"></p>
+        <button class="mb-button mb-button-primary" type="button" data-bind="click: $parent.upload, enable: $parent.canUpload"><span data-bind="text: $parent.submitting() ? 'Uploading...' : 'Upload for review'"></span></button>
+      </section>
+    </div>
+
+    <section class="mb-panel" data-bind="visible: currentCase" aria-labelledby="kyc-documents-heading">
+      <div class="mb-panel-heading"><div><p class="mb-eyebrow">Submitted securely</p><h2 id="kyc-documents-heading">Your documents</h2></div><span data-bind="text: documents().length + ' on file'"></span></div>
+      <div class="mb-empty-copy" data-bind="visible: documents().length === 0">No documents have been uploaded yet.</div>
+      <div class="mb-table-wrap" data-bind="visible: documents().length"><table class="mb-data-table"><thead><tr><th scope="col">Type</th><th scope="col">File</th><th scope="col">Uploaded</th><th scope="col">Review</th></tr></thead><tbody data-bind="foreach: documents"><tr><td data-bind="text: $parent.label(documentType)"></td><td data-bind="text: originalFileName"></td><td data-bind="text: $parent.dateTime(uploadedAt)"></td><td><span class="mb-status" data-bind="text: $parent.label(verificationStatus), css: $parent.statusClass(verificationStatus)"></span></td></tr></tbody></table></div>
+    </section>
+  </div>
+</section>

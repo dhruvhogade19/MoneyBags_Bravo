@@ -1,0 +1,45 @@
+<section class="mb-ops">
+  <div class="mb-container">
+    <header class="mb-ops__header">
+      <div>
+        <p class="mb-eyebrow">Bank admin workspace</p>
+        <h1>Good decisions start with a clear queue.</h1>
+        <p>Review customer verification, service accounts, monitor payments, and keep operational controls in one focused workspace.</p>
+      </div>
+      <span class="mb-ops__badge">Last refreshed: <span data-bind="text: lastRefreshed"></span></span>
+    </header>
+
+    <!-- ko if: accessDenied -->
+    <div class="mb-ops__state mb-ops__state--error" role="alert">
+      <h2>Bank admin access required</h2>
+      <p>This workspace is limited to users with the BANK_ADMIN role.</p>
+    </div>
+    <!-- /ko -->
+
+    <!-- ko ifnot: accessDenied -->
+    <div class="mb-ops__toolbar">
+      <p class="mb-ops__muted">Live counts come from the existing service APIs.</p>
+      <button class="mb-button mb-button-outline" type="button" data-bind="click: refresh, disable: state.loading">Refresh snapshot</button>
+    </div>
+    <!-- ko if: state.error --><div class="mb-ops__state mb-ops__state--error" role="alert" data-bind="text: state.error"></div><!-- /ko -->
+    <!-- ko if: state.success --><div class="mb-ops__state mb-ops__state--success" role="status" data-bind="text: state.success"></div><!-- /ko -->
+
+    <div class="mb-ops__metrics" aria-label="Operations summary">
+      <article class="mb-ops__metric"><small>KYC cases requiring attention</small><strong data-bind="text: kycCount"></strong></article>
+      <article class="mb-ops__metric"><small>Deposit accounts</small><strong data-bind="text: accountCount"></strong></article>
+      <article class="mb-ops__metric"><small>Catalogue products</small><strong data-bind="text: productCount"></strong></article>
+      <article class="mb-ops__metric"><small>Accounting journals</small><strong data-bind="text: journalCount"></strong></article>
+    </div>
+
+    <div class="mb-ops__section-title"><h2>Operations</h2><span class="mb-ops__muted">Choose a focused task</span></div>
+    <div class="mb-ops__quick-links">
+      <article class="mb-ops__card"><span class="mb-ops__chip">Customer 360</span><h3>Find a customer</h3><p>Use a CIF ID to assemble profile, KYC, account, card, and payment context.</p><button class="mb-button mb-button-primary" type="button" data-bind="click: function () { navigate('banker-customers'); }">Open customer servicing</button></article>
+      <article class="mb-ops__card"><span class="mb-ops__chip">Review queue</span><h3>KYC decisions</h3><p>Inspect customer documents, record verification results, and make a final decision.</p><button class="mb-button mb-button-primary" type="button" data-bind="click: function () { navigate('banker-kyc'); }">Open KYC queue</button></article>
+      <article class="mb-ops__card"><span class="mb-ops__chip">Deposits</span><h3>Account operations</h3><p>Open, locate, activate, block, freeze, and reactivate deposit accounts.</p><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('banker-accounts'); }">Manage accounts</button></article>
+      <article class="mb-ops__card"><span class="mb-ops__chip">Credit</span><h3>Card operations</h3><p>Inspect automatic eligibility decisions, applications, and issued card accounts.</p><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('banker-cards'); }">Manage credit cards</button></article>
+      <article class="mb-ops__card"><span class="mb-ops__chip">Product master</span><h3>Catalogue and pricing</h3><p>Manage product definitions, lifecycle, pricing policies, and benchmark rates.</p><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('banker-catalogue'); }">Open product master</button></article>
+      <article class="mb-ops__card"><span class="mb-ops__chip">Controls</span><h3>Accounting and EOD</h3><p>Review journals and configuration, then assess the currently available EOD controls.</p><div class="mb-ops__actions"><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('banker-accounting'); }">Accounting</button><button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('banker-eod'); }">EOD</button></div></article>
+    </div>
+    <!-- /ko -->
+  </div>
+</section>

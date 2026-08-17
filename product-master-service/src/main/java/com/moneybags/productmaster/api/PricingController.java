@@ -11,16 +11,23 @@ import java.time.LocalDate;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import com.moneybags.productmaster.service.ProductService;
 
 @RestController
 @RequestMapping("/api/products/{productCode}")
 @Tag(name = "Product Pricing", description = "Interest policy and explainable rate quotes")
 public class PricingController {
     private final PricingService service;
+    private final ProductService products;
+    private final CatalogueVisibility visibility;
 
-    public PricingController(PricingService service) {
+    public PricingController(PricingService service, ProductService products,
+                             CatalogueVisibility visibility) {
         this.service = service;
+        this.products = products;
+        this.visibility = visibility;
     }
 
     @GetMapping("/rate-quote")
@@ -29,7 +36,9 @@ public class PricingController {
             @PathVariable String productCode,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate quoteDate,
             @RequestParam(required = false) BigDecimal principal,
-            @RequestParam(required = false) Integer tenureMonths) {
+            @RequestParam(required = false) Integer tenureMonths,
+            Authentication authentication) {
+        visibility.requireVisible(products.get(productCode), authentication);
         return service.getQuote(productCode, quoteDate, principal, tenureMonths);
     }
 
@@ -41,7 +50,9 @@ public class PricingController {
     }
 
     @GetMapping("/interest-policies")
-    public List<InterestRuleDto> policies(@PathVariable String productCode) {
+    public List<InterestRuleDto> policies(@PathVariable String productCode,
+                                          Authentication authentication) {
+        visibility.requireVisible(products.get(productCode), authentication);
         return service.policies(productCode);
     }
 }

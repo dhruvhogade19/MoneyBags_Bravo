@@ -18,11 +18,8 @@ public record CreateCifRequest(
         @Past(message = "Date of birth must be in the past")
         LocalDate dob,
 
-        @NotNull(message = "Age is required")
-        @Min(value = 0, message = "Age cannot be negative")
         Integer age,
 
-        @NotBlank(message = "Email is required")
         @Email(message = "Email must be valid")
         String email,
 
@@ -55,4 +52,8 @@ public record CreateCifRequest(
         )
         String aadhaarNumber
 ) {
+    public CreateCifRequest withIdentityEmail(String identityEmail) {
+        return new CreateCifRequest(firstName, lastName, dob, age, identityEmail, number, address,
+                employmentType, salary, panNumber, aadhaarNumber);
+    }
 }

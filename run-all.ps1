@@ -58,10 +58,29 @@ if ($javaExitCode -ne 0) {
 $javaVersion = $javaOutput | Select-Object -First 1
 Write-Host ("Using Java: " + $javaVersion) -ForegroundColor Cyan
 
+$uiDirectory = Join-Path $projectRoot "moneybags-ui"
+$npmCommand = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
+if ($null -eq $npmCommand) {
+    throw "Node.js/npm was not found. Install Node.js before starting the Moneybags UI."
+}
+if (-not (Test-Path -LiteralPath (Join-Path $uiDirectory "node_modules"))) {
+    throw "Moneybags UI dependencies are missing. Run 'npm.cmd install' in moneybags-ui first."
+}
+Write-Host "Building the Oracle JET UI..." -ForegroundColor Cyan
+Push-Location $uiDirectory
+try {
+    & $npmCommand.Source run build:release
+    if ($LASTEXITCODE -ne 0) {
+        throw "Oracle JET release build failed. Services were not started."
+    }
+} finally {
+    Pop-Location
+}
+
 $services = @(
     @{ Name = "discovery-server"; Directory = "discovery-server"; Port = 8761 },
     @{ Name = "identity-access-service"; Directory = "identity-access-service"; Port = 8093; Profiles = "local" },
-    @{ Name = "cif-service"; Directory = "cif-service"; Port = 8081 },
+    @{ Name = "cif-service"; Directory = "cif-service"; Port = 8081; Profiles = "local" },
     @{ Name = "kyc-service"; Directory = "kyc-service"; Port = 8082 },
     @{ Name = "product-master-service"; Directory = "product-master-service"; Port = 8083 },
     @{ Name = "payments-service"; Directory = "payments-service"; Port = 8085 },
@@ -70,7 +89,8 @@ $services = @(
     @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088; Profiles = "local" },
     @{ Name = "notification-service"; Directory = "notification-service"; Port = 8090; Profiles = "mock-mail" },
     @{ Name = "bill-generation-service"; Directory = "bill-generation-service"; Port = 8087 },
-    @{ Name = "api-gateway"; Directory = "api-gateway"; Port = 8080 }
+    @{ Name = "api-gateway"; Directory = "api-gateway"; Port = 8080 },
+    @{ Name = "ui-bff"; Directory = "ui-bff"; Port = 8000 }
 )
 
 $occupied = foreach ($service in $services) {
@@ -158,6 +178,7 @@ Write-Host "Payments: http://localhost:8085/swagger-ui/index.html" -ForegroundCo
 Write-Host "Accounting: http://localhost:8088/swagger-ui.html" -ForegroundColor Green
 Write-Host "Eureka  : http://localhost:8761" -ForegroundColor Green
 Write-Host "Gateway : http://localhost:8080" -ForegroundColor Green
+Write-Host "Moneybags UI: http://localhost:8000" -ForegroundColor Green
 Write-Host ("Logs    : " + $logDir) -ForegroundColor Green
 Write-Host "Follow deposit logs: Get-Content .\logs\deposit-account-service.out.log -Wait -Tail 100"
 Write-Host "Follow payments logs: Get-Content .\logs\payments-service.out.log -Wait -Tail 100"

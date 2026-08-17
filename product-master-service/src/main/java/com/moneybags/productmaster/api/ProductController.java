@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -19,9 +20,11 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Product Master", description = "Banking product definitions and rule catalogue")
 public class ProductController {
     private final ProductService service;
+    private final CatalogueVisibility visibility;
 
-    public ProductController(ProductService service) {
+    public ProductController(ProductService service, CatalogueVisibility visibility) {
         this.service = service;
+        this.visibility = visibility;
     }
 
     @PostMapping
@@ -39,13 +42,15 @@ public class ProductController {
             @RequestParam(required = false) String productName,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate activeOn,
-            @PageableDefault(size = 20, sort = "productCode") Pageable pageable) {
-        return service.findAll(category, subtype, status, productName, activeOn, pageable);
+            @PageableDefault(size = 20, sort = "productCode") Pageable pageable,
+            Authentication authentication) {
+        return service.findAll(category, subtype, visibility.listStatus(status, authentication),
+                productName, activeOn, pageable);
     }
 
     @GetMapping("/{productCode}")
-    public ProductResponse get(@PathVariable String productCode) {
-        return service.get(productCode);
+    public ProductResponse get(@PathVariable String productCode, Authentication authentication) {
+        return visibility.requireVisible(service.get(productCode), authentication);
     }
 
     @PutMapping("/{productCode}")
@@ -85,18 +90,22 @@ public class ProductController {
 
     @GetMapping("/{productCode}/minimal")
     @Operation(summary = "Get one compact credit-card product")
-    public MinimalCreditCardProductResponse creditCardMinimal(@PathVariable String productCode) {
+    public MinimalCreditCardProductResponse creditCardMinimal(@PathVariable String productCode,
+                                                               Authentication authentication) {
+        visibility.requireVisible(service.get(productCode), authentication);
         return service.minimalCreditCard(productCode);
     }
 
     @GetMapping("/{productCode}/eligibility")
-    public List<EligibilityRuleDto> eligibility(@PathVariable String productCode) {
+    public List<EligibilityRuleDto> eligibility(@PathVariable String productCode,
+                                                Authentication authentication) {
+        visibility.requireVisible(service.get(productCode), authentication);
         return service.eligibility(productCode);
     }
 
     @GetMapping("/{productCode}/pricing")
-    public ProductResponse pricing(@PathVariable String productCode) {
-        return service.pricing(productCode);
+    public ProductResponse pricing(@PathVariable String productCode, Authentication authentication) {
+        return visibility.requireVisible(service.pricing(productCode), authentication);
     }
 
     @PostMapping("/{productCode}/validate-account-opening")

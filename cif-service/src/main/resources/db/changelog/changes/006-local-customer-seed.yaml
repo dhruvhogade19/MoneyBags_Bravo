@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-local-approved-customer
+      author: moneybags
+      context: local
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: "0"
+            sql: SELECT COUNT(*) FROM cifs WHERE cif_id = 101
+      changes:
+        - insert:
+            tableName: cifs
+            columns:
+              - column: { name: cif_id, valueNumeric: 101 }
+              - column: { name: tenant_id, value: moneybags }
+              - column: { name: first_name, value: Asha }
+              - column: { name: last_name, value: Sharma }
+              - column: { name: dob, valueDate: 1990-01-15 }
+              - column: { name: age, valueNumeric: 36 }
+              - column: { name: email, value: customer@moneybags.local }
+              - column: { name: mobile_number, value: "9000000101" }
+              - column: { name: address, value: "MoneyBag local demo address" }
+              - column: { name: employment_type, value: SALARIED }
+              - column: { name: salary, valueNumeric: 85000.00 }
+              - column: { name: kyc_status, value: APPROVED }
+              - column: { name: pan_number, value: MBDMO0101A }
+              - column: { name: aadhaar_number, value: "900000000101" }
+              - column: { name: created_at, valueComputed: CURRENT_TIMESTAMP }
+              - column: { name: updated_at, valueComputed: CURRENT_TIMESTAMP }
+      rollback:
+        - delete:
+            tableName: cifs
+            where: cif_id = 101

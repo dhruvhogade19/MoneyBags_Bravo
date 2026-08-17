@@ -62,7 +62,7 @@
 // RequireJS can leave a JET starter page looking empty when an asset is missing.
 requirejs.onError = function (error) {
   console.error('MoneyBags failed to load:', error);
-  var app = document.getElementById('app');
+  var app = document.getElementById('globalBody');
   if (app) {
     app.innerHTML = '<section class="oj-sm-padding-6x-vertical oj-sm-padding-4x-horizontal">' +
       '<h1>Unable to load MoneyBags</h1>' +

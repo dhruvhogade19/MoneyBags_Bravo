@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -50,5 +51,20 @@ class BillGenerationApplicationTest {
         assertThat(paid.status()).isEqualTo("PAID");
         assertThat(paid.outstandingAmount()).isZero();
         assertThat(service.closureEligibility(bill.accountId()).eligible()).isTrue();
+    }
+
+    @Test
+    void limitsCustomerBillReadsToTheAuthenticatedCif() {
+        var bill = service.generate("test-bill-generation-003", new BillGenerationApplication.GenerateRequest(
+                "55555555-5555-5555-5555-555555555555", "2026-10", LocalDate.of(2026, 10, 13)));
+
+        var customerPage = service.searchForCustomer(101L, false, null, null, null, 0, 20);
+
+        assertThat(customerPage.content()).extracting(BillGenerationApplication.BillResponse::billId)
+                .contains(bill.billId());
+        assertThatThrownBy(() -> service.getForCustomer(bill.billId(), 202L, false))
+                .isInstanceOf(BillGenerationApplication.ApiException.class)
+                .hasMessage("Bill was not found");
+        assertThat(service.getForCustomer(bill.billId(), null, true).billId()).isEqualTo(bill.billId());
     }
 }

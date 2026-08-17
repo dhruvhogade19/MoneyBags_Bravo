@@ -11,7 +11,7 @@ spring:
 moneybags:
   identity:
     clients:
-      service-secret: ${M2M_CLIENT_SECRET:local-service-secret-change-me}
+      service-secret: ${M2M_CLIENT_SECRET:moneybags-demo-service-secret}
     bootstrap:
-      admin-password: ${LOCAL_ADMIN_PASSWORD:ChangeThisAdminPassword!}
-      consumer-password: ${LOCAL_CONSUMER_PASSWORD:ChangeThisConsumerPassword!}
+      admin-password: ${LOCAL_ADMIN_PASSWORD:Admin@123456}
+      consumer-password: ${LOCAL_CONSUMER_PASSWORD:Customer@123456}

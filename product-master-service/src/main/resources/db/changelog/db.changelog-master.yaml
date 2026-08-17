@@ -23,3 +23,25 @@ databaseChangeLog:
       file: db/changelog/changes/005-drop-legacy-product-tables.sql
   - include:
       file: db/changelog/changes/006-add-senior-fixed-deposit-eligibility.sql
+  - changeSet:
+      id: product-007-repair-benchmark-rate-id
+      author: moneybags
+      dbms: oracle
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: BENCHMARK_RATE
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/007-repair-benchmark-rate-id.sql
+            splitStatements: false
+            stripComments: true
+  - changeSet:
+      id: product-008-create-benchmark-rate-sequence-h2
+      author: moneybags
+      dbms: h2
+      changes:
+        - createSequence:
+            sequenceName: SEQ_BENCHMARK_RATE_ID
+            startValue: 1
+            incrementBy: 1

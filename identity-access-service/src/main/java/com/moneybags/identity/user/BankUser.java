@@ -15,7 +15,7 @@ import org.hibernate.type.NumericBooleanConverter;
 @Table(name = "BANK_USER")
 public class BankUser {
     @Id
-    @Column(name = "USER_ID", length = 36, nullable = false, updatable = false)
+    @Column(name = "USER_ID", length = 36, nullable = false, updatable = false, columnDefinition = "CHAR(36)")
     private String id;
 
     @Column(name = "USERNAME", length = 100, nullable = false, unique = true)

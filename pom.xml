@@ -57,6 +57,7 @@
         <module>identity-access-service</module>
         <module>discovery-server</module>
         <module>api-gateway</module>
+        <module>ui-bff</module>
         <module>deposit-account-service</module>
         <module>product-master-service</module>
         <module>credit-card-service</module>

@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -25,7 +26,8 @@ public class TrustedIdentityHeadersFilter implements WebFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
-        if (path.startsWith("/actuator/health")) return chain.filter(exchange);
+        if (path.startsWith("/actuator/health")
+                || isPublicProductGet(exchange.getRequest().getMethod(), path)) return chain.filter(exchange);
         return exchange.getPrincipal().flatMap(principal -> {
             if (!(principal instanceof JwtAuthenticationToken jwt)) return forbidden(exchange, "JWT authentication is required");
             String tenantHeader = exchange.getRequest().getHeaders().getFirst("X-Tenant-ID");
@@ -49,6 +51,12 @@ public class TrustedIdentityHeadersFilter implements WebFilter, Ordered {
     private boolean validUuid(String value) {
         if (value == null) return false;
         try { UUID.fromString(value); return true; } catch (IllegalArgumentException ignored) { return false; }
+    }
+
+    static boolean isPublicProductGet(HttpMethod method, String path) {
+        if (method != HttpMethod.GET || path == null) return false;
+        return path.equals("/api/products") || path.startsWith("/api/products/")
+                || path.equals("/api/v1/products") || path.startsWith("/api/v1/products/");
     }
 
     private Mono<Void> forbidden(ServerWebExchange exchange, String detail) {

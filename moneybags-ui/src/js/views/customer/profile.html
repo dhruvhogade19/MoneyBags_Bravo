@@ -1,0 +1,34 @@
+<section class="mb-feature-page">
+  <div class="mb-container mb-narrow-container">
+    <header class="mb-page-heading mb-page-heading-split"><div><p class="mb-eyebrow">Customer workspace</p><h1 data-bind="text: onboarding() ? 'Complete your customer profile' : 'Profile and personal details'"></h1><p class="mb-hero-lead" data-bind="text: onboarding() ? 'Submit your customer details to create your CIF and start KYC.' : 'Keep your contact and employment information current.'"></p></div><button class="mb-button mb-button-outline" type="button" data-bind="visible: profile() && !editing(), click: startEdit">Edit details</button></header>
+    <div class="mb-state-card" data-bind="visible: loading" role="status"><oj-progress-circle size="sm" value="-1"></oj-progress-circle><span>Loading your profile...</span></div>
+    <div class="mb-alert mb-alert-error" data-bind="visible: errorMessage, text: errorMessage" role="alert"></div>
+    <div class="mb-alert mb-alert-success" data-bind="visible: successMessage, text: successMessage" role="status"></div>
+    <div class="mb-alert mb-alert-warning" data-bind="visible: identityRefreshRequired" role="status"><strong>Refresh your secure session</strong><p>Your current token was issued before the customer profile existed. Sign out, then sign in again so it includes your new customer reference.</p><button class="mb-button mb-button-primary" type="button" data-bind="click: refreshIdentity">Sign out now</button></div>
+
+    <section class="mb-panel" data-bind="with: profile, visible: profile() && !editing()" aria-labelledby="profile-summary-heading">
+      <div class="mb-panel-heading"><div><p class="mb-eyebrow">Customer reference <span data-bind="text: cifId"></span></p><h2 id="profile-summary-heading" data-bind="text: firstName + ' ' + lastName"></h2></div><span class="mb-status" data-bind="text: $parent.label(kycStatus), css: $parent.statusClass ? $parent.statusClass(kycStatus) : ''"></span></div>
+      <dl class="mb-key-values mb-key-values-two">
+        <div><dt>Date of birth</dt><dd data-bind="text: $parent.date(dob)"></dd></div><div><dt>Mobile</dt><dd data-bind="text: number"></dd></div>
+        <div><dt>Email</dt><dd data-bind="text: email"></dd></div><div><dt>Employment</dt><dd data-bind="text: $parent.label(employmentType)"></dd></div>
+        <div><dt>Monthly salary</dt><dd data-bind="text: salary !== null ? $parent.money(salary, 'INR') : 'Not provided'"></dd></div><div><dt>PAN</dt><dd data-bind="text: $parent.mask(panNumber, 4)"></dd></div>
+        <div><dt>Aadhaar</dt><dd data-bind="text: $parent.mask(aadhaarNumber, 4)"></dd></div><div><dt>Address</dt><dd data-bind="text: address"></dd></div>
+      </dl>
+      <div class="mb-action-strip"><div><h3>Verification and access</h3><p>Your KYC status controls access to account and card applications.</p></div><button class="mb-button mb-button-primary" type="button" data-bind="click: function () { $parent.navigate('customer-kyc'); }">View KYC</button></div>
+    </section>
+
+    <section class="mb-panel mb-form-panel" data-bind="visible: (profile() || onboarding()) && editing() && !identityRefreshRequired()" aria-labelledby="edit-profile-heading">
+      <h2 id="edit-profile-heading" data-bind="text: onboarding() ? 'Create your profile' : 'Edit personal details'"></h2>
+      <div class="mb-form-grid mb-form-grid-two">
+        <oj-input-text required label-hint="First name" value="{{firstName}}"></oj-input-text><oj-input-text required label-hint="Last name" value="{{lastName}}"></oj-input-text>
+        <oj-input-date required label-hint="Date of birth" value="{{dob}}"></oj-input-date><oj-input-text required label-hint="Mobile" value="{{number}}"></oj-input-text>
+        <label class="mb-native-field"><span>Employment type</span><select data-bind="value: employmentType"><option value="SALARIED">Salaried</option><option value="BUSINESS">Business</option><option value="STUDENT">Student</option></select></label><oj-input-number label-hint="Monthly salary" value="{{salary}}" min="0"></oj-input-number>
+        <oj-text-area class="mb-form-span" required label-hint="Address" value="{{address}}" rows="3"></oj-text-area>
+        <oj-input-text data-bind="visible: onboarding" required label-hint="PAN" value="{{panNumber}}" help.instruction="Example: ABCDE1234F"></oj-input-text>
+        <oj-input-text data-bind="visible: onboarding" required label-hint="Aadhaar number" value="{{aadhaarNumber}}" inputmode="numeric"></oj-input-text>
+      </div>
+      <p class="mb-privacy-note" data-bind="text: onboarding() ? 'Your sign-in email is used automatically and your age is calculated from your date of birth. Use details that match your KYC documents.' : 'Your sign-in email remains protected and your age is calculated from date of birth. PAN and Aadhaar changes require banker-assisted verification.'"></p>
+      <div class="mb-form-actions"><button class="mb-button mb-button-outline" type="button" data-bind="visible: !onboarding(), click: cancelEdit, disable: submitting">Cancel</button><button class="mb-button mb-button-primary" type="button" data-bind="click: save, disable: submitting"><span data-bind="text: submitting() ? 'Saving...' : (onboarding() ? 'Proceed to KYC' : 'Save changes')"></span></button></div>
+    </section>
+  </div>
+</section>

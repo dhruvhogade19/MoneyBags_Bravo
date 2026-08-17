@@ -504,7 +504,7 @@ public class KycController {
     }
 
     @GetMapping("/admin/work-queue")
-    @PreAuthorize("hasAuthority('SCOPE_kyc:review')")
+    @PreAuthorize("hasAnyAuthority('ROLE_BANK_ADMIN', 'SCOPE_kyc:review')")
     public ResponseEntity<Page<KycResponse>> getAdminWorkQueue(
             @RequestParam(required = false) Long cifId,
             @RequestParam(required = false) List<KycStatus> statuses,

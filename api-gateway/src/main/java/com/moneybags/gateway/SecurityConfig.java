@@ -12,6 +12,7 @@ import org.springframework.security.oauth2.server.resource.authentication.Reacti
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
 import java.nio.charset.StandardCharsets;
 import reactor.core.publisher.Mono;
 
@@ -33,6 +34,8 @@ public class SecurityConfig {
                 .authorizeExchange(exchange -> exchange
                         .pathMatchers("/actuator/health/**").permitAll()
                         .pathMatchers("/api/internal/**", "/internal/**").denyAll()
+                        .pathMatchers(HttpMethod.GET, "/api/products", "/api/products/**",
+                                "/api/v1/products", "/api/v1/products/**").permitAll()
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(
                         new ReactiveJwtAuthenticationConverterAdapter(converter)))

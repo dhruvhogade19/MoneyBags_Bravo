@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -27,7 +28,8 @@ class AuthorizationServerConfigTest {
         var cif = clients.findByClientId("cif-service");
 
         assertThat(consumer).isNotNull();
-        assertThat(consumer.getScopes()).contains("account:read", "payment:write");
+        assertThat(consumer.getScopes()).contains("account:read", "payment:write", "billing:read");
+        assertThat(consumer.getPostLogoutRedirectUris()).containsExactly("http://127.0.0.1:8000/");
         assertThat(consumer.getScopes()).doesNotContain("account:admin", "accounting:read", "kyc:review");
         assertThat(admin).isNotNull();
         assertThat(admin.getScopes()).contains("account:admin", "accounting:admin", "kyc:review");
@@ -56,5 +58,20 @@ class AuthorizationServerConfigTest {
 
         assertThat(authentication.getAuthorities()).extracting("authority")
                 .contains("SCOPE_identity:admin", "ROLE_BANK_ADMIN");
+    }
+
+    @Test
+    void persistsTheSigningKeyAcrossIdentityRestarts() throws Exception {
+        var path = java.nio.file.Path.of("target", "test-signing-key-" + UUID.randomUUID() + ".json");
+        try {
+            var first = AuthorizationServerConfig.loadOrCreateSigningKey(path);
+            var second = AuthorizationServerConfig.loadOrCreateSigningKey(path);
+
+            assertThat(second.getKeyID()).isEqualTo(first.getKeyID());
+            assertThat(second.toRSAPublicKey()).isEqualTo(first.toRSAPublicKey());
+            assertThat(second.isPrivate()).isTrue();
+        } finally {
+            java.nio.file.Files.deleteIfExists(path);
+        }
     }
 }

@@ -1,0 +1,104 @@
+server:
+  port: ${SERVER_PORT:8000}
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      timeout: ${UI_SESSION_TIMEOUT:30m}
+      cookie:
+        name: ${UI_SESSION_COOKIE_NAME:MONEYBAGS_UI_SESSION}
+        http-only: true
+        same-site: lax
+        secure: ${UI_SESSION_COOKIE_SECURE:false}
+
+spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  application:
+    name: ui-bff
+  servlet:
+    multipart:
+      # The BFF relays multipart bodies byte-for-byte to the owning service.
+      # Parsing here consumes the request stream before the proxy can forward it.
+      enabled: false
+      max-file-size: ${UI_MAX_UPLOAD_SIZE:20MB}
+      max-request-size: ${UI_MAX_UPLOAD_SIZE:20MB}
+  security:
+    oauth2:
+      client:
+        provider:
+          moneybags:
+            issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+        registration:
+          moneybags-consumer:
+            provider: moneybags
+            client-id: moneybags-consumer
+            client-authentication-method: none
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope:
+              - openid
+              - profile
+              - product:read
+              - cif:read
+              - cif:write
+              - kyc:read
+              - kyc:write
+              - account:read
+              - account:open
+              - account:write
+              - account:close
+              - fd:read
+              - fd:open
+              - fd:close
+              - payment:read
+              - payment:write
+              - card:read
+              - card:apply
+              - billing:read
+              - notification:read
+          moneybags-admin:
+            provider: moneybags
+            client-id: moneybags-admin
+            client-authentication-method: none
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope:
+              - openid
+              - profile
+              - product:read
+              - product:admin
+              - cif:read
+              - cif:admin
+              - kyc:read
+              - kyc:review
+              - account:read
+              - account:admin
+              - fd:read
+              - fd:admin
+              - payment:read
+              - payment:admin
+              - card:read
+              - card:admin
+              - billing:read
+              - billing:admin
+              - accounting:read
+              - accounting:admin
+              - notification:read
+              - notification:admin
+
+moneybags:
+  bff:
+    gateway-base-url: ${GATEWAY_URL:http://localhost:8080}
+    identity-base-url: ${IDENTITY_URL:http://localhost:8093}
+    ui-static-location: ${MONEYBAGS_UI_STATIC_LOCATION:../moneybags-ui/web}
+    connect-timeout: ${UI_UPSTREAM_CONNECT_TIMEOUT:3s}
+    read-timeout: ${UI_UPSTREAM_READ_TIMEOUT:30s}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

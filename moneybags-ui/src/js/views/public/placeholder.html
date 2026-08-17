@@ -1,23 +1,36 @@
-<section class="mb-placeholder-page">
+<section class="mb-feature-page">
   <div class="mb-container">
-    <div class="mb-placeholder-hero">
+    <div class="mb-detail-hero">
       <div>
         <p class="mb-eyebrow" data-bind="text: eyebrow"></p>
         <h1 data-bind="text: title"></h1>
         <p class="mb-hero-lead" data-bind="text: description"></p>
         <div class="mb-hero-actions">
-          <button class="mb-button mb-button-primary" type="button" data-bind="click: function () { navigate(nextPath); }"><span data-bind="text: nextLabel"></span> <span aria-hidden="true">→</span></button>
+          <button class="mb-button mb-button-primary" type="button" data-bind="click: function () { navigate(nextPath); }"><span data-bind="text: nextLabel"></span> <span aria-hidden="true">&rarr;</span></button>
           <button class="mb-button mb-button-outline" type="button" data-bind="click: function () { navigate('landing'); }">Back home</button>
         </div>
       </div>
-      <aside class="mb-placeholder-route" aria-label="Page status">
-        <span class="mb-placeholder-route-mark" aria-hidden="true">✦</span><p>Planned workspace</p><strong data-bind="text: routeName"></strong><small>Ready for the service contract and page-specific actions.</small>
+      <aside class="mb-rate-panel" aria-label="MoneyBag principle">
+        <span>MoneyBag principle</span>
+        <strong data-bind="text: routeName === 'security' ? 'Secure by default' : 'One clear workspace'"></strong>
+        <small data-bind="text: routeName === 'security' ? 'Identity handles credentials; the browser never stores access tokens.' : 'A modular banking experience for customers and bank administrators.'"></small>
       </aside>
     </div>
+
+    <!-- ko if: routeName === 'security' -->
     <div class="mb-empty-grid">
-      <article class="mb-empty-card"><span aria-hidden="true">01</span><h2>Focused overview</h2><p>Summary widgets will surface only the information needed for this task.</p></article>
-      <article class="mb-empty-card"><span aria-hidden="true">02</span><h2>Clear next action</h2><p>Each feature will have one obvious, safe action rather than a crowded toolbar.</p></article>
-      <article class="mb-empty-card"><span aria-hidden="true">03</span><h2>Auditable by design</h2><p>Customer and banker workflows will reflect the contract and role permissions.</p></article>
+      <article class="mb-empty-card"><span aria-hidden="true">01</span><h2>Identity sign-in</h2><p>Customer and bank-admin sessions use separate OIDC clients and only the two supported roles.</p></article>
+      <article class="mb-empty-card"><span aria-hidden="true">02</span><h2>Server-side tokens</h2><p>The BFF holds OAuth tokens, applies CSRF protection, and injects trusted tenant and correlation headers.</p></article>
+      <article class="mb-empty-card"><span aria-hidden="true">03</span><h2>KYC-gated access</h2><p>Customers can register and complete onboarding, but banking modules remain locked until KYC is approved.</p></article>
     </div>
+    <!-- /ko -->
+
+    <!-- ko if: routeName === 'about' -->
+    <div class="mb-empty-grid">
+      <article class="mb-empty-card"><span aria-hidden="true">01</span><h2>Browse openly</h2><p>Anyone can compare the active deposit and credit-card catalogue before creating a sign-in.</p></article>
+      <article class="mb-empty-card"><span aria-hidden="true">02</span><h2>Bank modularly</h2><p>Accounts, fixed deposits, cards, payments, bills, KYC, Product Master, Accounting, and IAM have focused pages.</p></article>
+      <article class="mb-empty-card"><span aria-hidden="true">03</span><h2>State boundaries honestly</h2><p>Statement generation and full EOD orchestration remain visible but are not represented as completed services.</p></article>
+    </div>
+    <!-- /ko -->
   </div>
 </section>

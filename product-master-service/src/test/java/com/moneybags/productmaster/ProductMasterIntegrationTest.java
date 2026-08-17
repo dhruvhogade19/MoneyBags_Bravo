@@ -10,10 +10,14 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.is;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.security.authentication.TestingAuthenticationToken;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -28,6 +32,37 @@ class ProductMasterIntegrationTest {
         Integer cards = jdbcTemplate.queryForObject("select count(*) from CREDIT_CARD_PRODUCT", Integer.class);
         assertThat(deposits).isEqualTo(4);
         assertThat(cards).isEqualTo(2);
+    }
+
+    @Test
+    void hidesUnpublishedProductsFromAnonymousAndCustomerReadsButNotBankAdmin() throws Exception {
+        jdbcTemplate.update("update DEPOSIT_PRODUCT set STATUS = 'DRAFT' where PRODUCT_CODE = 'SAV-REG-001'");
+        jdbcTemplate.update("update CREDIT_CARD_PRODUCT set STATUS = 'INACTIVE' where PRODUCT_CODE = 'CC-PLAT-001'");
+        var customer = new TestingAuthenticationToken("customer", "n/a", "ROLE_CONSUMER");
+        var admin = new TestingAuthenticationToken("admin", "n/a", "ROLE_BANK_ADMIN");
+        try {
+            mockMvc.perform(get("/api/products").queryParam("status", "DRAFT"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(4))
+                    .andExpect(jsonPath("$.content[*].status", everyItem(is("ACTIVE"))));
+
+            mockMvc.perform(get("/api/products/SAV-REG-001"))
+                    .andExpect(status().isNotFound());
+            mockMvc.perform(get("/api/products/CC-PLAT-001").with(authentication(customer)))
+                    .andExpect(status().isNotFound());
+
+            mockMvc.perform(get("/api/products").queryParam("status", "DRAFT")
+                            .with(authentication(admin)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].productCode").value("SAV-REG-001"));
+            mockMvc.perform(get("/api/products/CC-PLAT-001").with(authentication(admin)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("INACTIVE"));
+        } finally {
+            jdbcTemplate.update("update DEPOSIT_PRODUCT set STATUS = 'ACTIVE' where PRODUCT_CODE = 'SAV-REG-001'");
+            jdbcTemplate.update("update CREDIT_CARD_PRODUCT set STATUS = 'ACTIVE' where PRODUCT_CODE = 'CC-PLAT-001'");
+        }
     }
 
     @Test

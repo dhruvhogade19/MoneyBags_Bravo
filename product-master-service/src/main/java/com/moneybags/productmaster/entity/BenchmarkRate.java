@@ -11,7 +11,8 @@ import java.time.LocalDate;
                                              columnNames = {"BENCHMARK_CODE", "EFFECTIVE_FROM"}))
 public class BenchmarkRate {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @SequenceGenerator(name = "benchmarkRateIdGenerator", sequenceName = "SEQ_BENCHMARK_RATE_ID", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "benchmarkRateIdGenerator")
     @Column(name = "ID")
     private Long id;
     @Column(name = "BENCHMARK_CODE", nullable = false, length = 40)

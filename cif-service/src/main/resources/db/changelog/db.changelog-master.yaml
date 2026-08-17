@@ -18,3 +18,7 @@ databaseChangeLog:
   - include:
       file: changes/005-add-identity-link.yaml
       relativeToChangelogFile: true
+
+  - include:
+      file: changes/006-local-customer-seed.yaml
+      relativeToChangelogFile: true

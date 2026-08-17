@@ -11,6 +11,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
@@ -21,8 +23,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
@@ -55,6 +63,8 @@ public class BillGenerationApplication {
         String id;
         @Column(name = "ACCOUNT_ID", nullable = false)
         String accountId;
+        @Column(name = "CIF_ID")
+        Long cifId;
         @Column(name = "PRODUCT_CODE", nullable = false)
         String productCode;
         @Column(name = "BILLING_PERIOD", nullable = false)
@@ -83,9 +93,10 @@ public class BillGenerationApplication {
         protected Bill() {
         }
 
-        Bill(String id, String accountId, String productCode, String period, LocalDate date, String currency, BigDecimal previous, BigDecimal total, BigDecimal minimum, LocalDate due) {
+        Bill(String id, String accountId, long cifId, String productCode, String period, LocalDate date, String currency, BigDecimal previous, BigDecimal total, BigDecimal minimum, LocalDate due) {
             this.id = id;
             this.accountId = accountId;
+            this.cifId = cifId;
             this.productCode = productCode;
             this.billingPeriod = period;
             this.businessDate = date;
@@ -395,7 +406,10 @@ public class BillGenerationApplication {
 
         public void postCalculatedCharges(String billId, String accountId, LocalDate date, String currency, List<Activity> charges) {
             if (charges.isEmpty()) return;
-            accounting.post().uri("/internal/v1/bill-postings").body(Map.of("billId", billId, "accountId", accountId, "billingPeriodStart", date.withDayOfMonth(1), "billingPeriodEnd", date.withDayOfMonth(date.lengthOfMonth()), "businessDate", date, "occurredAt", OffsetDateTime.now(ZoneOffset.UTC), "currencyCode", currency, "components", charges.stream().map(c -> Map.of("componentType", c.type(), "amount", c.amount(), "description", c.description())).toList())).retrieve().toBodilessEntity();
+            accounting.post().uri("/internal/v1/bill-postings")
+                    .header("Idempotency-Key", "bill-" + billId + "-charges")
+                    .body(Map.of("billId", billId, "accountId", accountId, "billingPeriodStart", date.withDayOfMonth(1), "billingPeriodEnd", date.withDayOfMonth(date.lengthOfMonth()), "businessDate", date, "occurredAt", OffsetDateTime.now(ZoneOffset.UTC), "currencyCode", currency, "components", charges.stream().map(c -> Map.of("componentType", c.type(), "amount", c.amount(), "description", c.description())).toList()))
+                    .retrieve().toBodilessEntity();
         }
 
         private static BigDecimal decimal(Object n) {
@@ -405,6 +419,8 @@ public class BillGenerationApplication {
 
     @Service
     public static class BillingService {
+        private static final Logger log = LoggerFactory.getLogger(BillingService.class);
+
         @PersistenceContext
         EntityManager em;
         private final UpstreamGateway upstream;
@@ -457,7 +473,7 @@ public class BillGenerationApplication {
             net = net.add(fees).max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP);
             BigDecimal minimum = net.multiply(inputs.product.minimumPercentage).divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP).max(inputs.product.minimumAmount).min(net);
             String billId = UUID.randomUUID().toString();
-            Bill bill = new Bill(billId, request.accountId, inputs.product.code, request.billingPeriod, request.businessDate, inputs.product.currency, previous, net, minimum, request.businessDate.plusDays(inputs.product.dueDays));
+            Bill bill = new Bill(billId, request.accountId, inputs.card.cifId, inputs.product.code, request.billingPeriod, request.businessDate, inputs.product.currency, previous, net, minimum, request.businessDate.plusDays(inputs.product.dueDays));
             em.persist(bill);
             lines.forEach(l -> em.persist(new BillLine(billId, l)));
             em.persist(new BillSnapshot(billId, inputs.product, write(inputs.product.fees)));
@@ -466,8 +482,15 @@ public class BillGenerationApplication {
             em.persist(new Audit(billId));
             em.flush();
             upstream.postCalculatedCharges(billId, request.accountId, request.businessDate, inputs.product.currency, lines.stream().filter(l -> "INTEREST".equals(l.type) || "FEE".equals(l.type)).toList());
-            notifications.sendBillGenerated(inputs.card.cifId, billId, request.billingPeriod,
-                    inputs.product.currency, net, bill.paymentDueDate);
+            try {
+                notifications.sendBillGenerated(inputs.card.cifId, billId, request.billingPeriod,
+                        inputs.product.currency, net, bill.paymentDueDate);
+            } catch (RuntimeException notificationFailure) {
+                // Notification is a downstream side effect. A transient delivery failure must
+                // not roll back a bill after its accounting journal has already been posted.
+                log.warn("Bill {} was generated, but its notification could not be delivered", billId,
+                        notificationFailure);
+            }
             return toResponse(bill, lines);
         }
 
@@ -476,6 +499,15 @@ public class BillGenerationApplication {
             Bill b = em.find(Bill.class, id);
             if (b == null) throw new ApiException(HttpStatus.NOT_FOUND, "BILL_NOT_FOUND", "Bill was not found");
             return toResponse(b, em.createQuery("select l from BillLine l where l.billId=:b order by l.occurredAt", BillLine.class).setParameter("b", id).getResultList().stream().map(l -> new Activity(l.type, l.reference, l.description, l.amount, l.occurredAt)).toList());
+        }
+
+        @Transactional(readOnly = true)
+        public BillResponse getForCustomer(String id, Long cifId, boolean privileged) {
+            Bill bill = em.find(Bill.class, id);
+            if (bill == null || (!privileged && (cifId == null || !cifId.equals(bill.cifId)))) {
+                throw new ApiException(HttpStatus.NOT_FOUND, "BILL_NOT_FOUND", "Bill was not found");
+            }
+            return get(id);
         }
 
         @Transactional
@@ -511,6 +543,21 @@ public class BillGenerationApplication {
         }
 
         @Transactional(readOnly = true)
+        public BillPage searchForCustomer(Long cifId, boolean privileged, String account, String period,
+                                          String status, int page, int size) {
+            if (privileged) return search(account, period, status, page, size);
+            if (cifId == null) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "CUSTOMER_CONTEXT_REQUIRED",
+                        "The authenticated customer context is required");
+            }
+            String q = "select b from Bill b where b.cifId=:c and (:a is null or b.accountId=:a) and (:p is null or b.billingPeriod=:p) and (:s is null or b.status=:s) order by b.generatedAt desc";
+            List<Bill> all = em.createQuery(q, Bill.class).setParameter("c", cifId)
+                    .setParameter("a", account).setParameter("p", period).setParameter("s", status).getResultList();
+            int from = Math.min(page * size, all.size()), to = Math.min(from + size, all.size());
+            return new BillPage(all.subList(from, to).stream().map(b -> get(b.id)).toList(), page, size, all.size());
+        }
+
+        @Transactional
         public CloseResponse close(CloseRequest request) {
             List<Bill> overdue = em.createQuery("select b from Bill b where b.paymentDueDate < :d and b.status in ('GENERATED', 'PARTIALLY_PAID')", Bill.class).setParameter("d", request.businessDate).getResultList();
             overdue.forEach(b -> { String before = b.status; b.status = "OVERDUE"; em.persist(new BillHistory(b.id, before, "OVERDUE", "PAYMENT_DUE_DATE_PASSED")); });
@@ -618,7 +665,21 @@ public class BillGenerationApplication {
                     .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/bills/**")
                     .hasAnyAuthority("SCOPE_billing:read", "SCOPE_billing:admin")
                     .anyRequest().denyAll())
-                    .oauth2ResourceServer(o -> o.jwt(j -> { })).build();
+                    .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(converter()))).build();
+        }
+
+        private static Converter<Jwt, AbstractAuthenticationToken> converter() {
+            JwtGrantedAuthoritiesConverter scopes = new JwtGrantedAuthoritiesConverter();
+            JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+            converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+                var authorities = new ArrayList<>(scopes.convert(jwt));
+                var roles = jwt.getClaimAsStringList("roles");
+                if (roles != null) roles.stream()
+                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                        .forEach(authorities::add);
+                return authorities;
+            });
+            return converter;
         }
     }
 }

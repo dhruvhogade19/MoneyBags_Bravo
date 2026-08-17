@@ -29,7 +29,7 @@ public class SecurityConfig {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").hasRole("BANK_ADMIN")
                         .requestMatchers("/internal/v1/products/**").hasAuthority("SCOPE_product:validate")
                         .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/v1/products/**",
-                                "/api/benchmarks/**").hasAuthority("SCOPE_product:read")
+                                "/api/benchmarks/**").permitAll()
                         .requestMatchers("/api/products/**", "/api/v1/products/**",
                                 "/api/benchmarks/**").hasAuthority("SCOPE_product:admin")
                         .anyRequest().denyAll())

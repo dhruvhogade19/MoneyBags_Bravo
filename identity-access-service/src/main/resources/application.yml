@@ -1,6 +1,10 @@
 server:
   port: ${SERVER_PORT:8093}
   shutdown: graceful
+  servlet:
+    session:
+      cookie:
+        name: ${IDENTITY_SESSION_COOKIE_NAME:MONEYBAGS_IDP_SESSION}
 
 
 spring:
@@ -9,9 +13,9 @@ spring:
   application:
     name: identity-access-service
   datasource:
-    url: ${IDENTITY_DB_URL:${MONEYBAGS_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
-    username: ${IDENTITY_DB_USERNAME:MONEYBAGS_IDENTITY}
-    password: ${IDENTITY_DB_PASSWORD:}
+    url: ${MONEYBAGS_DB_URL:${IDENTITY_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
+    username: ${MONEYBAGS_DB_USERNAME:${IDENTITY_DB_USERNAME:MONEYBAGS_IDENTITY}}
+    password: ${MONEYBAGS_DB_PASSWORD:${IDENTITY_DB_PASSWORD:}}
     driver-class-name: oracle.jdbc.OracleDriver
   jpa:
     open-in-view: false
@@ -26,10 +30,13 @@ moneybags:
     issuer: ${OAUTH2_ISSUER_URI:http://localhost:8093}
     clients:
       consumer:
-        redirect-uri: ${CONSUMER_OIDC_REDIRECT_URI:http://127.0.0.1:8000/login/oauth2/code/moneybags-consumer}
+        redirect-uri: ${CONSUMER_OIDC_REDIRECT_URI:http://localhost:8000/login/oauth2/code/moneybags-consumer}
       admin:
-        redirect-uri: ${ADMIN_OIDC_REDIRECT_URI:http://127.0.0.1:8001/login/oauth2/code/moneybags-admin}
-      service-secret: ${M2M_CLIENT_SECRET:}
+        redirect-uri: ${ADMIN_OIDC_REDIRECT_URI:http://localhost:8000/login/oauth2/code/moneybags-admin}
+      service-secret: ${M2M_CLIENT_SECRET:moneybags-demo-service-secret}
+    bootstrap:
+      admin-password: ${LOCAL_ADMIN_PASSWORD:Admin@123456}
+      consumer-password: ${LOCAL_CONSUMER_PASSWORD:Customer@123456}
 
 eureka:
   client:

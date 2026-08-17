@@ -3,12 +3,10 @@ package com.moneybags.identity.user;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component
-@Profile("local")
 public class LocalUserBootstrap implements ApplicationRunner {
     private final BankUserRepository repository;
     private final PasswordEncoder encoder;
@@ -28,6 +26,7 @@ public class LocalUserBootstrap implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         createIfAbsent("admin@moneybags.local", adminPassword, null, "BANK_ADMIN");
         createIfAbsent("consumer@moneybags.local", consumerPassword, "101", "CONSUMER");
+        createIfAbsent("customer@moneybags.local", consumerPassword, "101", "CONSUMER");
     }
 
     private void createIfAbsent(String username, String password, String customerId, String role) {

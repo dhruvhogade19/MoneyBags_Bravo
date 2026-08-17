@@ -1,0 +1,47 @@
+<section class="mb-feature-page mb-products-page">
+  <div class="mb-container">
+    <header class="mb-page-heading">
+      <div>
+        <p class="mb-eyebrow">Public product catalogue</p>
+        <h1>Find a product that fits.</h1>
+        <p class="mb-hero-lead">Compare active MoneyBag accounts, fixed deposits, and credit cards before signing in.</p>
+      </div>
+    </header>
+
+    <div class="mb-toolbar" role="search" aria-label="Filter products">
+      <oj-input-search class="mb-search-field" value="{{searchText}}" label-hint="Search products"
+                       placeholder="Search by name or product code"></oj-input-search>
+      <fieldset class="mb-filter-group">
+        <legend class="oj-helper-hidden-accessible">Product category</legend>
+        <button class="mb-filter-chip" type="button" data-bind="click: function () { category(''); }, css: { 'is-active': !category() }">All</button>
+        <button class="mb-filter-chip" type="button" data-bind="click: function () { category('DEPOSIT'); }, css: { 'is-active': category() === 'DEPOSIT' }">Deposits</button>
+        <button class="mb-filter-chip" type="button" data-bind="click: function () { category('CREDIT_CARD'); }, css: { 'is-active': category() === 'CREDIT_CARD' }">Credit cards</button>
+      </fieldset>
+    </div>
+
+    <div class="mb-state-card" data-bind="visible: loading" role="status" aria-live="polite">
+      <oj-progress-circle size="sm" value="-1"></oj-progress-circle><span>Loading active products...</span>
+    </div>
+    <div class="mb-alert mb-alert-error" data-bind="visible: errorMessage, text: errorMessage" role="alert"></div>
+
+    <div class="mb-card-grid" data-bind="visible: !loading() && !errorMessage(), foreach: visibleProducts">
+      <article class="mb-feature-card">
+        <div class="mb-card-topline">
+          <span class="mb-kicker" data-bind="text: $parent.productType($data)"></span>
+          <span class="mb-status is-success">Active</span>
+        </div>
+        <h2 data-bind="text: productName"></h2>
+        <p class="mb-card-code" data-bind="text: productCode"></p>
+        <p data-bind="text: description || 'Open the product details to review rates, eligibility, fees, and features.'"></p>
+        <div class="mb-card-highlight"><span>Indicative rate</span><strong data-bind="text: $parent.formatRate($data)"></strong></div>
+        <button class="mb-button mb-button-outline" type="button" data-bind="click: $parent.openProduct">View product details</button>
+      </article>
+    </div>
+
+    <div class="mb-empty-state" data-bind="visible: !loading() && !errorMessage() && visibleProducts().length === 0">
+      <h2>No matching products</h2>
+      <p>Try a different search term or category.</p>
+      <button class="mb-button mb-button-outline" type="button" data-bind="click: function () { searchText(''); category(''); }">Clear filters</button>
+    </div>
+  </div>
+</section>

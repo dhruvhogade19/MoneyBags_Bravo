@@ -5,15 +5,17 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
-import java.security.KeyFactory;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
-import java.util.Base64;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,7 +24,6 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.Customizer;
@@ -51,6 +52,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
 
 @Configuration
 @EnableMethodSecurity
@@ -60,7 +63,7 @@ public class AuthorizationServerConfig {
             "openid", "profile", "product:read", "cif:read", "cif:write", "kyc:read", "kyc:write",
             "account:read", "account:open", "account:write",
             "account:close", "fd:read", "fd:open", "fd:close", "payment:read", "payment:write",
-            "card:read", "card:apply", "notification:read");
+            "card:read", "card:apply", "notification:read", "billing:read");
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -83,7 +86,9 @@ public class AuthorizationServerConfig {
     SecurityFilterChain applicationSecurityFilterChain(HttpSecurity http) throws Exception {
         return http.authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health/**", "/error").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/identity/registrations").permitAll()
                         .anyRequest().authenticated())
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/identity/registrations"))
                 .formLogin(Customizer.withDefaults())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt
                         .jwtAuthenticationConverter(resourceServerJwtAuthenticationConverter())))
@@ -117,9 +122,6 @@ public class AuthorizationServerConfig {
             @Value("${moneybags.identity.clients.consumer.redirect-uri}") String consumerRedirect,
             @Value("${moneybags.identity.clients.admin.redirect-uri}") String adminRedirect,
             @Value("${moneybags.identity.clients.service-secret}") String serviceSecret) {
-        if (serviceSecret == null || serviceSecret.isBlank()) {
-            throw new IllegalStateException("M2M_CLIENT_SECRET is required outside the local profile");
-        }
         TokenSettings humanTokens = TokenSettings.builder()
                 .accessTokenTimeToLive(Duration.ofMinutes(10))
                 .refreshTokenTimeToLive(Duration.ofHours(8))
@@ -165,6 +167,7 @@ public class AuthorizationServerConfig {
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
                 .redirectUri(redirectUri)
+                .postLogoutRedirectUri(URI.create(redirectUri).resolve("/").toString())
                 .clientSettings(ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
                 .tokenSettings(tokens);
         scopes.forEach(builder::scope);
@@ -187,7 +190,9 @@ public class AuthorizationServerConfig {
     @Bean
     OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer() {
         return context -> {
-            if (!OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) return;
+            boolean accessToken = OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType());
+            boolean idToken = OidcParameterNames.ID_TOKEN.equals(context.getTokenType().getValue());
+            if (!accessToken && !idToken) return;
             Object principal = context.getPrincipal().getPrincipal();
             if (principal instanceof BankPrincipal user) {
                 List<String> roles = user.getAuthorities().stream()
@@ -197,19 +202,20 @@ public class AuthorizationServerConfig {
                         .toList();
                 context.getClaims().claim("roles", roles)
                         .claim("user_id", user.userId())
-                        .claim("tenant_id", user.tenantId());
+                        .claim("tenant_id", user.tenantId())
+                        .claim("preferred_username", user.getUsername());
                 if (user.customerId() != null) context.getClaims().claim("customer_id", user.customerId());
-                if (roles.contains("CONSUMER") && !roles.contains("BANK_ADMIN")) {
+                if (accessToken && roles.contains("CONSUMER") && !roles.contains("BANK_ADMIN")) {
                     Set<String> safeScopes = new LinkedHashSet<>(context.getAuthorizedScopes());
                     safeScopes.retainAll(CONSUMER_SCOPES);
                     context.getClaims().claim("scope", safeScopes);
                 }
-            } else {
+            } else if (accessToken) {
                 context.getClaims().claim("roles", List.of())
                         .claim("user_id", context.getRegisteredClient().getClientId())
                         .claim("tenant_id", "system");
             }
-            context.getClaims().audience(List.of("moneybags-api"));
+            if (accessToken) context.getClaims().audience(List.of("moneybags-api"));
         };
     }
 
@@ -220,42 +226,37 @@ public class AuthorizationServerConfig {
     }
 
     @Bean
-    @Profile("local | test")
-    JWKSource<SecurityContext> localJwkSource() throws Exception {
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-        generator.initialize(3072);
-        KeyPair pair = generator.generateKeyPair();
-        return jwkSource((RSAPublicKey) pair.getPublic(), (RSAPrivateKey) pair.getPrivate());
-    }
-
-    @Bean
-    @Profile("!local & !test")
-    JWKSource<SecurityContext> productionJwkSource(
-            @Value("${IDENTITY_JWK_PUBLIC_KEY:}") String publicKey,
-            @Value("${IDENTITY_JWK_PRIVATE_KEY:}") String privateKey) throws Exception {
-        if (publicKey.isBlank() || privateKey.isBlank()) {
-            throw new IllegalStateException("IDENTITY_JWK_PUBLIC_KEY and IDENTITY_JWK_PRIVATE_KEY are required");
-        }
-        KeyFactory factory = KeyFactory.getInstance("RSA");
-        RSAPublicKey rsaPublic = (RSAPublicKey) factory.generatePublic(
-                new X509EncodedKeySpec(Base64.getDecoder().decode(cleanPem(publicKey))));
-        RSAPrivateKey rsaPrivate = (RSAPrivateKey) factory.generatePrivate(
-                new PKCS8EncodedKeySpec(Base64.getDecoder().decode(cleanPem(privateKey))));
-        return jwkSource(rsaPublic, rsaPrivate);
-    }
-
-    private static JWKSource<SecurityContext> jwkSource(RSAPublicKey publicKey, RSAPrivateKey privateKey) {
-        RSAKey rsa = new RSAKey.Builder(publicKey).privateKey(privateKey).keyID(UUID.randomUUID().toString()).build();
+    JWKSource<SecurityContext> jwkSource(
+            @Value("${moneybags.identity.jwk-path:${user.home}/.moneybags/identity-signing-key.json}")
+            String configuredPath) throws Exception {
+        RSAKey rsa = loadOrCreateSigningKey(Path.of(configuredPath));
         JWKSet set = new JWKSet(rsa);
         return (selector, context) -> selector.select(set);
     }
 
-    private static String cleanPem(String value) {
-        return value.replace("-----BEGIN PUBLIC KEY-----", "")
-                .replace("-----END PUBLIC KEY-----", "")
-                .replace("-----BEGIN PRIVATE KEY-----", "")
-                .replace("-----END PRIVATE KEY-----", "")
-                .replaceAll("\\s", "");
+    static RSAKey loadOrCreateSigningKey(Path configuredPath) throws Exception {
+        Path path = configuredPath.toAbsolutePath().normalize();
+        if (Files.exists(path)) {
+            return RSAKey.parse(Files.readString(path, StandardCharsets.UTF_8));
+        }
+
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair pair = generator.generateKeyPair();
+        RSAKey generated = new RSAKey.Builder((RSAPublicKey) pair.getPublic())
+                .privateKey((RSAPrivateKey) pair.getPrivate())
+                .keyIDFromThumbprint()
+                .build();
+
+        Path parent = path.getParent();
+        if (parent != null) Files.createDirectories(parent);
+        try {
+            Files.writeString(path, generated.toJSONString(), StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            return generated;
+        } catch (FileAlreadyExistsException concurrentCreate) {
+            return RSAKey.parse(Files.readString(path, StandardCharsets.UTF_8));
+        }
     }
 
     @Bean

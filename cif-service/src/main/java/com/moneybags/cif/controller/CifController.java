@@ -62,7 +62,10 @@ public class CifController {
             tenantId = jwt.getToken().getClaimAsString("tenant_id");
             boolean consumer = authentication.getAuthorities().stream()
                     .anyMatch(a -> a.getAuthority().equals("ROLE_CONSUMER"));
-            if (consumer) identityUserId = jwt.getToken().getClaimAsString("user_id");
+            if (consumer) {
+                identityUserId = jwt.getToken().getClaimAsString("user_id");
+                request = request.withIdentityEmail(identityEmail(jwt));
+            }
         }
         CifResponse response = cifService.createCif(request, identityUserId, tenantId);
 
@@ -97,9 +100,22 @@ public class CifController {
     )
     public ResponseEntity<CifResponse> updateCif(
             @PathVariable Long cifId,
-            @Valid @RequestBody UpdateCifRequest request
+            @Valid @RequestBody UpdateCifRequest request,
+            Authentication authentication
     ) {
+        if (authentication instanceof JwtAuthenticationToken jwt
+                && authentication.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_CONSUMER"))) {
+            request = request.withIdentityEmail(identityEmail(jwt));
+        }
         return ResponseEntity.ok(cifService.updateCif(cifId, request));
+    }
+
+    private static String identityEmail(JwtAuthenticationToken jwt) {
+        String email = jwt.getToken().getClaimAsString("preferred_username");
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("The signed-in identity does not contain an email address");
+        }
+        return email.trim().toLowerCase();
     }
 
 

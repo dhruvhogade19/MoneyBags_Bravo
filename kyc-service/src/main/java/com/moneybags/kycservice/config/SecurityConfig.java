@@ -25,11 +25,11 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health/**").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").hasRole("BANK_ADMIN")
                 .requestMatchers(HttpMethod.PATCH, "/api/v1/kycs/*/documents/*/verification",
-                        "/api/v1/kycs/*/decision").hasAuthority("SCOPE_kyc:review")
+                        "/api/v1/kycs/*/decision").hasAnyAuthority("ROLE_BANK_ADMIN", "SCOPE_kyc:review")
                 .requestMatchers(HttpMethod.POST, "/api/v1/kycs/*/sync").hasAuthority("SCOPE_kyc:service")
                 .requestMatchers(HttpMethod.POST, "/api/v1/kycs").hasAuthority("SCOPE_kyc:service")
                 .requestMatchers(HttpMethod.POST, "/api/v1/kycs/*/documents").hasAuthority("SCOPE_kyc:write")
-                .requestMatchers(HttpMethod.GET, "/api/v1/kycs/**").hasAnyAuthority("SCOPE_kyc:read", "SCOPE_kyc:review", "SCOPE_kyc:service")
+                .requestMatchers(HttpMethod.GET, "/api/v1/kycs/**").hasAnyAuthority("ROLE_BANK_ADMIN", "SCOPE_kyc:read", "SCOPE_kyc:review", "SCOPE_kyc:service")
                 .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter())))
                 .build();

@@ -108,7 +108,12 @@ Security is enabled by default. `identity-access-service` issues short-lived JWT
 - Consumers can access and upload documents only for their signed CIF and tenant. Bank administrators can review only their signed tenant, and reviewer identity always comes from the JWT rather than request JSON.
 - Final KYC approval/rejection requires PAN, Aadhaar, address proof and salary proof to be reviewed. CIF status synchronization and customer email notification use authenticated service calls, with persisted notification retries.
 
-For local development, `run-all.ps1` starts Identity with the `local` profile and H2. It creates `admin@moneybags.local` and `consumer@moneybags.local`; set `LOCAL_ADMIN_PASSWORD` and `LOCAL_CONSUMER_PASSWORD` in `.env`. Copy `.env.example` to `.env`, replace all placeholder secrets, and keep `SECURITY_ENABLED=true`. Security is disabled only in isolated test profiles.
+For the demo, Identity creates these users automatically:
+
+- Banker: `admin@moneybags.local` / `Admin@123456`
+- Customer: `customer@moneybags.local` / `Customer@123456`
+
+The UI uses the stored role to open either the banker workspace (`BANK_ADMIN`) or customer workspace (`CONSUMER`). `LOCAL_ADMIN_PASSWORD`, `LOCAL_CONSUMER_PASSWORD`, and `M2M_CLIENT_SECRET` remain optional overrides. Identity persists its local RSA signing key at `${user.home}/.moneybags/identity-signing-key.json`, so an Identity restart does not invalidate otherwise-live browser sessions. Set `MONEYBAGS_IDENTITY_JWK_PATH` to place that file elsewhere. Production deployments should provide a protected, durable signing key through their secrets-management process and restrict access to the key file.
 
 Production must set:
 
@@ -118,8 +123,6 @@ $env:STUB_UPSTREAM_CLIENTS = "false"
 $env:OAUTH2_ISSUER_URI = "https://identity.example/issuer"
 $env:OAUTH2_AUDIENCE = "moneybags-api"
 $env:M2M_CLIENT_SECRET = "a-long-secret-from-the-secret-manager"
-$env:IDENTITY_JWK_PUBLIC_KEY = "base64-or-PEM-public-key"
-$env:IDENTITY_JWK_PRIVATE_KEY = "base64-or-PEM-private-key"
 $env:CIF_URL = "https://cif.internal"
 $env:PRODUCT_MASTER_URL = "http://product-master-service"
 $env:NOTIFICATION_URL = "http://notification-service"

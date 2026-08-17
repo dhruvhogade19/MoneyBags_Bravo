@@ -47,7 +47,7 @@ eureka:
 
 moneybags:
   security:
-    enabled: ${SECURITY_ENABLED:false}
+    enabled: ${SECURITY_ENABLED:true}
   accounting:
     enforce-account-registration: ${ACCOUNTING_ENFORCE_ACCOUNT_REGISTRATION:false}
 

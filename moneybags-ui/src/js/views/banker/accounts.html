@@ -1,0 +1,55 @@
+<section class="mb-ops">
+  <div class="mb-container">
+    <header class="mb-ops__header"><div><p class="mb-eyebrow">Deposit operations</p><h1>Accounts, clearly serviced.</h1><p>Open a savings or current account from an active Product Master definition, then perform supported lifecycle actions.</p></div><span class="mb-ops__badge">Idempotent mutations</span></header>
+    <!-- ko if: accessDenied --><div class="mb-ops__state mb-ops__state--error" role="alert"><h2>Bank admin access required</h2><p>Deposit operations are restricted to BANK_ADMIN.</p></div><!-- /ko -->
+    <!-- ko ifnot: accessDenied -->
+    <div class="mb-ops__tabs" role="tablist" aria-label="Deposit operations">
+      <button type="button" role="tab" data-bind="click: function () { activeTab('search'); }, attr: { 'aria-selected': activeTab() === 'search' }">Find and service</button>
+      <button type="button" role="tab" data-bind="click: function () { activeTab('open'); }, attr: { 'aria-selected': activeTab() === 'open' }">Open account</button>
+    </div>
+
+    <!-- ko if: activeTab() === 'search' -->
+    <div class="mb-ops__split">
+      <div class="mb-ops__stack">
+        <form class="mb-ops__panel mb-ops__form mb-ops__form--single" data-bind="submit: lookup"><h2>Exact account lookup</h2><div class="mb-ops__field"><label for="deposit-account-id">Account ID</label><input id="deposit-account-id" required data-bind="value: accountId" /></div><button class="mb-button mb-button-primary" type="submit" data-bind="disable: searchState.loading">Load account</button></form>
+        <form class="mb-ops__panel mb-ops__form mb-ops__form--single" data-bind="submit: search"><h2>Search accounts</h2><div class="mb-ops__field"><label for="deposit-customer-filter">Customer ID</label><input id="deposit-customer-filter" data-bind="value: customerFilter" /></div><div class="mb-ops__field"><label for="deposit-status-filter">Status</label><select id="deposit-status-filter" data-bind="value: statusFilter"><option value="">All</option><option>PENDING_ACTIVATION</option><option>ACTIVE</option><option>BLOCKED</option><option>FROZEN</option><option>DORMANT</option><option>CLOSURE_PENDING</option><option>CLOSED</option></select></div><button class="mb-button mb-button-outline" type="submit" data-bind="disable: searchState.loading">Search</button></form>
+      </div>
+      <div>
+        <!-- ko if: searchState.loading --><div class="mb-ops__state" role="status">Loading deposit accounts…</div><!-- /ko -->
+        <!-- ko if: searchState.error --><div class="mb-ops__state mb-ops__state--error" role="alert" data-bind="text: searchState.error"></div><!-- /ko -->
+        <!-- ko if: searchState.success --><div class="mb-ops__state mb-ops__state--success" role="status" data-bind="text: searchState.success"></div><!-- /ko -->
+        <!-- ko if: accounts().length --><div class="mb-ops__table-wrap"><table class="mb-ops__table"><caption class="oj-helper-hidden-accessible">Deposit account search results</caption><thead><tr><th>Account</th><th>Product</th><th>Balance</th><th>Status</th><th>Action</th></tr></thead><tbody data-bind="foreach: accounts"><tr><td data-bind="text: maskedAccountNumber"></td><td data-bind="text: productName"></td><td data-bind="text: $parent.money(availableBalance, currency)"></td><td><span class="mb-ops__status" data-bind="text: status"></span></td><td><button class="mb-ops__link" type="button" data-bind="click: $parent.selectAccount">Service</button></td></tr></tbody></table></div><!-- /ko -->
+        <!-- ko ifnot: accounts().length --><div class="mb-ops__state mb-ops__state--empty">No accounts match the current filters.</div><!-- /ko -->
+      </div>
+    </div>
+
+    <!-- ko with: selectedAccount -->
+    <div class="mb-ops__section-title"><h2>Account <span data-bind="text: maskedAccountNumber"></span></h2><span class="mb-ops__status" data-bind="text: status, css: { 'mb-ops__status--good': status === 'ACTIVE' }"></span></div>
+    <article class="mb-ops__panel"><dl class="mb-ops__dl"><div><dt>Account ID</dt><dd data-bind="text: accountId"></dd></div><div><dt>Product</dt><dd data-bind="text: product.name + ' (' + product.productId + ')' "></dd></div><div><dt>Currency</dt><dd data-bind="text: currency"></dd></div><div><dt>Branch</dt><dd data-bind="text: servicingBranchId"></dd></div><div><dt>Ledger balance</dt><dd data-bind="text: $parent.money(balance.ledger, balance.currency)"></dd></div><div><dt>Available balance</dt><dd data-bind="text: $parent.money(balance.available, balance.currency)"></dd></div><div><dt>Operating instruction</dt><dd data-bind="text: operatingInstruction"></dd></div><div><dt>Version</dt><dd data-bind="text: version"></dd></div></dl></article>
+    <!-- /ko -->
+
+    <!-- ko if: selectedAccount -->
+    <article class="mb-ops__panel"><h3>Lifecycle action</h3><p>Only transitions supported by the account’s current status are offered. Closure uses a separate workflow and is intentionally not simulated here.</p><div class="mb-ops__form"><div class="mb-ops__field"><label for="deposit-reason-code">Reason code</label><input id="deposit-reason-code" required data-bind="value: reasonCode" /></div><div class="mb-ops__field"><label for="deposit-reason-text">Notes</label><input id="deposit-reason-text" data-bind="value: reasonText" /></div></div><div class="mb-ops__actions" data-bind="foreach: availableCommands"><button class="mb-button mb-button-outline" type="button" data-bind="text: label, click: function () { $parent.runCommand($data); }, disable: $parent.actionState.loading"></button></div></article>
+    <!-- ko if: actionState.error --><div class="mb-ops__state mb-ops__state--error" role="alert" data-bind="text: actionState.error"></div><!-- /ko -->
+    <!-- ko if: actionState.success --><div class="mb-ops__state mb-ops__state--success" role="status" data-bind="text: actionState.success"></div><!-- /ko -->
+    <!-- /ko -->
+    <!-- /ko -->
+
+    <!-- ko if: activeTab() === 'open' -->
+    <form class="mb-ops__panel mb-ops__form" data-bind="submit: openAccount" aria-label="Open deposit account">
+      <div class="mb-ops__field"><label for="open-deposit-customer">Primary customer ID</label><input id="open-deposit-customer" required data-bind="value: primaryCustomerId" /></div>
+      <div class="mb-ops__field"><label for="open-deposit-product">Active deposit product</label><select id="open-deposit-product" required data-bind="options: products, optionsText: function (p) { return p.productName + ' · ' + p.productCode; }, optionsValue: 'productCode', value: productId, optionsCaption: 'Choose a product'"></select><small data-bind="text: productVersion() ? 'Contract version ' + productVersion() : 'No active product selected'"></small></div>
+      <div class="mb-ops__field"><label for="open-deposit-amount">Opening amount</label><input id="open-deposit-amount" type="number" min="0" step="0.01" required data-bind="value: openingAmount" /></div>
+      <div class="mb-ops__field"><label for="open-deposit-currency">Currency</label><input id="open-deposit-currency" pattern="[A-Z]{3}" maxlength="3" required data-bind="value: currency" /></div>
+      <div class="mb-ops__field"><label for="open-deposit-branch">Servicing branch</label><input id="open-deposit-branch" required data-bind="value: branchId" /></div>
+      <div class="mb-ops__field"><label for="open-deposit-instruction">Operating instruction</label><select id="open-deposit-instruction" data-bind="value: operatingInstruction"><option>SINGLE</option><option>JOINTLY</option><option>EITHER_OR_SURVIVOR</option><option>ANYONE_OR_SURVIVOR</option></select></div>
+      <div class="mb-ops__field mb-ops__field--wide"><label for="open-deposit-reference">External reference (optional)</label><input id="open-deposit-reference" maxlength="64" data-bind="value: externalReference" /></div>
+      <div class="mb-ops__field--wide mb-ops__actions"><button class="mb-button mb-button-primary" type="submit" data-bind="disable: openState.loading">Create account</button><button class="mb-button mb-button-outline" type="button" data-bind="click: loadProducts">Refresh products</button></div>
+    </form>
+    <!-- ko if: openState.loading --><div class="mb-ops__state" role="status">Creating the deposit account…</div><!-- /ko -->
+    <!-- ko if: openState.error --><div class="mb-ops__state mb-ops__state--error" role="alert" data-bind="text: openState.error"></div><!-- /ko -->
+    <!-- ko if: openState.success --><div class="mb-ops__state mb-ops__state--success" role="status" data-bind="text: openState.success"></div><!-- /ko -->
+    <!-- /ko -->
+    <!-- /ko -->
+  </div>
+</section>

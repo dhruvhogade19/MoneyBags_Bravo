@@ -1,0 +1,51 @@
+<section class="mb-feature-page mb-product-detail-page">
+  <div class="mb-container">
+    <button class="mb-back-link" type="button" data-bind="click: back">Back to all products</button>
+    <div class="mb-state-card" data-bind="visible: loading" role="status"><oj-progress-circle size="sm" value="-1"></oj-progress-circle><span>Loading product details...</span></div>
+    <div class="mb-alert mb-alert-error" data-bind="visible: errorMessage" role="alert">
+      <p data-bind="text: errorMessage"></p><button class="mb-button mb-button-outline" type="button" data-bind="click: back">Browse products</button>
+    </div>
+
+    <div data-bind="with: product, visible: product">
+      <header class="mb-detail-hero">
+        <div>
+          <p class="mb-eyebrow" data-bind="text: $parent.label(subtype)"></p>
+          <h1 data-bind="text: productName"></h1>
+          <p class="mb-hero-lead" data-bind="text: description"></p>
+          <p class="mb-card-code" data-bind="text: productCode"></p>
+        </div>
+        <aside class="mb-rate-panel"><span>Indicative annual rate</span><strong data-bind="text: $parent.rate()"></strong><small>Final pricing is confirmed during application.</small></aside>
+      </header>
+
+      <div class="mb-detail-grid">
+        <section class="mb-panel" aria-labelledby="product-eligibility-heading">
+          <h2 id="product-eligibility-heading">Eligibility</h2>
+          <div class="mb-empty-copy" data-bind="visible: !eligibilityRules || eligibilityRules.length === 0">No additional eligibility rules are published.</div>
+          <ul class="mb-definition-list" data-bind="foreach: eligibilityRules">
+            <li><strong data-bind="text: customerType || 'Individual'"></strong><span data-bind="text: (minimumAge !== null ? 'Age ' + minimumAge + '+' : 'Standard age criteria') + (kycRequired ? ' / KYC required' : '')"></span></li>
+          </ul>
+        </section>
+        <section class="mb-panel" aria-labelledby="product-features-heading">
+          <h2 id="product-features-heading">Features</h2>
+          <div class="mb-empty-copy" data-bind="visible: !features || features.length === 0">Feature information will be confirmed during application.</div>
+          <ul class="mb-check-list" data-bind="foreach: features"><li data-bind="visible: active"><strong data-bind="text: featureName"></strong><span data-bind="text: featureValue"></span></li></ul>
+        </section>
+        <section class="mb-panel" aria-labelledby="product-fees-heading">
+          <h2 id="product-fees-heading">Fees</h2>
+          <div class="mb-empty-copy" data-bind="visible: !fees || fees.length === 0">No active fees are published for this product.</div>
+          <ul class="mb-definition-list" data-bind="foreach: fees"><li data-bind="visible: active"><strong data-bind="text: $parents[1].label(feeType)"></strong><span data-bind="text: feeAmount !== null ? $parents[1].money(feeAmount, $parents[1].product().currencyCode) : feePercentage + '%' "></span></li></ul>
+        </section>
+        <section class="mb-panel" aria-labelledby="product-limits-heading">
+          <h2 id="product-limits-heading">Key limits</h2>
+          <dl class="mb-key-values" data-bind="with: amountRule">
+            <div><dt>Minimum opening</dt><dd data-bind="text: $parents[1].money(minimumOpeningBalance || minimumAmount, $parents[1].product().currencyCode)"></dd></div>
+            <div><dt>Maximum amount</dt><dd data-bind="text: $parents[1].money(maximumBalance || maximumAmount, $parents[1].product().currencyCode)"></dd></div>
+            <div><dt>Tenure</dt><dd data-bind="text: minimumTenureMonths ? minimumTenureMonths + ' to ' + maximumTenureMonths + ' months' : 'Not applicable'"></dd></div>
+          </dl>
+        </section>
+      </div>
+
+      <div class="mb-action-strip"><div><h2>Ready to get started?</h2><p>Create your profile, complete KYC, and then apply securely.</p></div><button class="mb-button mb-button-primary" type="button" data-bind="click: $parent.start">Start onboarding</button></div>
+    </div>
+  </div>
+</section>
