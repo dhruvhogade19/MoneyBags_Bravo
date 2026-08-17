@@ -1,0 +1,1688 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Moneybags Credit Card Service API",
+    "version": "1.0.0",
+    "description": "Processes credit-card applications and owns credit-card accounts, limits, outstanding state, and card-specific posting projections."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "API Gateway - public routes only"
+    },
+    {
+      "url": "http://localhost:8085",
+      "description": "Direct service URL"
+    }
+  ],
+  "paths": {
+    "/api/v1/credit-card-applications": {
+      "post": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Submit a credit-card application",
+        "operationId": "postApiV1CreditCardApplications",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cifId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [
+          "cif-service:GET:/internal/v1/cifs/{cifId}/credit-card-application-details",
+          "product-master-service:POST:/internal/v1/products/{productCode}/validate-credit-card-application"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardApplicationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditCardApplicationRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Search applications",
+        "operationId": "getApiV1CreditCardApplications",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cifId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardApplicationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/credit-card-applications/{applicationId}": {
+      "get": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Get an application",
+        "operationId": "getApiV1CreditCardApplicationsByApplicationid",
+        "parameters": [
+          {
+            "name": "applicationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardApplicationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/credit-card-applications/{applicationId}/approve": {
+      "post": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Approve an application and limit",
+        "operationId": "postApiV1CreditCardApplicationsByApplicationidApprove",
+        "parameters": [
+          {
+            "name": "applicationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardApplicationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditCardDecisionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/credit-card-applications/{applicationId}/reject": {
+      "post": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Reject an application",
+        "operationId": "postApiV1CreditCardApplicationsByApplicationidReject",
+        "parameters": [
+          {
+            "name": "applicationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardApplicationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditCardDecisionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/credit-card-accounts": {
+      "post": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Open an account for an approved application",
+        "operationId": "postApiV1CreditCardAccounts",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cifId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenCreditCardAccountRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Search accounts by CIF",
+        "operationId": "getApiV1CreditCardAccounts",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cifId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardAccountPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/credit-card-accounts/{accountId}": {
+      "get": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Get a credit-card account",
+        "operationId": "getApiV1CreditCardAccountsByAccountid",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/credit-card-accounts/{accountId}": {
+      "get": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Get a peer-safe credit-card account snapshot",
+        "operationId": "getInternalV1CreditCardAccountsByAccountid",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "statement-service",
+          "bill-generation-service",
+          "payments-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/credit-card-accounts/{accountId}/available-limit": {
+      "get": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Get current available limit",
+        "operationId": "getInternalV1CreditCardAccountsByAccountidAvailableLimit",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "payments-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailableLimitResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/credit-card-accounts/{accountId}/purchase-postings": {
+      "post": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Apply a completed purchase projection",
+        "operationId": "postInternalV1CreditCardAccountsByAccountidPurchasePostings",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "payments-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardPurchasePostingRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/credit-card-accounts/{accountId}/payment-postings": {
+      "post": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Apply a completed bill payment projection",
+        "operationId": "postInternalV1CreditCardAccountsByAccountidPaymentPostings",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "payments-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditCardAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardPaymentPostingRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/credit-card-accounts/{accountId}/interest-rate": {
+      "get": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Get saved account-level interest rate",
+        "operationId": "getInternalV1CreditCardAccountsByAccountidInterestRate",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "bill-generation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterestRateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/credit-card-accounts/eod/readiness": {
+      "get": {
+        "tags": [
+          "Credit Card Service"
+        ],
+        "summary": "Report card-account blockers for daily close",
+        "operationId": "getInternalV1CreditCardAccountsEodReadiness",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "eod-reconciliation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceReadinessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "AvailableLimitResponse": {
+        "type": "object",
+        "required": [
+          "accountId",
+          "availableLimit",
+          "currency",
+          "asOf"
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "availableLimit": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CardPaymentPostingRequest": {
+        "type": "object",
+        "required": [
+          "paymentId",
+          "amount",
+          "currency",
+          "journalNumber",
+          "occurredAt"
+        ],
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "journalNumber": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CardPurchasePostingRequest": {
+        "type": "object",
+        "required": [
+          "paymentId",
+          "amount",
+          "currency",
+          "journalNumber",
+          "occurredAt"
+        ],
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "journalNumber": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreditCardAccountPage": {
+        "type": "object",
+        "required": [
+          "content",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "CreditCardAccountResponse": {
+        "type": "object",
+        "required": [
+          "accountId",
+          "cifId",
+          "productCode",
+          "status",
+          "sanctionedLimit",
+          "availableLimit",
+          "outstandingAmount",
+          "version"
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cifId": {
+            "type": "string"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "maskedCardNumber": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "sanctionedLimit": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "availableLimit": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "outstandingAmount": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "CreditCardApplicationPage": {
+        "type": "object",
+        "required": [
+          "content",
+          "page",
+          "size",
+          "totalElements"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "totalElements": {
+            "type": "integer"
+          }
+        }
+      },
+      "CreditCardApplicationRequest": {
+        "type": "object",
+        "required": [
+          "cifId",
+          "productCode",
+          "requestedCreditLimit"
+        ],
+        "properties": {
+          "cifId": {
+            "type": "string"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "requestedCreditLimit": {
+            "type": "number",
+            "format": "decimal"
+          }
+        }
+      },
+      "CreditCardApplicationResponse": {
+        "type": "object",
+        "required": [
+          "applicationId",
+          "cifId",
+          "productCode",
+          "status",
+          "version"
+        ],
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cifId": {
+            "type": "string"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "requestedCreditLimit": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "approvedCreditLimit": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "CreditCardDecisionRequest": {
+        "type": "object",
+        "required": [
+          "reasonCode"
+        ],
+        "properties": {
+          "approvedCreditLimit": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "remarks": {
+            "type": "string"
+          }
+        }
+      },
+      "InterestRateResponse": {
+        "type": "object",
+        "required": [
+          "accountId",
+          "annualInterestRate",
+          "effectiveFrom"
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "annualInterestRate": {
+            "type": "number",
+            "format": "decimal"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "effectiveTo": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "OpenCreditCardAccountRequest": {
+        "type": "object",
+        "required": [
+          "applicationId"
+        ],
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ProblemDetail": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "correlationId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "fieldErrors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ServiceReadinessResponse": {
+        "type": "object",
+        "required": [
+          "service",
+          "businessDate",
+          "ready",
+          "blockers"
+        ],
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  }
+}

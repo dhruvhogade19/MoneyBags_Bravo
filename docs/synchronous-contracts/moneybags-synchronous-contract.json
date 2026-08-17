@@ -1,0 +1,6191 @@
+{
+  "contractVersion": "1.0.0",
+  "generatedOn": "2026-08-11",
+  "architecture": "Synchronous HTTP/JSON microservices with database-per-service",
+  "technologyBaseline": {
+    "java": "17",
+    "springBoot": "3.3.5",
+    "springCloud": "2023.0.x",
+    "database": "Oracle with Oracle JDBC",
+    "migration": "Flyway",
+    "security": "Spring Security OAuth2 Resource Server / JWT",
+    "faultTolerance": "Resilience4j",
+    "apiDocumentation": "OpenAPI 3.0 / Swagger UI",
+    "observability": "Actuator and Prometheus",
+    "build": "Maven",
+    "test": "JUnit, Spring Boot Test, H2"
+  },
+  "conventions": {
+    "publicPrefix": "/api/v1",
+    "internalPrefix": "/internal/v1",
+    "gatewayRule": "Only public/admin /api/v1/** routes are exposed by API Gateway; /internal/v1/** is direct service-to-service only.",
+    "headers": {
+      "requiredAll": [
+        "Authorization: Bearer <JWT>"
+      ],
+      "propagated": [
+        "X-Correlation-Id"
+      ],
+      "mutable": [
+        "Idempotency-Key"
+      ],
+      "concurrentMutation": [
+        "If-Match"
+      ]
+    },
+    "mediaTypes": {
+      "request": "application/json",
+      "response": "application/json",
+      "errors": "application/problem+json"
+    },
+    "time": "UTC ISO-8601",
+    "money": "decimal amount plus ISO-4217 currency",
+    "pagination": "page, size, sort with a stable Page response"
+  },
+  "infrastructure": [
+    {
+      "id": "discovery-server",
+      "port": 8761,
+      "purpose": "Netflix Eureka registry",
+      "path": "/eureka/"
+    },
+    {
+      "id": "api-gateway",
+      "port": 8080,
+      "purpose": "Public routing, JWT enforcement, correlation propagation, rate limiting"
+    }
+  ],
+  "services": [
+    {
+      "id": "identity-access-service",
+      "name": "Identity and Access Service",
+      "port": 8082,
+      "oracleSchema": "MONEYBAGS_IDENTITY",
+      "scope": "Manages application users, profiles, roles, permissions, and role-derived menus. JWT issuance may be delegated to an enterprise authorization server, while this service remains the source for Moneybags application authorization data.",
+      "owns": "Users, application profiles, roles, permissions, menu definitions, and role assignments.",
+      "doesNotOwn": "CIF/customer records, KYC evidence, bank accounts, or financial transactions.",
+      "tables": [
+        "APP_USER",
+        "USER_PROFILE",
+        "ROLE",
+        "PERMISSION",
+        "USER_ROLE",
+        "ROLE_PERMISSION",
+        "MENU_ITEM",
+        "ROLE_MENU"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/users",
+          "visibility": "public",
+          "purpose": "Register an application user",
+          "request": "CreateUserRequest",
+          "response": "UserResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/users/{userId}",
+          "visibility": "public",
+          "purpose": "Get an application profile",
+          "request": null,
+          "response": "UserResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/users/{userId}",
+          "visibility": "public",
+          "purpose": "Update an application profile",
+          "request": "UpdateUserProfileRequest",
+          "response": "UserResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "PUT",
+          "path": "/api/v1/users/{userId}/roles",
+          "visibility": "admin",
+          "purpose": "Replace user role assignments",
+          "request": "RoleAssignmentRequest",
+          "response": "UserResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/users/{userId}/menu",
+          "visibility": "public",
+          "purpose": "Get the effective application menu",
+          "request": null,
+          "response": "MenuResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/roles",
+          "visibility": "admin",
+          "purpose": "Create a role and permissions",
+          "request": "RoleRequest",
+          "response": "RoleResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/roles",
+          "visibility": "admin",
+          "purpose": "List roles",
+          "request": null,
+          "response": "RolePage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/users/{userId}/authorization-context",
+          "visibility": "internal",
+          "purpose": "Resolve roles and permissions for a trusted caller",
+          "request": null,
+          "response": "AuthorizationContext",
+          "consumers": [
+            "api-gateway"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "cif-service",
+      "name": "CIF / Customer Service",
+      "port": 8081,
+      "oracleSchema": "MONEYBAGS_CIF",
+      "scope": "Creates and maintains the bank customer record, contact data, customer classification, and the synchronized KYC status used by downstream account-opening services.",
+      "owns": "CIF identity, customer demographics, contact details, employment data, customer status, and the current KYC status snapshot.",
+      "doesNotOwn": "KYC documents or decisions, product rules, deposit accounts, credit-card accounts, or notification delivery.",
+      "tables": [
+        "CIF",
+        "CIF_ADDRESS",
+        "CIF_CONTACT",
+        "CIF_EMPLOYMENT",
+        "CIF_STATUS_HISTORY",
+        "KYC_STATUS_SNAPSHOT"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/cifs",
+          "visibility": "public",
+          "purpose": "Create a customer and initiate KYC",
+          "request": "CreateCifRequest",
+          "response": "CifResponse",
+          "consumers": [],
+          "calls": [
+            "kyc-service:POST:/api/v1/kycs"
+          ],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/cifs/{cifId}",
+          "visibility": "public",
+          "purpose": "Get a customer",
+          "request": null,
+          "response": "CifResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/cifs",
+          "visibility": "admin",
+          "purpose": "Search customers",
+          "request": null,
+          "response": "CifPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/cifs/{cifId}",
+          "visibility": "public",
+          "purpose": "Update allowed customer fields",
+          "request": "UpdateCifRequest",
+          "response": "CifResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "PATCH",
+          "path": "/internal/v1/cifs/{cifId}/kyc-status",
+          "visibility": "internal",
+          "purpose": "Apply the final KYC status",
+          "request": "KycStatusUpdateRequest",
+          "response": "CifResponse",
+          "consumers": [
+            "kyc-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/cifs/{cifId}/deposit-creation-details",
+          "visibility": "internal",
+          "purpose": "Provide customer and KYC eligibility for deposit opening",
+          "request": null,
+          "response": "DepositCreationDetails",
+          "consumers": [
+            "deposit-account-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/cifs/{cifId}/credit-card-application-details",
+          "visibility": "internal",
+          "purpose": "Provide customer and KYC eligibility for card application",
+          "request": null,
+          "response": "CreditCardApplicationDetails",
+          "consumers": [
+            "credit-card-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/cifs/{cifId}/customer-contact-details",
+          "visibility": "internal",
+          "purpose": "Provide notification-safe contact data",
+          "request": null,
+          "response": "CustomerContactDetails",
+          "consumers": [
+            "notification-service",
+            "statement-service",
+            "bill-generation-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/cifs/{cifId}/ownership",
+          "visibility": "internal",
+          "purpose": "Confirm ownership of a referenced account",
+          "request": null,
+          "response": "OwnershipResponse",
+          "consumers": [
+            "payments-service",
+            "statement-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "kyc-service",
+      "name": "KYC Service",
+      "port": 8083,
+      "oracleSchema": "MONEYBAGS_KYC",
+      "scope": "Runs KYC cases from initiation through document upload, verification, review, and final decision, then synchronously updates the CIF KYC snapshot.",
+      "owns": "KYC cases, customer snapshots used for review, document metadata/content references, verification results, and decisions.",
+      "doesNotOwn": "The canonical customer record, notification delivery, account opening, or product eligibility rules.",
+      "tables": [
+        "KYC_CASE",
+        "KYC_CUSTOMER_SNAPSHOT",
+        "KYC_DOCUMENT",
+        "KYC_DOCUMENT_VERIFICATION",
+        "KYC_DECISION",
+        "IDEMPOTENCY_RECORD",
+        "AUDIT_LOG"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/kycs",
+          "visibility": "public",
+          "purpose": "Initiate a KYC case",
+          "request": "KycInitiationRequest",
+          "response": "KycCaseResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/kycs/{kycId}",
+          "visibility": "public",
+          "purpose": "Get a KYC case",
+          "request": null,
+          "response": "KycCaseResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/kycs",
+          "visibility": "admin",
+          "purpose": "Search KYC cases by CIF and status",
+          "request": null,
+          "response": "KycCasePage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/kycs/{kycId}/documents",
+          "visibility": "public",
+          "purpose": "Upload KYC document metadata and content",
+          "request": "KycDocumentUploadRequest",
+          "response": "KycDocumentResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/kycs/{kycId}/documents",
+          "visibility": "admin",
+          "purpose": "List KYC document metadata",
+          "request": null,
+          "response": "KycDocumentPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/kycs/{kycId}/documents/{documentId}",
+          "visibility": "admin",
+          "purpose": "Download or preview a KYC document",
+          "request": null,
+          "response": "BinaryDocument",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/kycs/{kycId}/documents/{documentId}/verification",
+          "visibility": "admin",
+          "purpose": "Record document verification",
+          "request": "DocumentVerificationRequest",
+          "response": "KycDocumentResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/kycs/{kycId}/decision",
+          "visibility": "admin",
+          "purpose": "Approve or reject the KYC case",
+          "request": "KycDecisionRequest",
+          "response": "KycCaseResponse",
+          "consumers": [],
+          "calls": [
+            "cif-service:PATCH:/internal/v1/cifs/{cifId}/kyc-status",
+            "notification-service:POST:/internal/v1/notifications"
+          ],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "product-master-service",
+      "name": "Product Master Service",
+      "port": 8084,
+      "oracleSchema": "MONEYBAGS_PRODUCT",
+      "scope": "Defines reusable deposit and credit-card products, lifecycle, eligibility, pricing, effective-dated interest policies, fees, limits, and reference benchmarks.",
+      "owns": "Product definitions and versions, eligibility rules, fee rules, pricing, interest policies, card terms, and benchmarks.",
+      "doesNotOwn": "Customer/account state, balances, cards, transactions, bills, or journals.",
+      "tables": [
+        "PRODUCT",
+        "PRODUCT_VERSION",
+        "PRODUCT_ELIGIBILITY_RULE",
+        "PRODUCT_FEE",
+        "PRODUCT_PRICING",
+        "INTEREST_POLICY",
+        "CREDIT_CARD_TERM",
+        "BENCHMARK_RATE",
+        "AUDIT_LOG"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/products",
+          "visibility": "admin",
+          "purpose": "Create a draft product",
+          "request": "ProductRequest",
+          "response": "ProductResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/products",
+          "visibility": "public",
+          "purpose": "Search and page products",
+          "request": null,
+          "response": "ProductPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/products/{productCode}",
+          "visibility": "public",
+          "purpose": "Get the effective product definition",
+          "request": null,
+          "response": "ProductResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "PUT",
+          "path": "/api/v1/products/{productCode}",
+          "visibility": "admin",
+          "purpose": "Create a replacement product version",
+          "request": "ProductRequest",
+          "response": "ProductResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/products/{productCode}/status",
+          "visibility": "admin",
+          "purpose": "Change product lifecycle status",
+          "request": "StatusChangeRequest",
+          "response": "ProductResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/v1/products/{productCode}",
+          "visibility": "admin",
+          "purpose": "Delete a draft or discontinue an unused product",
+          "request": null,
+          "response": "NoContent",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/products/active",
+          "visibility": "public",
+          "purpose": "List all currently active products",
+          "request": null,
+          "response": "ProductPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/products/category/{category}",
+          "visibility": "public",
+          "purpose": "List active products by category",
+          "request": null,
+          "response": "ProductPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/products/{productCode}/eligibility",
+          "visibility": "public",
+          "purpose": "Get eligibility rules",
+          "request": null,
+          "response": "EligibilityRulePage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/products/{productCode}/pricing",
+          "visibility": "public",
+          "purpose": "Get effective fees, rates, and calculation rules",
+          "request": null,
+          "response": "ProductPricingResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/products/{productCode}/validate-account-opening",
+          "visibility": "internal",
+          "purpose": "Validate a proposed deposit account opening",
+          "request": "AccountOpeningValidationRequest",
+          "response": "EligibilityDecision",
+          "consumers": [
+            "deposit-account-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/products/{productCode}/validate-credit-card-application",
+          "visibility": "internal",
+          "purpose": "Validate a proposed card application",
+          "request": "CreditCardValidationRequest",
+          "response": "EligibilityDecision",
+          "consumers": [
+            "credit-card-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/products/{productCode}/interest-policies",
+          "visibility": "admin",
+          "purpose": "Add an effective-dated interest policy",
+          "request": "InterestPolicyRequest",
+          "response": "InterestPolicyResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/products/{productCode}/interest-policies",
+          "visibility": "public",
+          "purpose": "List interest-policy versions",
+          "request": null,
+          "response": "InterestPolicyPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/benchmarks",
+          "visibility": "admin",
+          "purpose": "Publish an effective-dated benchmark",
+          "request": "BenchmarkRequest",
+          "response": "BenchmarkResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/benchmarks/{benchmarkCode}",
+          "visibility": "public",
+          "purpose": "Get an effective benchmark",
+          "request": null,
+          "response": "BenchmarkResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/benchmarks/{benchmarkCode}/history",
+          "visibility": "public",
+          "purpose": "List benchmark history",
+          "request": null,
+          "response": "BenchmarkPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "deposit-account-service",
+      "name": "Deposit Account Service",
+      "port": 8086,
+      "oracleSchema": "MONEYBAGS_DEPOSIT",
+      "scope": "Opens and manages deposit accounts, holders, nominees, mandates, limits, lifecycle, balance projection, operational holds, and peer-service eligibility.",
+      "owns": "Deposit account identity and lifecycle, holder/nominee/mandate configuration, account-level limits, operational reservations, and balance read projections.",
+      "doesNotOwn": "Product rules, CIF/KYC truth, immutable accounting journals, payment orchestration, or statements.",
+      "tables": [
+        "DEPOSIT_ACCOUNT",
+        "ACCOUNT_HOLDER",
+        "ACCOUNT_BALANCE",
+        "ACCOUNT_NOMINEE",
+        "ACCOUNT_MANDATE",
+        "ACCOUNT_LIMIT",
+        "ACCOUNT_STATUS_HISTORY",
+        "FUND_RESERVATION",
+        "IDEMPOTENCY_RECORD",
+        "AUDIT_LOG"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/deposit-accounts",
+          "visibility": "public",
+          "purpose": "Open a deposit account",
+          "request": "OpenDepositAccountRequest",
+          "response": "DepositAccountResponse",
+          "consumers": [],
+          "calls": [
+            "cif-service:GET:/internal/v1/cifs/{cifId}/deposit-creation-details",
+            "product-master-service:GET:/api/v1/products/{productCode}",
+            "product-master-service:POST:/internal/v1/products/{productCode}/validate-account-opening"
+          ],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/deposit-accounts/eligibility-check",
+          "visibility": "public",
+          "purpose": "Validate opening without persistence",
+          "request": "DepositEligibilityRequest",
+          "response": "EligibilityDecision",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/deposit-accounts/{accountId}",
+          "visibility": "public",
+          "purpose": "Get account details",
+          "request": null,
+          "response": "DepositAccountResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/deposit-accounts",
+          "visibility": "public",
+          "purpose": "Search accounts",
+          "request": null,
+          "response": "DepositAccountPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/deposit-accounts/{accountId}/balance",
+          "visibility": "public",
+          "purpose": "Get the current balance projection",
+          "request": null,
+          "response": "DepositBalanceResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/deposit-accounts/{accountId}/status-history",
+          "visibility": "public",
+          "purpose": "Get immutable lifecycle history",
+          "request": null,
+          "response": "AccountStatusHistoryPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/deposit-accounts/{accountId}/holders",
+          "visibility": "public",
+          "purpose": "Add an eligible holder",
+          "request": "HolderRequest",
+          "response": "DepositAccountResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/deposit-accounts/{accountId}/holders/{cifId}",
+          "visibility": "public",
+          "purpose": "Remove a non-primary holder",
+          "request": null,
+          "response": "NoContent",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "PUT",
+          "path": "/api/deposit-accounts/{accountId}/nominees",
+          "visibility": "public",
+          "purpose": "Replace nominee instructions",
+          "request": "NomineeListRequest",
+          "response": "NomineePage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "PUT",
+          "path": "/api/deposit-accounts/{accountId}/limits/{limitType}",
+          "visibility": "public",
+          "purpose": "Upsert an account limit",
+          "request": "AccountLimitRequest",
+          "response": "AccountLimitResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/deposit-accounts/{accountId}/mandates",
+          "visibility": "public",
+          "purpose": "Add an account mandate",
+          "request": "MandateRequest",
+          "response": "MandateResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/deposit-accounts/{accountId}/mandates/{mandateId}",
+          "visibility": "public",
+          "purpose": "Revoke a mandate",
+          "request": null,
+          "response": "NoContent",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/deposit-accounts/{accountId}/commands/{command}",
+          "visibility": "public",
+          "purpose": "Execute a guarded lifecycle transition",
+          "request": "AccountStatusCommand",
+          "response": "DepositAccountResponse",
+          "consumers": [],
+          "calls": [
+            "accounting-service:GET:/internal/v1/account-balances/{accountReference}",
+            "payments-service:GET:/internal/v1/payments"
+          ],
+          "idempotent": true,
+          "if_match": true,
+          "notes": "confirm-close uses both dependency checks; other lifecycle commands are local"
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/deposit-accounts/{accountId}/eligibility",
+          "visibility": "internal",
+          "purpose": "Validate ownership, status, currency, limits, and balances",
+          "request": null,
+          "response": "DepositAccountEligibility",
+          "consumers": [
+            "payments-service",
+            "statement-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/deposit-accounts/{accountId}",
+          "visibility": "internal",
+          "purpose": "Get a peer-safe deposit account snapshot",
+          "request": null,
+          "response": "DepositAccountResponse",
+          "consumers": [
+            "statement-service",
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/deposit-accounts/{accountId}/reservations",
+          "visibility": "internal",
+          "purpose": "Reserve funds for a payment",
+          "request": "FundReservationRequest",
+          "response": "FundReservationResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/deposit-accounts/{accountId}/reservations/{reservationId}/capture",
+          "visibility": "internal",
+          "purpose": "Capture a reservation after accounting posts",
+          "request": "ReservationActionRequest",
+          "response": "FundReservationResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/deposit-accounts/{accountId}/reservations/{reservationId}/release",
+          "visibility": "internal",
+          "purpose": "Release a reservation after failure or cancellation",
+          "request": "ReservationActionRequest",
+          "response": "FundReservationResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/deposit-transfers",
+          "visibility": "internal",
+          "purpose": "Apply an atomic source/target balance projection update",
+          "request": "DepositTransferRequest",
+          "response": "DepositTransferResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/deposit-accounts/eod/accruals",
+          "visibility": "internal",
+          "purpose": "Run daily deposit accrual controls",
+          "request": "DepositAccrualRequest",
+          "response": "DepositAccrualResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/deposit-accounts/eod/readiness",
+          "visibility": "internal",
+          "purpose": "Report account blockers for daily close",
+          "request": null,
+          "response": "ServiceReadinessResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "credit-card-service",
+      "name": "Credit Card Service",
+      "port": 8085,
+      "oracleSchema": "MONEYBAGS_CREDIT_CARD",
+      "scope": "Processes credit-card applications and owns credit-card accounts, limits, outstanding state, and card-specific posting projections.",
+      "owns": "Card applications, approved limits, card account identity/status, available-limit projection, outstanding amount, and account-level interest snapshots.",
+      "doesNotOwn": "Product rules, CIF/KYC truth, payment orchestration, bills, statements, or accounting journals.",
+      "tables": [
+        "CREDIT_CARD_APPLICATION",
+        "CREDIT_CARD_ACCOUNT",
+        "CARD_STATUS_HISTORY",
+        "CARD_ACCOUNT_POSTING",
+        "IDEMPOTENCY_RECORD",
+        "AUDIT_LOG"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/credit-card-applications",
+          "visibility": "public",
+          "purpose": "Submit a credit-card application",
+          "request": "CreditCardApplicationRequest",
+          "response": "CreditCardApplicationResponse",
+          "consumers": [],
+          "calls": [
+            "cif-service:GET:/internal/v1/cifs/{cifId}/credit-card-application-details",
+            "product-master-service:POST:/internal/v1/products/{productCode}/validate-credit-card-application"
+          ],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/credit-card-applications/{applicationId}",
+          "visibility": "public",
+          "purpose": "Get an application",
+          "request": null,
+          "response": "CreditCardApplicationResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/credit-card-applications",
+          "visibility": "admin",
+          "purpose": "Search applications",
+          "request": null,
+          "response": "CreditCardApplicationPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/credit-card-applications/{applicationId}/approve",
+          "visibility": "admin",
+          "purpose": "Approve an application and limit",
+          "request": "CreditCardDecisionRequest",
+          "response": "CreditCardApplicationResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/credit-card-applications/{applicationId}/reject",
+          "visibility": "admin",
+          "purpose": "Reject an application",
+          "request": "CreditCardDecisionRequest",
+          "response": "CreditCardApplicationResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/credit-card-accounts",
+          "visibility": "admin",
+          "purpose": "Open an account for an approved application",
+          "request": "OpenCreditCardAccountRequest",
+          "response": "CreditCardAccountResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/credit-card-accounts/{accountId}",
+          "visibility": "public",
+          "purpose": "Get a credit-card account",
+          "request": null,
+          "response": "CreditCardAccountResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/credit-card-accounts",
+          "visibility": "public",
+          "purpose": "Search accounts by CIF",
+          "request": null,
+          "response": "CreditCardAccountPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/credit-card-accounts/{accountId}",
+          "visibility": "internal",
+          "purpose": "Get a peer-safe credit-card account snapshot",
+          "request": null,
+          "response": "CreditCardAccountResponse",
+          "consumers": [
+            "statement-service",
+            "bill-generation-service",
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/credit-card-accounts/{accountId}/available-limit",
+          "visibility": "internal",
+          "purpose": "Get current available limit",
+          "request": null,
+          "response": "AvailableLimitResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/credit-card-accounts/{accountId}/purchase-postings",
+          "visibility": "internal",
+          "purpose": "Apply a completed purchase projection",
+          "request": "CardPurchasePostingRequest",
+          "response": "CreditCardAccountResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/credit-card-accounts/{accountId}/payment-postings",
+          "visibility": "internal",
+          "purpose": "Apply a completed bill payment projection",
+          "request": "CardPaymentPostingRequest",
+          "response": "CreditCardAccountResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/credit-card-accounts/{accountId}/interest-rate",
+          "visibility": "internal",
+          "purpose": "Get saved account-level interest rate",
+          "request": null,
+          "response": "InterestRateResponse",
+          "consumers": [
+            "bill-generation-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/credit-card-accounts/eod/readiness",
+          "visibility": "internal",
+          "purpose": "Report card-account blockers for daily close",
+          "request": null,
+          "response": "ServiceReadinessResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "payments-service",
+      "name": "Payments Service",
+      "port": 8087,
+      "oracleSchema": "MONEYBAGS_PAYMENT",
+      "scope": "Orchestrates book transfers, credit-card payments, merchant payments, cancellation, settlement, reversal, and refund states through synchronous peer APIs.",
+      "owns": "Payment requests, payment lifecycle, orchestration attempts, idempotency results, and peer-call outcome evidence.",
+      "doesNotOwn": "Account balances, card limits, customer contacts, product rules, or accounting journals.",
+      "tables": [
+        "PAYMENT",
+        "PAYMENT_STATUS_HISTORY",
+        "PAYMENT_ATTEMPT",
+        "PAYMENT_PEER_RESULT",
+        "IDEMPOTENCY_RECORD",
+        "AUDIT_LOG"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/payments",
+          "visibility": "public",
+          "purpose": "Create and synchronously execute a payment",
+          "request": "CreatePaymentRequest",
+          "response": "PaymentResponse",
+          "consumers": [],
+          "calls": [
+            "deposit-account-service:GET:/internal/v1/deposit-accounts/{accountId}/eligibility",
+            "deposit-account-service:POST:/internal/v1/deposit-accounts/{accountId}/reservations",
+            "accounting-service:POST:/internal/v1/payment-postings/settlements",
+            "notification-service:POST:/internal/v1/notifications"
+          ],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/payments/{paymentId}",
+          "visibility": "public",
+          "purpose": "Get payment status",
+          "request": null,
+          "response": "PaymentResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/payments/{paymentId}/cancel",
+          "visibility": "public",
+          "purpose": "Cancel a payment before settlement",
+          "request": "PaymentCancelRequest",
+          "response": "PaymentResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/payments",
+          "visibility": "internal",
+          "purpose": "Search settled and exceptional payments by account and date",
+          "request": null,
+          "response": "PaymentPage",
+          "consumers": [
+            "statement-service",
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/payments/eod/cutoff",
+          "visibility": "internal",
+          "purpose": "Apply payment cutoff controls",
+          "request": "EodPaymentCommand",
+          "response": "EodPaymentResult",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/payments/eod/drain",
+          "visibility": "internal",
+          "purpose": "Drain or classify in-flight payments",
+          "request": "EodPaymentCommand",
+          "response": "EodPaymentResult",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/payments/{paymentId}/reversal",
+          "visibility": "internal",
+          "purpose": "Reverse a settled payment",
+          "request": "PaymentReversalRequest",
+          "response": "PaymentResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [
+            "accounting-service:POST:/internal/v1/journals/{journalNumber}/reversals"
+          ],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "accounting-service",
+      "name": "Accounting Service",
+      "port": 8089,
+      "oracleSchema": "MONEYBAGS_ACCOUNTING",
+      "scope": "Maintains the authoritative double-entry record, accounting rules, GL accounts, subledger mappings, journals, trial balances, financial reconciliation, and accounting periods.",
+      "owns": "Immutable journals and lines, reversals, GL master, rule versions, mappings, posting idempotency, trial balances, financial reconciliation, and periods.",
+      "doesNotOwn": "Payment lifecycle, customer/account truth, product definitions, bills, statements, or EOD orchestration.",
+      "tables": [
+        "GL_ACCOUNT",
+        "ACCOUNTING_RULE",
+        "SUBLEDGER_MAPPING",
+        "POSTING_REQUEST",
+        "JOURNAL",
+        "JOURNAL_LINE",
+        "TRIAL_BALANCE_RUN",
+        "TRIAL_BALANCE_LINE",
+        "FIN_RECON_RUN",
+        "FIN_RECON_ITEM",
+        "ACCOUNTING_PERIOD",
+        "IDEMPOTENCY_RECORD",
+        "AUDIT_LOG"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/internal/v1/payment-postings/settlements",
+          "visibility": "internal",
+          "purpose": "Post a settled payment fact",
+          "request": "PaymentSettlementPostingRequest",
+          "response": "JournalResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/payment-postings/refunds",
+          "visibility": "internal",
+          "purpose": "Post a completed refund fact",
+          "request": "PaymentRefundPostingRequest",
+          "response": "JournalResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/payment-postings/by-reference/{externalReference}",
+          "visibility": "internal",
+          "purpose": "Resolve an uncertain posting outcome",
+          "request": null,
+          "response": "PostingOutcomeResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/account-balances/{accountReference}",
+          "visibility": "internal",
+          "purpose": "Get an authoritative journal-derived account balance",
+          "request": null,
+          "response": "AccountBalanceResponse",
+          "consumers": [
+            "deposit-account-service",
+            "bill-generation-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/ledger-entries",
+          "visibility": "internal",
+          "purpose": "List journal lines for an account and date range",
+          "request": null,
+          "response": "LedgerEntryPage",
+          "consumers": [
+            "bill-generation-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/bill-postings",
+          "visibility": "internal",
+          "purpose": "Post bill fees and interest as an immutable journal",
+          "request": "BillAccountingPostingRequest",
+          "response": "JournalResponse",
+          "consumers": [
+            "bill-generation-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/journals/{journalNumber}/reversals",
+          "visibility": "internal",
+          "purpose": "Create an immutable opposite journal",
+          "request": "JournalReversalRequest",
+          "response": "JournalResponse",
+          "consumers": [
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/journals/{journalNumber}",
+          "visibility": "admin",
+          "purpose": "Get a journal and lines",
+          "request": null,
+          "response": "JournalResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/journals",
+          "visibility": "admin",
+          "purpose": "Search journals",
+          "request": null,
+          "response": "JournalPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/gl-accounts",
+          "visibility": "admin",
+          "purpose": "Create a GL account",
+          "request": "GlAccountRequest",
+          "response": "GlAccountResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/gl-accounts",
+          "visibility": "admin",
+          "purpose": "List GL accounts",
+          "request": null,
+          "response": "GlAccountPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/gl-accounts/{glCode}",
+          "visibility": "admin",
+          "purpose": "Get a GL account",
+          "request": null,
+          "response": "GlAccountResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/gl-accounts/{glCode}/status",
+          "visibility": "admin",
+          "purpose": "Activate or deactivate a GL account",
+          "request": "StatusChangeRequest",
+          "response": "GlAccountResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/accounting-rules",
+          "visibility": "admin",
+          "purpose": "Create an effective-dated rule version",
+          "request": "AccountingRuleRequest",
+          "response": "AccountingRuleResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/accounting-rules",
+          "visibility": "admin",
+          "purpose": "List accounting-rule versions",
+          "request": null,
+          "response": "AccountingRulePage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/subledger-mappings",
+          "visibility": "admin",
+          "purpose": "Create a subledger-to-GL mapping",
+          "request": "SubledgerMappingRequest",
+          "response": "SubledgerMappingResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/subledger-mappings",
+          "visibility": "admin",
+          "purpose": "List subledger mappings",
+          "request": null,
+          "response": "SubledgerMappingPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/trial-balances",
+          "visibility": "internal",
+          "purpose": "Generate and persist a trial balance",
+          "request": "TrialBalanceRequest",
+          "response": "TrialBalanceResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/trial-balances/{runId}",
+          "visibility": "admin",
+          "purpose": "Get a persisted trial balance",
+          "request": null,
+          "response": "TrialBalanceResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/eod/reconciliation/runs",
+          "visibility": "internal",
+          "purpose": "Run Payments-to-Accounting financial reconciliation",
+          "request": "FinancialReconciliationRequest",
+          "response": "FinancialReconciliationResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/reconciliation/runs/{runId}",
+          "visibility": "admin",
+          "purpose": "Get financial reconciliation and exceptions",
+          "request": null,
+          "response": "FinancialReconciliationResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/reconciliation/runs/{runId}/items/{itemId}/resolution",
+          "visibility": "admin",
+          "purpose": "Resolve a financial reconciliation item",
+          "request": "ReconciliationResolutionRequest",
+          "response": "FinancialReconciliationResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/accounting-periods/{businessDate}/open",
+          "visibility": "internal",
+          "purpose": "Open an accounting period",
+          "request": "AccountingPeriodCommand",
+          "response": "AccountingPeriodResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/accounting-periods/{businessDate}/close",
+          "visibility": "internal",
+          "purpose": "Close an accounting period",
+          "request": "AccountingPeriodCommand",
+          "response": "AccountingPeriodResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/accounting-periods/{businessDate}",
+          "visibility": "admin",
+          "purpose": "Get accounting-period status",
+          "request": null,
+          "response": "AccountingPeriodResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "bill-generation-service",
+      "name": "Bill Generation Service",
+      "port": 8092,
+      "oracleSchema": "MONEYBAGS_BILLING",
+      "scope": "Generates immutable credit-card bills from product rules, card snapshots, and authoritative financial activity, then exposes bill summaries to statements and payments.",
+      "owns": "Billing cycles, bill headers, line items, calculation snapshots, bill status, and generation audit.",
+      "doesNotOwn": "Card-account truth, product rules, accounting journals, customer contacts, statements, or notification delivery.",
+      "tables": [
+        "BILLING_CYCLE",
+        "BILL",
+        "BILL_LINE",
+        "BILL_CALCULATION_SNAPSHOT",
+        "BILL_STATUS_HISTORY",
+        "IDEMPOTENCY_RECORD",
+        "AUDIT_LOG"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/internal/v1/bills/generate",
+          "visibility": "internal",
+          "purpose": "Generate a bill for an account and period",
+          "request": "BillGenerationRequest",
+          "response": "BillResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [
+            "product-master-service:GET:/api/v1/products/{productCode}/pricing",
+            "credit-card-service:GET:/internal/v1/credit-card-accounts/{accountId}",
+            "credit-card-service:GET:/internal/v1/credit-card-accounts/{accountId}/interest-rate",
+            "accounting-service:GET:/internal/v1/ledger-entries",
+            "accounting-service:POST:/internal/v1/bill-postings"
+          ],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/bills/{billId}",
+          "visibility": "public",
+          "purpose": "Get a bill",
+          "request": null,
+          "response": "BillResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/bills",
+          "visibility": "internal",
+          "purpose": "Find bills by account and billing period",
+          "request": null,
+          "response": "BillPage",
+          "consumers": [
+            "statement-service",
+            "payments-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/internal/v1/bills/{billId}/summary",
+          "visibility": "internal",
+          "purpose": "Get a statement-safe bill summary",
+          "request": null,
+          "response": "BillSummaryResponse",
+          "consumers": [
+            "statement-service"
+          ],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/bills/eod/close",
+          "visibility": "internal",
+          "purpose": "Complete or classify daily bill generation",
+          "request": "BillCloseRequest",
+          "response": "BillCloseResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "statement-service",
+      "name": "Statement Service",
+      "port": 8088,
+      "oracleSchema": "MONEYBAGS_STATEMENT",
+      "scope": "Builds downloadable deposit-account and credit-card statements from authoritative account, payment, bill, and customer-contact APIs.",
+      "owns": "Statement requests, generation status, immutable generated document metadata, file references, and generation audit.",
+      "doesNotOwn": "Accounts, payments, bills, accounting journals, customer truth, or notification delivery.",
+      "tables": [
+        "STATEMENT_REQUEST",
+        "STATEMENT_DOCUMENT",
+        "STATEMENT_GENERATION_ATTEMPT",
+        "IDEMPOTENCY_RECORD",
+        "AUDIT_LOG"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/statements",
+          "visibility": "public",
+          "purpose": "Request a statement",
+          "request": "StatementRequest",
+          "response": "StatementResponse",
+          "consumers": [],
+          "calls": [
+            "cif-service:GET:/internal/v1/cifs/{cifId}/ownership",
+            "deposit-account-service:GET:/internal/v1/deposit-accounts/{accountId}",
+            "credit-card-service:GET:/internal/v1/credit-card-accounts/{accountId}",
+            "payments-service:GET:/internal/v1/payments",
+            "bill-generation-service:GET:/internal/v1/bills"
+          ],
+          "idempotent": true,
+          "if_match": false,
+          "notes": "accountType selects the Deposit or Credit Card branch"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/statements/{statementId}",
+          "visibility": "public",
+          "purpose": "Get statement generation status",
+          "request": null,
+          "response": "StatementResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/statements/{statementId}/download",
+          "visibility": "public",
+          "purpose": "Download a generated statement",
+          "request": null,
+          "response": "BinaryDocument",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/internal/v1/statements/eod/generate",
+          "visibility": "internal",
+          "purpose": "Generate scheduled statements and account summaries",
+          "request": "EodStatementRequest",
+          "response": "EodStatementResponse",
+          "consumers": [
+            "eod-reconciliation-service"
+          ],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "notification-service",
+      "name": "Notification Service",
+      "port": 8090,
+      "oracleSchema": "MONEYBAGS_NOTIFICATION",
+      "scope": "Creates and delivers templated email/SMS/in-app notifications for peer services and exposes a customer notification inbox.",
+      "owns": "Notification templates, notification requests, channel payload snapshots, delivery attempts, and delivery status.",
+      "doesNotOwn": "Customer contact truth, source business records, statements, bills, payments, or KYC decisions.",
+      "tables": [
+        "NOTIFICATION_TEMPLATE",
+        "NOTIFICATION",
+        "DELIVERY_ATTEMPT",
+        "IDEMPOTENCY_RECORD",
+        "AUDIT_LOG"
+      ],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/internal/v1/notifications",
+          "visibility": "internal",
+          "purpose": "Create and attempt a notification",
+          "request": "NotificationRequest",
+          "response": "NotificationResponse",
+          "consumers": [
+            "kyc-service",
+            "deposit-account-service",
+            "payments-service",
+            "bill-generation-service",
+            "statement-service",
+            "eod-reconciliation-service"
+          ],
+          "calls": [
+            "cif-service:GET:/internal/v1/cifs/{cifId}/customer-contact-details"
+          ],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/notifications",
+          "visibility": "public",
+          "purpose": "List notifications for the authenticated CIF",
+          "request": null,
+          "response": "NotificationPage",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/notifications/{notificationId}",
+          "visibility": "public",
+          "purpose": "Get notification status and safe content",
+          "request": null,
+          "response": "NotificationResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "eod-reconciliation-service",
+      "name": "EOD / Reconciliation Orchestrator",
+      "port": 8091,
+      "oracleSchema": "MONEYBAGS_EOD",
+      "scope": "Coordinates the business date and ordered synchronous end-of-day controls across Payments, Deposit, Credit Card, Billing, Accounting, Statements, and Notifications.",
+      "owns": "Business date, EOD runs, step execution state, stable peer command references, orchestration exceptions, waivers, and close audit.",
+      "doesNotOwn": "Peer-service business records, journals, account status, bill content, statements, or notifications.",
+      "tables": [
+        "BUSINESS_DATE",
+        "EOD_RUN",
+        "EOD_STEP_RUN",
+        "EOD_EXCEPTION",
+        "EOD_WAIVER",
+        "PEER_COMMAND_RESULT",
+        "IDEMPOTENCY_RECORD",
+        "AUDIT_LOG"
+      ],
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/v1/business-date",
+          "visibility": "public",
+          "purpose": "Get the current business date and cutoff state",
+          "request": null,
+          "response": "BusinessDateResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/eod/runs",
+          "visibility": "admin",
+          "purpose": "Start one EOD run for a business date",
+          "request": "StartEodRunRequest",
+          "response": "EodRunResponse",
+          "consumers": [],
+          "calls": [
+            "payments-service:POST:/internal/v1/payments/eod/cutoff",
+            "payments-service:POST:/internal/v1/payments/eod/drain",
+            "credit-card-service:GET:/internal/v1/credit-card-accounts/eod/readiness",
+            "deposit-account-service:GET:/internal/v1/deposit-accounts/eod/readiness",
+            "deposit-account-service:POST:/internal/v1/deposit-accounts/eod/accruals",
+            "bill-generation-service:POST:/internal/v1/bills/eod/close",
+            "accounting-service:POST:/internal/v1/trial-balances",
+            "accounting-service:POST:/internal/v1/eod/reconciliation/runs",
+            "statement-service:POST:/internal/v1/statements/eod/generate",
+            "notification-service:POST:/internal/v1/notifications",
+            "accounting-service:POST:/internal/v1/accounting-periods/{businessDate}/close"
+          ],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/eod/runs/{runId}",
+          "visibility": "admin",
+          "purpose": "Get EOD run and step status",
+          "request": null,
+          "response": "EodRunResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": false,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/eod/runs/{runId}/resume",
+          "visibility": "admin",
+          "purpose": "Resume incomplete non-completed steps",
+          "request": "EodResumeRequest",
+          "response": "EodRunResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/eod/runs/{runId}/steps/{stepCode}/retry",
+          "visibility": "admin",
+          "purpose": "Retry one failed step",
+          "request": "EodStepRetryRequest",
+          "response": "EodRunResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/eod/exceptions/{exceptionId}/resolve",
+          "visibility": "admin",
+          "purpose": "Resolve or waive an EOD exception",
+          "request": "EodExceptionResolutionRequest",
+          "response": "EodRunResponse",
+          "consumers": [],
+          "calls": [],
+          "idempotent": true,
+          "if_match": true,
+          "notes": ""
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/business-date/open-next",
+          "visibility": "admin",
+          "purpose": "Open the next business date after successful close",
+          "request": "OpenBusinessDateRequest",
+          "response": "BusinessDateResponse",
+          "consumers": [],
+          "calls": [
+            "accounting-service:POST:/internal/v1/accounting-periods/{businessDate}/close",
+            "accounting-service:POST:/internal/v1/accounting-periods/{businessDate}/open"
+          ],
+          "idempotent": true,
+          "if_match": false,
+          "notes": ""
+        }
+      ]
+    }
+  ],
+  "schemas": {
+    "NoContent": {
+      "type": "object",
+      "properties": {}
+    },
+    "BinaryDocument": {
+      "type": "string",
+      "format": "binary"
+    },
+    "Money": {
+      "type": "object",
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "properties": {
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "ProblemDetail": {
+      "type": "object",
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "correlationId"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "format": "uri"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "code": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "correlationId": {
+          "type": "string"
+        },
+        "fieldErrors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "CreateUserRequest": {
+      "type": "object",
+      "required": [
+        "username",
+        "email"
+      ],
+      "properties": {
+        "username": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        }
+      }
+    },
+    "UpdateUserProfileRequest": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        }
+      }
+    },
+    "RoleAssignmentRequest": {
+      "type": "object",
+      "required": [
+        "roleCodes"
+      ],
+      "properties": {
+        "roleCodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "RoleRequest": {
+      "type": "object",
+      "required": [
+        "roleCode",
+        "name",
+        "permissionCodes"
+      ],
+      "properties": {
+        "roleCode": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "permissionCodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "RoleResponse": {
+      "type": "object",
+      "required": [
+        "roleCode",
+        "name",
+        "permissionCodes"
+      ],
+      "properties": {
+        "roleCode": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "permissionCodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "UserResponse": {
+      "type": "object",
+      "required": [
+        "userId",
+        "username",
+        "status",
+        "roles",
+        "version"
+      ],
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "username": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "MenuResponse": {
+      "type": "object",
+      "required": [
+        "userId",
+        "items"
+      ],
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "AuthorizationContext": {
+      "type": "object",
+      "required": [
+        "userId",
+        "roles",
+        "permissions"
+      ],
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "CreateCifRequest": {
+      "type": "object",
+      "required": [
+        "firstName",
+        "lastName",
+        "dateOfBirth",
+        "email",
+        "phone",
+        "address",
+        "employmentType",
+        "pan",
+        "aadhaar"
+      ],
+      "properties": {
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string",
+          "format": "date"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "object"
+        },
+        "employmentType": {
+          "type": "string"
+        },
+        "salary": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "pan": {
+          "type": "string"
+        },
+        "aadhaar": {
+          "type": "string"
+        }
+      }
+    },
+    "UpdateCifRequest": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "object"
+        },
+        "employmentType": {
+          "type": "string"
+        },
+        "salary": {
+          "type": "number",
+          "format": "decimal"
+        }
+      }
+    },
+    "CifResponse": {
+      "type": "object",
+      "required": [
+        "cifId",
+        "status",
+        "kycStatus",
+        "version"
+      ],
+      "properties": {
+        "cifId": {
+          "type": "string"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string",
+          "format": "date"
+        },
+        "customerType": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "kycStatus": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "KycStatusUpdateRequest": {
+      "type": "object",
+      "required": [
+        "kycId",
+        "status",
+        "decidedAt"
+      ],
+      "properties": {
+        "kycId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string"
+        },
+        "reasonCode": {
+          "type": "string"
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "DepositCreationDetails": {
+      "type": "object",
+      "required": [
+        "cifId",
+        "dateOfBirth",
+        "customerType",
+        "kycStatus",
+        "active"
+      ],
+      "properties": {
+        "cifId": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string",
+          "format": "date"
+        },
+        "customerType": {
+          "type": "string"
+        },
+        "kycStatus": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    },
+    "CreditCardApplicationDetails": {
+      "type": "object",
+      "required": [
+        "cifId",
+        "dateOfBirth",
+        "monthlyIncome",
+        "customerType",
+        "kycStatus",
+        "active"
+      ],
+      "properties": {
+        "cifId": {
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "type": "string",
+          "format": "date"
+        },
+        "monthlyIncome": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "customerType": {
+          "type": "string"
+        },
+        "kycStatus": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    },
+    "CustomerContactDetails": {
+      "type": "object",
+      "required": [
+        "cifId",
+        "email",
+        "phone",
+        "preferredChannel"
+      ],
+      "properties": {
+        "cifId": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "preferredChannel": {
+          "type": "string"
+        }
+      }
+    },
+    "OwnershipResponse": {
+      "type": "object",
+      "required": [
+        "cifId",
+        "accountId",
+        "owned"
+      ],
+      "properties": {
+        "cifId": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "owned": {
+          "type": "boolean"
+        },
+        "role": {
+          "type": "string"
+        }
+      }
+    },
+    "KycInitiationRequest": {
+      "type": "object",
+      "required": [
+        "cifId",
+        "initiatedBy"
+      ],
+      "properties": {
+        "cifId": {
+          "type": "string"
+        },
+        "initiatedBy": {
+          "type": "string"
+        }
+      }
+    },
+    "KycCaseResponse": {
+      "type": "object",
+      "required": [
+        "kycId",
+        "cifId",
+        "status",
+        "version"
+      ],
+      "properties": {
+        "kycId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "cifId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "customerSnapshot": {
+          "type": "object"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "decision": {
+          "type": "object"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "KycDocumentUploadRequest": {
+      "type": "object",
+      "required": [
+        "documentType",
+        "fileName",
+        "content"
+      ],
+      "properties": {
+        "documentType": {
+          "type": "string"
+        },
+        "fileName": {
+          "type": "string"
+        },
+        "content": {
+          "$ref": "#/components/schemas/BinaryDocument"
+        }
+      }
+    },
+    "KycDocumentResponse": {
+      "type": "object",
+      "required": [
+        "documentId",
+        "kycId",
+        "documentType",
+        "verificationStatus"
+      ],
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kycId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "documentType": {
+          "type": "string"
+        },
+        "fileName": {
+          "type": "string"
+        },
+        "verificationStatus": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "DocumentVerificationRequest": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "remarks": {
+          "type": "string"
+        }
+      }
+    },
+    "KycDecisionRequest": {
+      "type": "object",
+      "required": [
+        "decision"
+      ],
+      "properties": {
+        "decision": {
+          "type": "string"
+        },
+        "reasonCode": {
+          "type": "string"
+        },
+        "remarks": {
+          "type": "string"
+        }
+      }
+    },
+    "ProductRequest": {
+      "type": "object",
+      "required": [
+        "productCode",
+        "productName",
+        "category",
+        "currencyCode",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "productCode": {
+          "type": "string"
+        },
+        "productName": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "currencyCode": {
+          "type": "string"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date"
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "eligibilityRules": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "fees": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "ProductResponse": {
+      "type": "object",
+      "required": [
+        "productCode",
+        "productName",
+        "category",
+        "currencyCode",
+        "status",
+        "version"
+      ],
+      "properties": {
+        "productCode": {
+          "type": "string"
+        },
+        "productName": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "currencyCode": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date"
+        },
+        "effectiveTo": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "StatusChangeRequest": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "AccountOpeningValidationRequest": {
+      "type": "object",
+      "required": [
+        "openingAmount",
+        "currency",
+        "age",
+        "customerType",
+        "kycVerified",
+        "productVersion"
+      ],
+      "properties": {
+        "openingAmount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "age": {
+          "type": "integer"
+        },
+        "customerType": {
+          "type": "string"
+        },
+        "kycVerified": {
+          "type": "boolean"
+        },
+        "productVersion": {
+          "type": "integer"
+        }
+      }
+    },
+    "CreditCardValidationRequest": {
+      "type": "object",
+      "required": [
+        "requestedCreditLimit",
+        "age",
+        "monthlyIncome",
+        "customerType",
+        "kycVerified"
+      ],
+      "properties": {
+        "requestedCreditLimit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "age": {
+          "type": "integer"
+        },
+        "monthlyIncome": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "customerType": {
+          "type": "string"
+        },
+        "kycVerified": {
+          "type": "boolean"
+        }
+      }
+    },
+    "EligibilityDecision": {
+      "type": "object",
+      "required": [
+        "eligible",
+        "validationMessages"
+      ],
+      "properties": {
+        "eligible": {
+          "type": "boolean"
+        },
+        "validationMessages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "applicableFees": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "appliedRuleVersion": {
+          "type": "integer"
+        }
+      }
+    },
+    "ProductPricingResponse": {
+      "type": "object",
+      "required": [
+        "productCode",
+        "version",
+        "currency",
+        "fees",
+        "interestPolicy"
+      ],
+      "properties": {
+        "productCode": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "fees": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "interestPolicy": {
+          "type": "object"
+        }
+      }
+    },
+    "InterestPolicyRequest": {
+      "type": "object",
+      "required": [
+        "policyVersion",
+        "pricingMode",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "policyVersion": {
+          "type": "string"
+        },
+        "pricingMode": {
+          "type": "string"
+        },
+        "annualInterestRate": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "benchmarkCode": {
+          "type": "string"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "InterestPolicyResponse": {
+      "type": "object",
+      "required": [
+        "productCode",
+        "policyVersion",
+        "pricingMode",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "productCode": {
+          "type": "string"
+        },
+        "policyVersion": {
+          "type": "string"
+        },
+        "pricingMode": {
+          "type": "string"
+        },
+        "annualInterestRate": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "benchmarkCode": {
+          "type": "string"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date"
+        },
+        "effectiveTo": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "BenchmarkRequest": {
+      "type": "object",
+      "required": [
+        "benchmarkCode",
+        "annualRate",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "benchmarkCode": {
+          "type": "string"
+        },
+        "annualRate": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date"
+        },
+        "createdBy": {
+          "type": "string"
+        }
+      }
+    },
+    "BenchmarkResponse": {
+      "type": "object",
+      "required": [
+        "benchmarkCode",
+        "annualRate",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "benchmarkCode": {
+          "type": "string"
+        },
+        "annualRate": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date"
+        },
+        "effectiveTo": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "OpenDepositAccountRequest": {
+      "type": "object",
+      "required": [
+        "customerIds",
+        "primaryCustomerId",
+        "productCode",
+        "productVersion",
+        "currency",
+        "openingAmount",
+        "servicingBranchId",
+        "operatingInstruction",
+        "channel"
+      ],
+      "properties": {
+        "customerIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "primaryCustomerId": {
+          "type": "string"
+        },
+        "productCode": {
+          "type": "string"
+        },
+        "productVersion": {
+          "type": "integer"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "openingAmount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "servicingBranchId": {
+          "type": "string"
+        },
+        "operatingInstruction": {
+          "type": "string"
+        },
+        "nominees": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "channel": {
+          "type": "string"
+        },
+        "externalReference": {
+          "type": "string"
+        }
+      }
+    },
+    "DepositEligibilityRequest": {
+      "type": "object",
+      "required": [
+        "cifId",
+        "productCode",
+        "productVersion",
+        "currency",
+        "openingAmount"
+      ],
+      "properties": {
+        "cifId": {
+          "type": "string"
+        },
+        "productCode": {
+          "type": "string"
+        },
+        "productVersion": {
+          "type": "integer"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "openingAmount": {
+          "type": "number",
+          "format": "decimal"
+        }
+      }
+    },
+    "DepositAccountResponse": {
+      "type": "object",
+      "required": [
+        "accountId",
+        "maskedAccountNumber",
+        "status",
+        "productCode",
+        "productVersion",
+        "currency",
+        "holders",
+        "version"
+      ],
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "maskedAccountNumber": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "productCode": {
+          "type": "string"
+        },
+        "productVersion": {
+          "type": "integer"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "holders": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "balance": {
+          "$ref": "#/components/schemas/DepositBalanceResponse"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "DepositBalanceResponse": {
+      "type": "object",
+      "required": [
+        "accountId",
+        "ledgerBalance",
+        "availableBalance",
+        "blockedAmount",
+        "asOf"
+      ],
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "ledgerBalance": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "availableBalance": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "blockedAmount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "HolderRequest": {
+      "type": "object",
+      "required": [
+        "cifId",
+        "role"
+      ],
+      "properties": {
+        "cifId": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "authorizationType": {
+          "type": "string"
+        },
+        "ownershipPercentage": {
+          "type": "number",
+          "format": "decimal"
+        }
+      }
+    },
+    "NomineeListRequest": {
+      "type": "object",
+      "required": [
+        "nominees"
+      ],
+      "properties": {
+        "nominees": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "AccountLimitRequest": {
+      "type": "object",
+      "required": [
+        "amount",
+        "currency",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "effectiveTo": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "AccountLimitResponse": {
+      "type": "object",
+      "required": [
+        "limitType",
+        "amount",
+        "currency",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "limitType": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "effectiveTo": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "MandateRequest": {
+      "type": "object",
+      "required": [
+        "authorizedCifId",
+        "mandateType",
+        "validFrom"
+      ],
+      "properties": {
+        "authorizedCifId": {
+          "type": "string"
+        },
+        "mandateType": {
+          "type": "string"
+        },
+        "validFrom": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "validTo": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "MandateResponse": {
+      "type": "object",
+      "required": [
+        "mandateId",
+        "authorizedCifId",
+        "mandateType",
+        "status"
+      ],
+      "properties": {
+        "mandateId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "authorizedCifId": {
+          "type": "string"
+        },
+        "mandateType": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      }
+    },
+    "AccountStatusCommand": {
+      "type": "object",
+      "required": [
+        "reasonCode"
+      ],
+      "properties": {
+        "reasonCode": {
+          "type": "string"
+        },
+        "reasonText": {
+          "type": "string"
+        },
+        "effectiveAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "DepositAccountEligibility": {
+      "type": "object",
+      "required": [
+        "accountId",
+        "status",
+        "currency",
+        "debitAllowed",
+        "creditAllowed",
+        "availableBalance",
+        "limits"
+      ],
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "debitAllowed": {
+          "type": "boolean"
+        },
+        "creditAllowed": {
+          "type": "boolean"
+        },
+        "availableBalance": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "limits": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "owners": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "FundReservationRequest": {
+      "type": "object",
+      "required": [
+        "paymentId",
+        "amount",
+        "currency",
+        "expiresAt"
+      ],
+      "properties": {
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "FundReservationResponse": {
+      "type": "object",
+      "required": [
+        "reservationId",
+        "accountId",
+        "paymentId",
+        "status",
+        "amount",
+        "currency"
+      ],
+      "properties": {
+        "reservationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "ReservationActionRequest": {
+      "type": "object",
+      "required": [
+        "paymentId",
+        "occurredAt"
+      ],
+      "properties": {
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "journalNumber": {
+          "type": "string"
+        }
+      }
+    },
+    "DepositTransferRequest": {
+      "type": "object",
+      "required": [
+        "paymentId",
+        "sourceAccountId",
+        "destinationAccountId",
+        "reservationId",
+        "amount",
+        "currency",
+        "journalNumber"
+      ],
+      "properties": {
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sourceAccountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "destinationAccountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reservationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "journalNumber": {
+          "type": "string"
+        }
+      }
+    },
+    "DepositTransferResponse": {
+      "type": "object",
+      "required": [
+        "paymentId",
+        "status",
+        "sourceBalanceAsOf",
+        "destinationBalanceAsOf"
+      ],
+      "properties": {
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string"
+        },
+        "sourceBalanceAsOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "destinationBalanceAsOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "DepositAccrualRequest": {
+      "type": "object",
+      "required": [
+        "eodRunId",
+        "businessDate",
+        "currency"
+      ],
+      "properties": {
+        "eodRunId": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "currency": {
+          "type": "string"
+        }
+      }
+    },
+    "DepositAccrualResponse": {
+      "type": "object",
+      "required": [
+        "processedCount",
+        "failedCount",
+        "totalAmount"
+      ],
+      "properties": {
+        "processedCount": {
+          "type": "integer"
+        },
+        "failedCount": {
+          "type": "integer"
+        },
+        "totalAmount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "ServiceReadinessResponse": {
+      "type": "object",
+      "required": [
+        "service",
+        "businessDate",
+        "ready",
+        "blockers"
+      ],
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "CreditCardApplicationRequest": {
+      "type": "object",
+      "required": [
+        "cifId",
+        "productCode",
+        "requestedCreditLimit"
+      ],
+      "properties": {
+        "cifId": {
+          "type": "string"
+        },
+        "productCode": {
+          "type": "string"
+        },
+        "requestedCreditLimit": {
+          "type": "number",
+          "format": "decimal"
+        }
+      }
+    },
+    "CreditCardApplicationResponse": {
+      "type": "object",
+      "required": [
+        "applicationId",
+        "cifId",
+        "productCode",
+        "status",
+        "version"
+      ],
+      "properties": {
+        "applicationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "cifId": {
+          "type": "string"
+        },
+        "productCode": {
+          "type": "string"
+        },
+        "requestedCreditLimit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "approvedCreditLimit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "status": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "CreditCardDecisionRequest": {
+      "type": "object",
+      "required": [
+        "reasonCode"
+      ],
+      "properties": {
+        "approvedCreditLimit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "reasonCode": {
+          "type": "string"
+        },
+        "remarks": {
+          "type": "string"
+        }
+      }
+    },
+    "OpenCreditCardAccountRequest": {
+      "type": "object",
+      "required": [
+        "applicationId"
+      ],
+      "properties": {
+        "applicationId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "CreditCardAccountResponse": {
+      "type": "object",
+      "required": [
+        "accountId",
+        "cifId",
+        "productCode",
+        "status",
+        "sanctionedLimit",
+        "availableLimit",
+        "outstandingAmount",
+        "version"
+      ],
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "cifId": {
+          "type": "string"
+        },
+        "productCode": {
+          "type": "string"
+        },
+        "maskedCardNumber": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "sanctionedLimit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "availableLimit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "outstandingAmount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "AvailableLimitResponse": {
+      "type": "object",
+      "required": [
+        "accountId",
+        "availableLimit",
+        "currency",
+        "asOf"
+      ],
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "availableLimit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "CardPurchasePostingRequest": {
+      "type": "object",
+      "required": [
+        "paymentId",
+        "amount",
+        "currency",
+        "journalNumber",
+        "occurredAt"
+      ],
+      "properties": {
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "journalNumber": {
+          "type": "string"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "CardPaymentPostingRequest": {
+      "type": "object",
+      "required": [
+        "paymentId",
+        "amount",
+        "currency",
+        "journalNumber",
+        "occurredAt"
+      ],
+      "properties": {
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "journalNumber": {
+          "type": "string"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "InterestRateResponse": {
+      "type": "object",
+      "required": [
+        "accountId",
+        "annualInterestRate",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "annualInterestRate": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date"
+        },
+        "effectiveTo": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "CreatePaymentRequest": {
+      "type": "object",
+      "required": [
+        "paymentType",
+        "source",
+        "destination",
+        "amount",
+        "currency",
+        "reference"
+      ],
+      "properties": {
+        "paymentType": {
+          "type": "string"
+        },
+        "source": {
+          "type": "object"
+        },
+        "destination": {
+          "type": "object"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        }
+      }
+    },
+    "PaymentResponse": {
+      "type": "object",
+      "required": [
+        "paymentId",
+        "paymentType",
+        "status",
+        "amount",
+        "currency",
+        "version"
+      ],
+      "properties": {
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "paymentType": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "source": {
+          "type": "object"
+        },
+        "destination": {
+          "type": "object"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "journalNumber": {
+          "type": "string"
+        },
+        "failure": {
+          "type": "object"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "PaymentCancelRequest": {
+      "type": "object",
+      "required": [
+        "reasonCode"
+      ],
+      "properties": {
+        "reasonCode": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "EodPaymentCommand": {
+      "type": "object",
+      "required": [
+        "eodRunId",
+        "businessDate",
+        "commandReference"
+      ],
+      "properties": {
+        "eodRunId": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "commandReference": {
+          "type": "string"
+        }
+      }
+    },
+    "EodPaymentResult": {
+      "type": "object",
+      "required": [
+        "pendingCount",
+        "failedCount",
+        "blockingPaymentReferences"
+      ],
+      "properties": {
+        "pendingCount": {
+          "type": "integer"
+        },
+        "failedCount": {
+          "type": "integer"
+        },
+        "blockingPaymentReferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "PaymentReversalRequest": {
+      "type": "object",
+      "required": [
+        "journalNumber",
+        "reasonCode",
+        "occurredAt"
+      ],
+      "properties": {
+        "journalNumber": {
+          "type": "string"
+        },
+        "reasonCode": {
+          "type": "string"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "PaymentSettlementPostingRequest": {
+      "type": "object",
+      "required": [
+        "paymentId",
+        "paymentType",
+        "source",
+        "destination",
+        "amount",
+        "currency",
+        "occurredAt",
+        "businessDate"
+      ],
+      "properties": {
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "paymentType": {
+          "type": "string"
+        },
+        "source": {
+          "type": "object"
+        },
+        "destination": {
+          "type": "object"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "PaymentRefundPostingRequest": {
+      "type": "object",
+      "required": [
+        "refundId",
+        "paymentId",
+        "amount",
+        "currency",
+        "occurredAt",
+        "businessDate"
+      ],
+      "properties": {
+        "refundId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "paymentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "amount": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "JournalResponse": {
+      "type": "object",
+      "required": [
+        "journalNumber",
+        "externalReference",
+        "status",
+        "businessDate",
+        "currency",
+        "totalDebit",
+        "totalCredit",
+        "lines"
+      ],
+      "properties": {
+        "journalNumber": {
+          "type": "string"
+        },
+        "externalReference": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "totalDebit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "totalCredit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "reversesJournalNumber": {
+          "type": "string"
+        }
+      }
+    },
+    "PostingOutcomeResponse": {
+      "type": "object",
+      "required": [
+        "externalReference",
+        "outcome"
+      ],
+      "properties": {
+        "externalReference": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "journalNumber": {
+          "type": "string"
+        },
+        "receivedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "AccountBalanceResponse": {
+      "type": "object",
+      "required": [
+        "accountReference",
+        "ledgerBalance",
+        "currency",
+        "asOf"
+      ],
+      "properties": {
+        "accountReference": {
+          "type": "string"
+        },
+        "ledgerBalance": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "BillAccountingPostingRequest": {
+      "type": "object",
+      "required": [
+        "billId",
+        "accountId",
+        "businessDate",
+        "currency",
+        "components"
+      ],
+      "properties": {
+        "billId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "JournalReversalRequest": {
+      "type": "object",
+      "required": [
+        "businessDate",
+        "occurredAt",
+        "reason"
+      ],
+      "properties": {
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "GlAccountRequest": {
+      "type": "object",
+      "required": [
+        "glCode",
+        "name",
+        "accountType",
+        "normalBalance",
+        "currency"
+      ],
+      "properties": {
+        "glCode": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "accountType": {
+          "type": "string"
+        },
+        "normalBalance": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "parentGlCode": {
+          "type": "string"
+        }
+      }
+    },
+    "GlAccountResponse": {
+      "type": "object",
+      "required": [
+        "glCode",
+        "name",
+        "accountType",
+        "normalBalance",
+        "currency",
+        "status",
+        "version"
+      ],
+      "properties": {
+        "glCode": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "accountType": {
+          "type": "string"
+        },
+        "normalBalance": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "AccountingRuleRequest": {
+      "type": "object",
+      "required": [
+        "ruleCode",
+        "eventType",
+        "componentType",
+        "currency",
+        "version",
+        "debitMappingCode",
+        "creditMappingCode",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "ruleCode": {
+          "type": "string"
+        },
+        "eventType": {
+          "type": "string"
+        },
+        "componentType": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "debitMappingCode": {
+          "type": "string"
+        },
+        "creditMappingCode": {
+          "type": "string"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date"
+        },
+        "effectiveTo": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "AccountingRuleResponse": {
+      "type": "object",
+      "required": [
+        "ruleCode",
+        "eventType",
+        "version",
+        "status"
+      ],
+      "properties": {
+        "ruleCode": {
+          "type": "string"
+        },
+        "eventType": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date"
+        },
+        "effectiveTo": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "SubledgerMappingRequest": {
+      "type": "object",
+      "required": [
+        "mappingCode",
+        "glCode",
+        "currency",
+        "effectiveFrom"
+      ],
+      "properties": {
+        "mappingCode": {
+          "type": "string"
+        },
+        "productCode": {
+          "type": "string"
+        },
+        "glCode": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date"
+        },
+        "effectiveTo": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "SubledgerMappingResponse": {
+      "type": "object",
+      "required": [
+        "mappingCode",
+        "glCode",
+        "currency",
+        "status"
+      ],
+      "properties": {
+        "mappingCode": {
+          "type": "string"
+        },
+        "productCode": {
+          "type": "string"
+        },
+        "glCode": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      }
+    },
+    "TrialBalanceRequest": {
+      "type": "object",
+      "required": [
+        "businessDate",
+        "currency",
+        "generatedBy"
+      ],
+      "properties": {
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "generatedBy": {
+          "type": "string"
+        }
+      }
+    },
+    "TrialBalanceResponse": {
+      "type": "object",
+      "required": [
+        "runId",
+        "businessDate",
+        "currency",
+        "totalDebit",
+        "totalCredit",
+        "balanced",
+        "lines"
+      ],
+      "properties": {
+        "runId": {
+          "type": "integer"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "totalDebit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "totalCredit": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "balanced": {
+          "type": "boolean"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "FinancialReconciliationRequest": {
+      "type": "object",
+      "required": [
+        "eodRunId",
+        "businessDate",
+        "currency",
+        "expectedJournalCount",
+        "expectedTotalDebit"
+      ],
+      "properties": {
+        "eodRunId": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "expectedJournalCount": {
+          "type": "integer"
+        },
+        "expectedTotalDebit": {
+          "type": "number",
+          "format": "decimal"
+        }
+      }
+    },
+    "FinancialReconciliationResponse": {
+      "type": "object",
+      "required": [
+        "runId",
+        "businessDate",
+        "status",
+        "differenceCount",
+        "items"
+      ],
+      "properties": {
+        "runId": {
+          "type": "integer"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "status": {
+          "type": "string"
+        },
+        "differenceCount": {
+          "type": "integer"
+        },
+        "totalDifference": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "ReconciliationResolutionRequest": {
+      "type": "object",
+      "required": [
+        "resolution",
+        "accepted"
+      ],
+      "properties": {
+        "resolution": {
+          "type": "string"
+        },
+        "accepted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "AccountingPeriodCommand": {
+      "type": "object",
+      "required": [
+        "eodRunId",
+        "actorId"
+      ],
+      "properties": {
+        "eodRunId": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string"
+        }
+      }
+    },
+    "AccountingPeriodResponse": {
+      "type": "object",
+      "required": [
+        "businessDate",
+        "status"
+      ],
+      "properties": {
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "status": {
+          "type": "string"
+        },
+        "openedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "openedBy": {
+          "type": "string"
+        },
+        "closedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "closedBy": {
+          "type": "string"
+        }
+      }
+    },
+    "BillGenerationRequest": {
+      "type": "object",
+      "required": [
+        "accountId",
+        "billingPeriod",
+        "businessDate"
+      ],
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "billingPeriod": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "BillResponse": {
+      "type": "object",
+      "required": [
+        "billId",
+        "accountId",
+        "billingPeriod",
+        "status",
+        "totalAmountDue",
+        "minimumAmountDue",
+        "paymentDueDate",
+        "lines"
+      ],
+      "properties": {
+        "billId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "billingPeriod": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "previousBalance": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "totalAmountDue": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "minimumAmountDue": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "paymentDueDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "BillSummaryResponse": {
+      "type": "object",
+      "required": [
+        "billId",
+        "accountId",
+        "billingPeriod",
+        "totalAmountDue",
+        "minimumAmountDue",
+        "paymentDueDate"
+      ],
+      "properties": {
+        "billId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "accountId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "billingPeriod": {
+          "type": "string"
+        },
+        "totalAmountDue": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "minimumAmountDue": {
+          "type": "number",
+          "format": "decimal"
+        },
+        "paymentDueDate": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "BillCloseRequest": {
+      "type": "object",
+      "required": [
+        "eodRunId",
+        "businessDate",
+        "commandReference"
+      ],
+      "properties": {
+        "eodRunId": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "commandReference": {
+          "type": "string"
+        }
+      }
+    },
+    "BillCloseResponse": {
+      "type": "object",
+      "required": [
+        "billsProcessed",
+        "failedCount",
+        "pendingBillReferences"
+      ],
+      "properties": {
+        "billsProcessed": {
+          "type": "integer"
+        },
+        "failedCount": {
+          "type": "integer"
+        },
+        "pendingBillReferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "StatementRequest": {
+      "type": "object",
+      "required": [
+        "cifId",
+        "accountId",
+        "accountType",
+        "fromDate",
+        "toDate",
+        "format"
+      ],
+      "properties": {
+        "cifId": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "accountType": {
+          "type": "string"
+        },
+        "fromDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "toDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "format": {
+          "type": "string"
+        }
+      }
+    },
+    "StatementResponse": {
+      "type": "object",
+      "required": [
+        "statementId",
+        "cifId",
+        "accountId",
+        "status",
+        "requestedAt"
+      ],
+      "properties": {
+        "statementId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "cifId": {
+          "type": "string"
+        },
+        "accountId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "downloadUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "EodStatementRequest": {
+      "type": "object",
+      "required": [
+        "eodRunId",
+        "businessDate",
+        "commandReference"
+      ],
+      "properties": {
+        "eodRunId": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "commandReference": {
+          "type": "string"
+        }
+      }
+    },
+    "EodStatementResponse": {
+      "type": "object",
+      "required": [
+        "statementsGenerated",
+        "failedCount"
+      ],
+      "properties": {
+        "statementsGenerated": {
+          "type": "integer"
+        },
+        "failedCount": {
+          "type": "integer"
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "NotificationRequest": {
+      "type": "object",
+      "required": [
+        "notificationType",
+        "cifId",
+        "referenceType",
+        "referenceId",
+        "templateCode",
+        "templateData"
+      ],
+      "properties": {
+        "notificationType": {
+          "type": "string"
+        },
+        "cifId": {
+          "type": "string"
+        },
+        "referenceType": {
+          "type": "string"
+        },
+        "referenceId": {
+          "type": "string"
+        },
+        "templateCode": {
+          "type": "string"
+        },
+        "templateData": {
+          "type": "object"
+        },
+        "requestedChannels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "NotificationResponse": {
+      "type": "object",
+      "required": [
+        "notificationId",
+        "status",
+        "deliveryAttempts"
+      ],
+      "properties": {
+        "notificationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string"
+        },
+        "deliveryAttempts": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "BusinessDateResponse": {
+      "type": "object",
+      "required": [
+        "businessDate",
+        "status",
+        "cutoffAt"
+      ],
+      "properties": {
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "status": {
+          "type": "string"
+        },
+        "cutoffAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "StartEodRunRequest": {
+      "type": "object",
+      "required": [
+        "businessDate",
+        "startedBy"
+      ],
+      "properties": {
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "startedBy": {
+          "type": "string"
+        }
+      }
+    },
+    "EodRunResponse": {
+      "type": "object",
+      "required": [
+        "runId",
+        "businessDate",
+        "status",
+        "steps",
+        "exceptions",
+        "version"
+      ],
+      "properties": {
+        "runId": {
+          "type": "string"
+        },
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "status": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "EodResumeRequest": {
+      "type": "object",
+      "required": [
+        "requestedBy",
+        "reason"
+      ],
+      "properties": {
+        "requestedBy": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "EodStepRetryRequest": {
+      "type": "object",
+      "required": [
+        "requestedBy",
+        "reason"
+      ],
+      "properties": {
+        "requestedBy": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "EodExceptionResolutionRequest": {
+      "type": "object",
+      "required": [
+        "resolution",
+        "resolvedBy"
+      ],
+      "properties": {
+        "resolution": {
+          "type": "string"
+        },
+        "resolvedBy": {
+          "type": "string"
+        },
+        "waived": {
+          "type": "boolean"
+        }
+      }
+    },
+    "OpenBusinessDateRequest": {
+      "type": "object",
+      "required": [
+        "businessDate",
+        "openedBy"
+      ],
+      "properties": {
+        "businessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "openedBy": {
+          "type": "string"
+        }
+      }
+    },
+    "UserPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "RolePage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "CifPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "KycCasePage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "KycDocumentPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "ProductPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "EligibilityRulePage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "InterestPolicyPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "BenchmarkPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "DepositAccountPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "AccountStatusHistoryPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "NomineePage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "CreditCardApplicationPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "CreditCardAccountPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "PaymentPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "JournalPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "LedgerEntryPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "GlAccountPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "AccountingRulePage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "SubledgerMappingPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "BillPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    },
+    "NotificationPage": {
+      "type": "object",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "page": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "totalElements": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "databaseTableBlueprints": {
+    "ACCOUNTING_PERIOD": {
+      "purpose": "Accounting business-date state",
+      "columns": "PERIOD_ID VARCHAR2(36) PK; BUSINESS_DATE DATE; STATUS VARCHAR2(20); OPENED_AT/CLOSED_AT TIMESTAMP TZ; OPENED_BY/CLOSED_BY VARCHAR2(100); VERSION_NO NUMBER",
+      "keysAndRelationships": "UQ(BUSINESS_DATE)"
+    },
+    "ACCOUNTING_RULE": {
+      "purpose": "Effective-dated double-entry rule",
+      "columns": "RULE_ID VARCHAR2(36) PK; RULE_CODE VARCHAR2(60); EVENT_TYPE VARCHAR2(60); COMPONENT_TYPE VARCHAR2(40); PRODUCT_CODE VARCHAR2(40); CURRENCY_CODE CHAR(3); VERSION_NO NUMBER; DEBIT_MAPPING_CODE/CREDIT_MAPPING_CODE VARCHAR2(60); EFFECTIVE_FROM/EFFECTIVE_TO DATE; STATUS VARCHAR2(20)",
+      "keysAndRelationships": "UQ(RULE_CODE,VERSION_NO)"
+    },
+    "ACCOUNT_BALANCE": {
+      "purpose": "Operational balance projection",
+      "columns": "ACCOUNT_ID VARCHAR2(36) PK/FK; CURRENCY_CODE CHAR(3); LEDGER_BALANCE/AVAILABLE_BALANCE/BLOCKED_AMOUNT NUMBER(19,4); PROJECTION_VERSION NUMBER; AS_OF TIMESTAMP TZ; SOURCE_REFERENCE VARCHAR2(100)",
+      "keysAndRelationships": "FK ACCOUNT_ID -> DEPOSIT_ACCOUNT; UQ(SOURCE_REFERENCE)"
+    },
+    "ACCOUNT_HOLDER": {
+      "purpose": "Deposit account holder",
+      "columns": "HOLDER_ID VARCHAR2(36) PK; ACCOUNT_ID VARCHAR2(36) FK; CIF_ID VARCHAR2(36); HOLDER_ROLE VARCHAR2(16); AUTHORIZATION_TYPE VARCHAR2(30); OWNERSHIP_PCT NUMBER(5,2); STATUS VARCHAR2(16)",
+      "keysAndRelationships": "FK ACCOUNT_ID -> DEPOSIT_ACCOUNT; UQ(ACCOUNT_ID,CIF_ID)"
+    },
+    "ACCOUNT_LIMIT": {
+      "purpose": "Effective account-level limit",
+      "columns": "LIMIT_ID VARCHAR2(36) PK; ACCOUNT_ID VARCHAR2(36) FK; LIMIT_TYPE VARCHAR2(40); AMOUNT NUMBER(19,4); CURRENCY_CODE CHAR(3); EFFECTIVE_FROM/EFFECTIVE_TO TIMESTAMP TZ; VERSION_NO NUMBER",
+      "keysAndRelationships": "FK ACCOUNT_ID -> DEPOSIT_ACCOUNT; IX(account,type,effective from)"
+    },
+    "ACCOUNT_MANDATE": {
+      "purpose": "Account mandate",
+      "columns": "MANDATE_ID VARCHAR2(36) PK; ACCOUNT_ID VARCHAR2(36) FK; AUTHORIZED_CIF_ID VARCHAR2(36); MANDATE_TYPE VARCHAR2(30); STATUS VARCHAR2(16); VALID_FROM/VALID_TO TIMESTAMP TZ",
+      "keysAndRelationships": "FK ACCOUNT_ID -> DEPOSIT_ACCOUNT"
+    },
+    "ACCOUNT_NOMINEE": {
+      "purpose": "Nominee instruction",
+      "columns": "NOMINEE_ID VARCHAR2(36) PK; ACCOUNT_ID VARCHAR2(36) FK; CIF_REFERENCE VARCHAR2(36); NAME_CIPHER CLOB; RELATIONSHIP_CODE VARCHAR2(30); ALLOCATION_PCT NUMBER(5,2); STATUS VARCHAR2(16)",
+      "keysAndRelationships": "FK ACCOUNT_ID -> DEPOSIT_ACCOUNT"
+    },
+    "ACCOUNT_STATUS_HISTORY": {
+      "purpose": "Immutable account lifecycle history",
+      "columns": "HISTORY_ID VARCHAR2(36) PK; ACCOUNT_ID VARCHAR2(36) FK; FROM_STATUS/TO_STATUS VARCHAR2(24); REASON_CODE VARCHAR2(40); CHANGED_BY VARCHAR2(100); CORRELATION_ID VARCHAR2(64); CHANGED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK ACCOUNT_ID -> DEPOSIT_ACCOUNT"
+    },
+    "APP_USER": {
+      "purpose": "Application login identity",
+      "columns": "USER_ID VARCHAR2(36) PK; USERNAME VARCHAR2(100); EMAIL VARCHAR2(254); STATUS VARCHAR2(20); VERSION_NO NUMBER; CREATED_AT/UPDATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ(USERNAME), UQ(EMAIL)"
+    },
+    "AUDIT_LOG": {
+      "purpose": "Immutable service-local audit evidence",
+      "columns": "AUDIT_ID VARCHAR2(36) PK; AGGREGATE_ID VARCHAR2(100); ACTION VARCHAR2(80); OUTCOME VARCHAR2(20); ACTOR_ID/ACTOR_TYPE VARCHAR2; BEFORE_HASH/AFTER_HASH VARCHAR2(64); CORRELATION_ID VARCHAR2(64); OCCURRED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "IX(AGGREGATE_ID,OCCURRED_AT)"
+    },
+    "BENCHMARK_RATE": {
+      "purpose": "Effective benchmark rate",
+      "columns": "BENCHMARK_ID VARCHAR2(36) PK; BENCHMARK_CODE VARCHAR2(40); ANNUAL_RATE NUMBER(9,6); EFFECTIVE_FROM/EFFECTIVE_TO DATE; CREATED_BY VARCHAR2(100)",
+      "keysAndRelationships": "UQ(BENCHMARK_CODE,EFFECTIVE_FROM)"
+    },
+    "BILL": {
+      "purpose": "Immutable generated bill header",
+      "columns": "BILL_ID VARCHAR2(36) PK; ACCOUNT_ID VARCHAR2(36); PRODUCT_CODE VARCHAR2(40); BILLING_PERIOD VARCHAR2(20); BUSINESS_DATE DATE; STATUS VARCHAR2(20); PREVIOUS_BALANCE/TOTAL_DUE/MINIMUM_DUE NUMBER(19,4); PAYMENT_DUE_DATE DATE; VERSION_NO NUMBER; GENERATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ(ACCOUNT_ID,BILLING_PERIOD); account is opaque"
+    },
+    "BILLING_CYCLE": {
+      "purpose": "Credit-card billing-cycle configuration",
+      "columns": "CYCLE_ID VARCHAR2(36) PK; CYCLE_CODE VARCHAR2(30); CUT_OFF_DAY NUMBER; DUE_DAYS NUMBER; STATUS VARCHAR2(20)",
+      "keysAndRelationships": "UQ(CYCLE_CODE)"
+    },
+    "BILL_CALCULATION_SNAPSHOT": {
+      "purpose": "Rules and rates frozen into a bill",
+      "columns": "SNAPSHOT_ID VARCHAR2(36) PK; BILL_ID VARCHAR2(36) FK; PRODUCT_VERSION NUMBER; INTEREST_POLICY_VERSION VARCHAR2(30); RATE_SNAPSHOT NUMBER(9,6); FEE_RULES_JSON CLOB IS JSON; CALCULATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK BILL_ID -> BILL; UQ(BILL_ID)"
+    },
+    "BILL_LINE": {
+      "purpose": "Bill transaction/calculation line",
+      "columns": "LINE_ID VARCHAR2(36) PK; BILL_ID VARCHAR2(36) FK; LINE_TYPE VARCHAR2(30); SOURCE_REFERENCE VARCHAR2(160); DESCRIPTION VARCHAR2(500); AMOUNT NUMBER(19,4); OCCURRED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK BILL_ID -> BILL; UQ(BILL_ID,SOURCE_REFERENCE,LINE_TYPE)"
+    },
+    "BILL_STATUS_HISTORY": {
+      "purpose": "Immutable bill status changes",
+      "columns": "HISTORY_ID VARCHAR2(36) PK; BILL_ID VARCHAR2(36) FK; FROM_STATUS/TO_STATUS VARCHAR2(20); REASON_CODE VARCHAR2(40); CHANGED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK BILL_ID -> BILL"
+    },
+    "BUSINESS_DATE": {
+      "purpose": "Current business-date control",
+      "columns": "BUSINESS_DATE DATE PK; STATUS VARCHAR2(20); CUT_OFF_AT TIMESTAMP TZ; OPENED_AT/CLOSED_AT TIMESTAMP TZ; VERSION_NO NUMBER",
+      "keysAndRelationships": "Only one OPEN date"
+    },
+    "CARD_ACCOUNT_POSTING": {
+      "purpose": "Idempotent card projection posting",
+      "columns": "POSTING_ID VARCHAR2(36) PK; ACCOUNT_ID VARCHAR2(36) FK; PAYMENT_ID VARCHAR2(36); POSTING_TYPE VARCHAR2(30); AMOUNT NUMBER(19,4); JOURNAL_NUMBER VARCHAR2(60); OCCURRED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK ACCOUNT_ID -> CREDIT_CARD_ACCOUNT; UQ(PAYMENT_ID,POSTING_TYPE)"
+    },
+    "CARD_STATUS_HISTORY": {
+      "purpose": "Immutable card-account status history",
+      "columns": "HISTORY_ID VARCHAR2(36) PK; ACCOUNT_ID VARCHAR2(36) FK; FROM_STATUS/TO_STATUS VARCHAR2(20); REASON_CODE VARCHAR2(40); CHANGED_AT TIMESTAMP TZ; CORRELATION_ID VARCHAR2(64)",
+      "keysAndRelationships": "FK ACCOUNT_ID -> CREDIT_CARD_ACCOUNT"
+    },
+    "CIF": {
+      "purpose": "Canonical customer record",
+      "columns": "CIF_ID VARCHAR2(36) PK; FIRST_NAME/LAST_NAME VARCHAR2; DOB DATE; CUSTOMER_TYPE VARCHAR2(30); PAN_HASH/AADHAAR_HASH VARCHAR2(64); STATUS VARCHAR2(20); KYC_STATUS VARCHAR2(20); VERSION_NO NUMBER; CREATED_AT/UPDATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ(PAN_HASH), UQ(AADHAAR_HASH)"
+    },
+    "CIF_ADDRESS": {
+      "purpose": "Effective customer address",
+      "columns": "ADDRESS_ID VARCHAR2(36) PK; CIF_ID VARCHAR2(36) FK; TYPE VARCHAR2(20); ADDRESS_LINES/CITY/STATE/POSTAL_CODE/COUNTRY VARCHAR2; VALID_FROM/VALID_TO TIMESTAMP TZ",
+      "keysAndRelationships": "FK CIF_ID -> CIF"
+    },
+    "CIF_CONTACT": {
+      "purpose": "Customer contact and preference",
+      "columns": "CONTACT_ID VARCHAR2(36) PK; CIF_ID VARCHAR2(36) FK; EMAIL/PHONE VARCHAR2; PREFERRED_CHANNEL VARCHAR2(20); VERIFIED_FLAGS; UPDATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK CIF_ID -> CIF; UQ(CIF_ID, contact type/value)"
+    },
+    "CIF_EMPLOYMENT": {
+      "purpose": "Employment and income snapshot",
+      "columns": "EMPLOYMENT_ID VARCHAR2(36) PK; CIF_ID VARCHAR2(36) FK; EMPLOYMENT_TYPE VARCHAR2(30); EMPLOYER VARCHAR2(160); MONTHLY_INCOME NUMBER(19,4); CURRENCY CHAR(3); AS_OF DATE",
+      "keysAndRelationships": "FK CIF_ID -> CIF"
+    },
+    "CIF_STATUS_HISTORY": {
+      "purpose": "Immutable customer status changes",
+      "columns": "HISTORY_ID VARCHAR2(36) PK; CIF_ID VARCHAR2(36) FK; FROM_STATUS/TO_STATUS VARCHAR2; REASON_CODE VARCHAR2(40); CHANGED_AT TIMESTAMP TZ; CORRELATION_ID VARCHAR2(64)",
+      "keysAndRelationships": "FK CIF_ID -> CIF; IX(CIF_ID,CHANGED_AT)"
+    },
+    "CREDIT_CARD_ACCOUNT": {
+      "purpose": "Credit-card account aggregate",
+      "columns": "ACCOUNT_ID VARCHAR2(36) PK; APPLICATION_ID VARCHAR2(36) FK; CIF_ID VARCHAR2(36); PRODUCT_CODE VARCHAR2(40); CARD_TOKEN VARCHAR2(100); SANCTIONED_LIMIT/AVAILABLE_LIMIT/OUTSTANDING_AMOUNT NUMBER(19,4); PURCHASE_RATE_SNAPSHOT NUMBER(9,6); STATUS VARCHAR2(20); VERSION_NO NUMBER",
+      "keysAndRelationships": "FK APPLICATION_ID -> CREDIT_CARD_APPLICATION; UQ(CARD_TOKEN)"
+    },
+    "CREDIT_CARD_APPLICATION": {
+      "purpose": "Credit-card application aggregate",
+      "columns": "APPLICATION_ID VARCHAR2(36) PK; CIF_ID VARCHAR2(36); PRODUCT_CODE VARCHAR2(40); REQUESTED_LIMIT/APPROVED_LIMIT NUMBER(19,4); KYC_STATUS_SNAPSHOT VARCHAR2(20); ELIGIBILITY_STATUS VARCHAR2(20); STATUS VARCHAR2(20); VERSION_NO NUMBER; CREATED_AT/UPDATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "CIF/product references are opaque"
+    },
+    "CREDIT_CARD_TERM": {
+      "purpose": "Card-specific product terms",
+      "columns": "TERM_ID VARCHAR2(36) PK; PRODUCT_VERSION_ID VARCHAR2(36) FK; GRACE_DAYS NUMBER; MINIMUM_DUE_RULE CLOB IS JSON; LIMIT_RULE CLOB IS JSON; PURCHASE_RATE NUMBER(9,6)",
+      "keysAndRelationships": "FK PRODUCT_VERSION_ID -> PRODUCT_VERSION"
+    },
+    "DELIVERY_ATTEMPT": {
+      "purpose": "Channel delivery attempt",
+      "columns": "ATTEMPT_ID VARCHAR2(36) PK; NOTIFICATION_ID VARCHAR2(36) FK; ATTEMPT_NO NUMBER; CHANNEL VARCHAR2(20); PROVIDER VARCHAR2(40); STATUS VARCHAR2(20); PROVIDER_REFERENCE VARCHAR2(160); ERROR_CODE/ERROR_MESSAGE VARCHAR2; ATTEMPTED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK NOTIFICATION_ID -> NOTIFICATION; UQ(notification,channel,attempt)"
+    },
+    "DEPOSIT_ACCOUNT": {
+      "purpose": "Deposit account aggregate root",
+      "columns": "ACCOUNT_ID VARCHAR2(36) PK; ACCOUNT_NUMBER VARCHAR2(34); PRODUCT_CODE VARCHAR2(40); PRODUCT_VERSION NUMBER; PRODUCT_NAME_SNAPSHOT VARCHAR2(120); CURRENCY_CODE CHAR(3); STATUS VARCHAR2(24); BRANCH_ID VARCHAR2(36); OPERATING_INSTRUCTION VARCHAR2(30); VERSION_NO NUMBER; CREATED_AT/UPDATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ(ACCOUNT_NUMBER); product references are opaque"
+    },
+    "EOD_EXCEPTION": {
+      "purpose": "EOD blocking/warning exception",
+      "columns": "EXCEPTION_ID VARCHAR2(36) PK; RUN_ID VARCHAR2(80) FK; STEP_CODE VARCHAR2(60); SEVERITY VARCHAR2(20); ERROR_CODE VARCHAR2(80); DETAILS_JSON CLOB IS JSON; STATUS VARCHAR2(20); VERSION_NO NUMBER",
+      "keysAndRelationships": "FK RUN_ID -> EOD_RUN"
+    },
+    "EOD_RUN": {
+      "purpose": "Daily-close orchestration aggregate",
+      "columns": "RUN_ID VARCHAR2(80) PK; BUSINESS_DATE DATE; STATUS VARCHAR2(24); STARTED_BY VARCHAR2(100); STARTED_AT/COMPLETED_AT TIMESTAMP TZ; VERSION_NO NUMBER",
+      "keysAndRelationships": "UQ(BUSINESS_DATE) for active/completed run"
+    },
+    "EOD_STEP_RUN": {
+      "purpose": "State of one ordered EOD step",
+      "columns": "STEP_RUN_ID VARCHAR2(36) PK; RUN_ID VARCHAR2(80) FK; STEP_CODE VARCHAR2(60); SEQUENCE_NO NUMBER; STATUS VARCHAR2(24); COMMAND_REFERENCE VARCHAR2(120); ATTEMPT_COUNT NUMBER; STARTED_AT/COMPLETED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK RUN_ID -> EOD_RUN; UQ(RUN_ID,STEP_CODE)"
+    },
+    "EOD_WAIVER": {
+      "purpose": "Governed exception waiver",
+      "columns": "WAIVER_ID VARCHAR2(36) PK; EXCEPTION_ID VARCHAR2(36) FK; RESOLUTION VARCHAR2(1000); APPROVED_BY VARCHAR2(100); APPROVED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK EXCEPTION_ID -> EOD_EXCEPTION; UQ(EXCEPTION_ID)"
+    },
+    "FIN_RECON_ITEM": {
+      "purpose": "Financial reconciliation exception item",
+      "columns": "ITEM_ID VARCHAR2(36) PK; RUN_ID VARCHAR2(36) FK; REFERENCE VARCHAR2(160); EXPECTED_AMOUNT/ACTUAL_AMOUNT/DIFFERENCE NUMBER(19,4); BLOCKING_FLAG CHAR(1); STATUS VARCHAR2(20); RESOLUTION VARCHAR2(1000)",
+      "keysAndRelationships": "FK RUN_ID -> FIN_RECON_RUN"
+    },
+    "FIN_RECON_RUN": {
+      "purpose": "Payments-to-Accounting reconciliation run",
+      "columns": "RUN_ID VARCHAR2(36) PK; EOD_RUN_ID VARCHAR2(80); BUSINESS_DATE DATE; CURRENCY_CODE CHAR(3); EXPECTED/ACTUAL_COUNTS NUMBER; EXPECTED/ACTUAL_TOTALS NUMBER(19,4); STATUS VARCHAR2(20); VERSION_NO NUMBER",
+      "keysAndRelationships": "UQ(EOD_RUN_ID,CURRENCY_CODE)"
+    },
+    "FUND_RESERVATION": {
+      "purpose": "Payment fund hold",
+      "columns": "RESERVATION_ID VARCHAR2(36) PK; ACCOUNT_ID VARCHAR2(36) FK; PAYMENT_ID VARCHAR2(36); AMOUNT NUMBER(19,4); CURRENCY_CODE CHAR(3); STATUS VARCHAR2(20); EXPIRES_AT TIMESTAMP TZ; VERSION_NO NUMBER",
+      "keysAndRelationships": "FK ACCOUNT_ID -> DEPOSIT_ACCOUNT; UQ(PAYMENT_ID)"
+    },
+    "GL_ACCOUNT": {
+      "purpose": "General-ledger account master",
+      "columns": "GL_ACCOUNT_ID VARCHAR2(36) PK; GL_CODE VARCHAR2(40); NAME VARCHAR2(160); ACCOUNT_TYPE VARCHAR2(20); NORMAL_BALANCE VARCHAR2(10); CURRENCY_CODE CHAR(3); PARENT_GL_CODE VARCHAR2(40); STATUS VARCHAR2(20); VERSION_NO NUMBER",
+      "keysAndRelationships": "UQ(GL_CODE); optional self-reference by code"
+    },
+    "IDEMPOTENCY_RECORD": {
+      "purpose": "Local command replay protection",
+      "columns": "RECORD_ID VARCHAR2(36) PK; SCOPE VARCHAR2(100); KEY_HASH/REQUEST_HASH VARCHAR2(64); STATUS VARCHAR2(20); RESOURCE_ID VARCHAR2(100); HTTP_STATUS NUMBER(3); RESPONSE_BODY CLOB; CREATED_AT/EXPIRES_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ(SCOPE,KEY_HASH)"
+    },
+    "INTEREST_POLICY": {
+      "purpose": "Effective-dated interest policy",
+      "columns": "POLICY_ID VARCHAR2(36) PK; PRODUCT_ID VARCHAR2(36) FK; POLICY_VERSION VARCHAR2(20); POLICY_JSON CLOB IS JSON; EFFECTIVE_FROM/EFFECTIVE_TO DATE; STATUS VARCHAR2(20)",
+      "keysAndRelationships": "FK PRODUCT_ID -> PRODUCT; UQ(PRODUCT_ID,POLICY_VERSION)"
+    },
+    "JOURNAL": {
+      "purpose": "Immutable balanced journal header",
+      "columns": "JOURNAL_ID VARCHAR2(36) PK; JOURNAL_NUMBER VARCHAR2(60); EXTERNAL_REFERENCE VARCHAR2(160); SOURCE_SERVICE VARCHAR2(80); EVENT_TYPE VARCHAR2(60); BUSINESS_DATE DATE; CURRENCY_CODE CHAR(3); STATUS VARCHAR2(20); TOTAL_DEBIT/TOTAL_CREDIT NUMBER(19,4); REVERSES_JOURNAL_ID VARCHAR2(36); POSTED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ(JOURNAL_NUMBER), UQ(EXTERNAL_REFERENCE); self FK reversal"
+    },
+    "JOURNAL_LINE": {
+      "purpose": "Immutable journal debit/credit line",
+      "columns": "LINE_ID VARCHAR2(36) PK; JOURNAL_ID VARCHAR2(36) FK; LINE_NUMBER NUMBER; GL_CODE VARCHAR2(40); SUBLEDGER_REFERENCE VARCHAR2(100); DEBIT_AMOUNT/CREDIT_AMOUNT NUMBER(19,4); NARRATION VARCHAR2(500)",
+      "keysAndRelationships": "FK JOURNAL_ID -> JOURNAL; local FK GL_CODE; UQ(journal,line)"
+    },
+    "KYC_CASE": {
+      "purpose": "KYC workflow aggregate",
+      "columns": "KYC_ID VARCHAR2(36) PK; CIF_ID VARCHAR2(36); STATUS VARCHAR2(24); INITIATED_BY VARCHAR2(100); REVIEWED_BY VARCHAR2(100); VERSION_NO NUMBER; CREATED_AT/UPDATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ active case per CIF; CIF_ID is opaque"
+    },
+    "KYC_CUSTOMER_SNAPSHOT": {
+      "purpose": "Immutable customer data used in review",
+      "columns": "SNAPSHOT_ID VARCHAR2(36) PK; KYC_ID VARCHAR2(36) FK; SNAPSHOT_JSON CLOB IS JSON; CAPTURED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK KYC_ID -> KYC_CASE"
+    },
+    "KYC_DECISION": {
+      "purpose": "Final KYC case decision",
+      "columns": "DECISION_ID VARCHAR2(36) PK; KYC_ID VARCHAR2(36) FK; DECISION VARCHAR2(20); REASON_CODE VARCHAR2(40); REMARKS VARCHAR2(1000); DECIDED_BY VARCHAR2(100); DECIDED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK KYC_ID -> KYC_CASE; UQ(KYC_ID)"
+    },
+    "KYC_DOCUMENT": {
+      "purpose": "Document metadata and encrypted content reference",
+      "columns": "DOCUMENT_ID VARCHAR2(36) PK; KYC_ID VARCHAR2(36) FK; DOCUMENT_TYPE VARCHAR2(30); FILE_NAME VARCHAR2(255); STORAGE_REFERENCE VARCHAR2(500); CONTENT_HASH VARCHAR2(64); STATUS VARCHAR2(24); UPLOADED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK KYC_ID -> KYC_CASE; UQ(KYC_ID,DOCUMENT_TYPE,CONTENT_HASH)"
+    },
+    "KYC_DOCUMENT_VERIFICATION": {
+      "purpose": "Document verification decision",
+      "columns": "VERIFICATION_ID VARCHAR2(36) PK; DOCUMENT_ID VARCHAR2(36) FK; STATUS VARCHAR2(20); REMARKS VARCHAR2(1000); VERIFIED_BY VARCHAR2(100); VERIFIED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK DOCUMENT_ID -> KYC_DOCUMENT"
+    },
+    "KYC_STATUS_SNAPSHOT": {
+      "purpose": "Last KYC decision synchronized into CIF",
+      "columns": "CIF_ID VARCHAR2(36) PK/FK; KYC_ID VARCHAR2(36); STATUS VARCHAR2(20); REASON_CODE VARCHAR2(40); DECIDED_AT TIMESTAMP TZ; SOURCE_VERSION NUMBER",
+      "keysAndRelationships": "Local FK CIF_ID only; KYC_ID is opaque"
+    },
+    "MENU_ITEM": {
+      "purpose": "Application navigation item",
+      "columns": "MENU_ID VARCHAR2(36) PK; PARENT_MENU_ID VARCHAR2(36); CODE/LABEL/PATH VARCHAR2; SORT_ORDER NUMBER; STATUS VARCHAR2(20)",
+      "keysAndRelationships": "Self FK PARENT_MENU_ID; UQ(CODE)"
+    },
+    "NOTIFICATION": {
+      "purpose": "Notification request and rendered snapshot",
+      "columns": "NOTIFICATION_ID VARCHAR2(36) PK; CIF_ID VARCHAR2(36); TYPE VARCHAR2(40); REFERENCE_TYPE/REFERENCE_ID VARCHAR2; TEMPLATE_CODE VARCHAR2(60); RENDERED_SUBJECT VARCHAR2(500); RENDERED_BODY CLOB; STATUS VARCHAR2(20); CORRELATION_ID VARCHAR2(64); CREATED_AT/SENT_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ(source reference,type); CIF is opaque"
+    },
+    "NOTIFICATION_TEMPLATE": {
+      "purpose": "Versioned notification template",
+      "columns": "TEMPLATE_ID VARCHAR2(36) PK; TEMPLATE_CODE VARCHAR2(60); CHANNEL VARCHAR2(20); VERSION_NO NUMBER; SUBJECT_TEMPLATE VARCHAR2(500); BODY_TEMPLATE CLOB; STATUS VARCHAR2(20)",
+      "keysAndRelationships": "UQ(TEMPLATE_CODE,CHANNEL,VERSION_NO)"
+    },
+    "PAYMENT": {
+      "purpose": "Payment orchestration aggregate",
+      "columns": "PAYMENT_ID VARCHAR2(36) PK; PAYMENT_TYPE VARCHAR2(30); SOURCE_TYPE/SOURCE_ACCOUNT_ID VARCHAR2; DESTINATION_TYPE/DESTINATION_ACCOUNT_ID VARCHAR2; AMOUNT NUMBER(19,4); CURRENCY_CODE CHAR(3); STATUS VARCHAR2(30); JOURNAL_NUMBER VARCHAR2(60); REFERENCE VARCHAR2(255); VERSION_NO NUMBER; CREATED_AT/UPDATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "IX(source account,date), IX(destination account,date)"
+    },
+    "PAYMENT_ATTEMPT": {
+      "purpose": "Peer-call attempt",
+      "columns": "ATTEMPT_ID VARCHAR2(36) PK; PAYMENT_ID VARCHAR2(36) FK; STEP_CODE VARCHAR2(40); ATTEMPT_NO NUMBER; OUTCOME VARCHAR2(20); HTTP_STATUS NUMBER(3); ERROR_CODE VARCHAR2(80); STARTED_AT/COMPLETED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK PAYMENT_ID -> PAYMENT; UQ(payment,step,attempt)"
+    },
+    "PAYMENT_PEER_RESULT": {
+      "purpose": "Stable result of one orchestration step",
+      "columns": "RESULT_ID VARCHAR2(36) PK; PAYMENT_ID VARCHAR2(36) FK; STEP_CODE VARCHAR2(40); COMMAND_REFERENCE VARCHAR2(100); PROVIDER_SERVICE VARCHAR2(80); RESOURCE_REFERENCE VARCHAR2(100); RESPONSE_HASH VARCHAR2(64); COMPLETED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK PAYMENT_ID -> PAYMENT; UQ(COMMAND_REFERENCE)"
+    },
+    "PAYMENT_STATUS_HISTORY": {
+      "purpose": "Immutable payment status changes",
+      "columns": "HISTORY_ID VARCHAR2(36) PK; PAYMENT_ID VARCHAR2(36) FK; FROM_STATUS/TO_STATUS VARCHAR2(30); REASON_CODE VARCHAR2(40); CORRELATION_ID VARCHAR2(64); CHANGED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK PAYMENT_ID -> PAYMENT"
+    },
+    "PEER_COMMAND_RESULT": {
+      "purpose": "Idempotent peer command outcome",
+      "columns": "RESULT_ID VARCHAR2(36) PK; RUN_ID VARCHAR2(80) FK; STEP_CODE VARCHAR2(60); PROVIDER_SERVICE VARCHAR2(80); COMMAND_REFERENCE VARCHAR2(120); REQUEST_HASH/RESPONSE_HASH VARCHAR2(64); HTTP_STATUS NUMBER(3); STATUS VARCHAR2(20); COMPLETED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK RUN_ID -> EOD_RUN; UQ(PROVIDER_SERVICE,COMMAND_REFERENCE)"
+    },
+    "PERMISSION": {
+      "purpose": "Permission definition",
+      "columns": "PERMISSION_ID VARCHAR2(36) PK; PERMISSION_CODE VARCHAR2(100); DESCRIPTION VARCHAR2(500)",
+      "keysAndRelationships": "UQ(PERMISSION_CODE)"
+    },
+    "POSTING_REQUEST": {
+      "purpose": "Financial posting idempotency/control",
+      "columns": "POSTING_REQUEST_ID VARCHAR2(36) PK; EXTERNAL_REFERENCE VARCHAR2(160); REQUEST_HASH VARCHAR2(64); SOURCE_SERVICE VARCHAR2(80); EVENT_TYPE VARCHAR2(60); STATUS VARCHAR2(20); JOURNAL_NUMBER VARCHAR2(60); RECEIVED_AT/COMPLETED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ(EXTERNAL_REFERENCE)"
+    },
+    "PRODUCT": {
+      "purpose": "Stable product identity",
+      "columns": "PRODUCT_ID VARCHAR2(36) PK; PRODUCT_CODE VARCHAR2(40); CATEGORY VARCHAR2(30); CURRENT_VERSION NUMBER; STATUS VARCHAR2(20); CREATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ(PRODUCT_CODE)"
+    },
+    "PRODUCT_ELIGIBILITY_RULE": {
+      "purpose": "Product eligibility rule",
+      "columns": "RULE_ID VARCHAR2(36) PK; PRODUCT_VERSION_ID VARCHAR2(36) FK; RULE_CODE VARCHAR2(60); RULE_TYPE VARCHAR2(30); PARAMETERS_JSON CLOB IS JSON; PRIORITY NUMBER; ACTIVE_FLAG CHAR(1)",
+      "keysAndRelationships": "FK PRODUCT_VERSION_ID -> PRODUCT_VERSION; UQ(version,rule code)"
+    },
+    "PRODUCT_FEE": {
+      "purpose": "Effective product fee",
+      "columns": "FEE_ID VARCHAR2(36) PK; PRODUCT_VERSION_ID VARCHAR2(36) FK; FEE_TYPE VARCHAR2(40); AMOUNT NUMBER(19,4); PERCENTAGE NUMBER(9,6); FREQUENCY VARCHAR2(20); ACTIVE_FLAG CHAR(1)",
+      "keysAndRelationships": "FK PRODUCT_VERSION_ID -> PRODUCT_VERSION"
+    },
+    "PRODUCT_PRICING": {
+      "purpose": "Rate/calculation configuration",
+      "columns": "PRICING_ID VARCHAR2(36) PK; PRODUCT_VERSION_ID VARCHAR2(36) FK; PRICING_MODE VARCHAR2(30); ANNUAL_RATE NUMBER(9,6); BENCHMARK_CODE VARCHAR2(40); SPREAD NUMBER(9,6); CALCULATION_METHOD VARCHAR2(30)",
+      "keysAndRelationships": "FK PRODUCT_VERSION_ID -> PRODUCT_VERSION"
+    },
+    "PRODUCT_VERSION": {
+      "purpose": "Effective-dated product definition",
+      "columns": "PRODUCT_VERSION_ID VARCHAR2(36) PK; PRODUCT_ID VARCHAR2(36) FK; VERSION_NO NUMBER; NAME VARCHAR2(160); CURRENCY_CODE CHAR(3); EFFECTIVE_FROM/EFFECTIVE_TO DATE; DEFINITION_JSON CLOB IS JSON",
+      "keysAndRelationships": "FK PRODUCT_ID -> PRODUCT; UQ(PRODUCT_ID,VERSION_NO)"
+    },
+    "ROLE": {
+      "purpose": "Role definition",
+      "columns": "ROLE_ID VARCHAR2(36) PK; ROLE_CODE VARCHAR2(50); NAME VARCHAR2(120); STATUS VARCHAR2(20); VERSION_NO NUMBER",
+      "keysAndRelationships": "UQ(ROLE_CODE)"
+    },
+    "ROLE_MENU": {
+      "purpose": "Role-visible menu item",
+      "columns": "ROLE_ID VARCHAR2(36); MENU_ID VARCHAR2(36)",
+      "keysAndRelationships": "PK(ROLE_ID,MENU_ID); local FKs"
+    },
+    "ROLE_PERMISSION": {
+      "purpose": "Role-to-permission assignment",
+      "columns": "ROLE_ID VARCHAR2(36); PERMISSION_ID VARCHAR2(36)",
+      "keysAndRelationships": "PK(ROLE_ID,PERMISSION_ID); local FKs"
+    },
+    "STATEMENT_DOCUMENT": {
+      "purpose": "Immutable generated statement file",
+      "columns": "DOCUMENT_ID VARCHAR2(36) PK; STATEMENT_ID VARCHAR2(36) FK; FILE_NAME VARCHAR2(255); FILE_FORMAT VARCHAR2(10); STORAGE_REFERENCE VARCHAR2(500); CONTENT_HASH VARCHAR2(64); FILE_SIZE NUMBER; CREATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK STATEMENT_ID -> STATEMENT_REQUEST; UQ(STATEMENT_ID)"
+    },
+    "STATEMENT_GENERATION_ATTEMPT": {
+      "purpose": "Statement generation attempt",
+      "columns": "ATTEMPT_ID VARCHAR2(36) PK; STATEMENT_ID VARCHAR2(36) FK; ATTEMPT_NO NUMBER; STATUS VARCHAR2(20); ERROR_CODE/ERROR_MESSAGE VARCHAR2; STARTED_AT/COMPLETED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "FK STATEMENT_ID -> STATEMENT_REQUEST; UQ(statement,attempt)"
+    },
+    "STATEMENT_REQUEST": {
+      "purpose": "Statement request aggregate",
+      "columns": "STATEMENT_ID VARCHAR2(36) PK; CIF_ID VARCHAR2(36); ACCOUNT_ID VARCHAR2(36); ACCOUNT_TYPE VARCHAR2(30); FROM_DATE/TO_DATE DATE; FORMAT VARCHAR2(10); STATUS VARCHAR2(20); ERROR_CODE VARCHAR2(80); REQUESTED_AT/GENERATED_AT TIMESTAMP TZ; VERSION_NO NUMBER",
+      "keysAndRelationships": "UQ idempotency scope/key; CIF/account are opaque"
+    },
+    "SUBLEDGER_MAPPING": {
+      "purpose": "Logical posting role to GL mapping",
+      "columns": "MAPPING_ID VARCHAR2(36) PK; MAPPING_CODE VARCHAR2(60); PRODUCT_CODE VARCHAR2(40); CURRENCY_CODE CHAR(3); GL_CODE VARCHAR2(40); EFFECTIVE_FROM/EFFECTIVE_TO DATE; STATUS VARCHAR2(20)",
+      "keysAndRelationships": "Local FK GL_CODE -> GL_ACCOUNT; UQ(mapping,product,currency,effective from)"
+    },
+    "TRIAL_BALANCE_LINE": {
+      "purpose": "Trial balance by GL",
+      "columns": "LINE_ID VARCHAR2(36) PK; RUN_ID VARCHAR2(36) FK; GL_CODE VARCHAR2(40); DEBIT_TOTAL/CREDIT_TOTAL/CLOSING_BALANCE NUMBER(19,4)",
+      "keysAndRelationships": "FK RUN_ID -> TRIAL_BALANCE_RUN; UQ(RUN_ID,GL_CODE)"
+    },
+    "TRIAL_BALANCE_RUN": {
+      "purpose": "Persisted trial-balance run",
+      "columns": "RUN_ID VARCHAR2(36) PK; BUSINESS_DATE DATE; CURRENCY_CODE CHAR(3); TOTAL_DEBIT/TOTAL_CREDIT NUMBER(19,4); BALANCED_FLAG CHAR(1); GENERATED_BY VARCHAR2(100); GENERATED_AT TIMESTAMP TZ",
+      "keysAndRelationships": "UQ(BUSINESS_DATE,CURRENCY_CODE)"
+    },
+    "USER_PROFILE": {
+      "purpose": "Moneybags application profile",
+      "columns": "USER_ID VARCHAR2(36) PK/FK; DISPLAY_NAME VARCHAR2(160); PHONE VARCHAR2(30); LOCALE VARCHAR2(10); TIME_ZONE VARCHAR2(50)",
+      "keysAndRelationships": "FK USER_ID -> APP_USER"
+    },
+    "USER_ROLE": {
+      "purpose": "User-to-role assignment",
+      "columns": "USER_ID VARCHAR2(36); ROLE_ID VARCHAR2(36); ASSIGNED_AT TIMESTAMP TZ; ASSIGNED_BY VARCHAR2(100)",
+      "keysAndRelationships": "PK(USER_ID,ROLE_ID); local FKs to APP_USER and ROLE"
+    }
+  },
+  "canonicalization": [
+    {
+      "source": "/api/products/**",
+      "canonical": "/api/v1/products/**",
+      "reason": "All public business APIs are versioned."
+    },
+    {
+      "source": "/api/benchmarks/**",
+      "canonical": "/api/v1/benchmarks/**",
+      "reason": "Product reference APIs use the same version prefix."
+    },
+    {
+      "source": "/api/internal/deposit-accounts/**",
+      "canonical": "/internal/v1/deposit-accounts/**",
+      "reason": "Peer APIs are direct-service routes and are never gateway-public."
+    },
+    {
+      "source": "/api/v1/cifs/{cifId}/deposit-creation-details",
+      "canonical": "/internal/v1/cifs/{cifId}/deposit-creation-details",
+      "reason": "CIF eligibility snapshots are trusted peer contracts."
+    },
+    {
+      "source": "/api/v1/cifs/{cifId}/credit-card-details",
+      "canonical": "/internal/v1/cifs/{cifId}/credit-card-application-details",
+      "reason": "Name states the exact consumer use case."
+    },
+    {
+      "source": "/api/v1/cifs/{cifId}/customer-contact-details",
+      "canonical": "/internal/v1/cifs/{cifId}/customer-contact-details",
+      "reason": "PII-bearing contact data is peer-only."
+    },
+    {
+      "source": "/internal/payments",
+      "canonical": "/internal/v1/payments",
+      "reason": "Internal APIs are versioned."
+    },
+    {
+      "source": "/api/credit-cards/accounts/{accountId}/transactions/complete",
+      "canonical": "/internal/v1/credit-card-accounts/{accountId}/purchase-postings",
+      "reason": "Posting semantics replace an ambiguous complete command."
+    },
+    {
+      "source": "/api/credit-cards/accounts/{accountId}/payments/complete",
+      "canonical": "/internal/v1/credit-card-accounts/{accountId}/payment-postings",
+      "reason": "Bill-payment projection is distinct from purchases."
+    },
+    {
+      "source": "/api/v1/bills/generate",
+      "canonical": "/internal/v1/bills/generate",
+      "reason": "Bill generation is an EOD/operations command, not a customer API."
+    },
+    {
+      "source": "/api/eod/**",
+      "canonical": "/api/v1/eod/**",
+      "reason": "EOD operator APIs follow the public version convention."
+    },
+    {
+      "source": "/internal/** (Accounting)",
+      "canonical": "/internal/v1/**",
+      "reason": "Accounting peer APIs use the common internal prefix."
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Customer onboarding and KYC",
+      "steps": [
+        "Client creates CIF using POST /api/v1/cifs with Idempotency-Key.",
+        "CIF persists the customer, then calls KYC POST /api/v1/kycs using the same correlation ID.",
+        "Reviewers verify documents and decide the KYC case.",
+        "KYC calls CIF PATCH /internal/v1/cifs/{cifId}/kyc-status and Notification POST /internal/v1/notifications."
+      ]
+    },
+    {
+      "name": "Deposit account opening",
+      "steps": [
+        "Deposit reads CIF /internal/v1/cifs/{cifId}/deposit-creation-details.",
+        "Deposit reads Product /api/v1/products/{productCode} and validates via /internal/v1/products/{productCode}/validate-account-opening.",
+        "Deposit persists the account aggregate, audit row, and idempotency result in one Oracle transaction.",
+        "No accounting journal is created merely for account identity creation; opening funding is a Payment command."
+      ]
+    },
+    {
+      "name": "Book transfer",
+      "steps": [
+        "Payments validates both accounts through Deposit eligibility APIs and reserves source funds.",
+        "Payments posts the settlement fact to Accounting with the payment ID as the stable external reference.",
+        "After Journal POSTED, Payments calls Deposit /internal/v1/deposit-transfers and captures the reservation.",
+        "If projection settlement fails after accounting posts, Payments requests a journal reversal and releases the reservation."
+      ]
+    },
+    {
+      "name": "Credit-card bill payment",
+      "steps": [
+        "Payments validates and reserves the source deposit account and validates destination card status/limit context.",
+        "Accounting posts the debit/credit journal.",
+        "Payments captures the source reservation and calls Card /payment-postings to reduce outstanding and restore limit.",
+        "Payments stores SETTLED only after accounting and both projections succeed; otherwise it enters REVERSAL_PENDING."
+      ]
+    },
+    {
+      "name": "Statement generation",
+      "steps": [
+        "Statement verifies CIF ownership and reads the owning account service.",
+        "Deposit statements read Payments history; card statements also read Bill summaries and card account data.",
+        "The generated document is immutable and referenced by the Statement service.",
+        "Statement completion may request a notification; delivery failure does not invalidate the statement."
+      ]
+    },
+    {
+      "name": "End-of-day closure",
+      "steps": [
+        "EOD freezes the business-date cutoff and sends stable commandReference values to each peer.",
+        "Payments cutoff/drain and Deposit/Card readiness must complete before Billing and financial controls.",
+        "Accounting produces a trial balance and Payments reconciliation; critical differences block closure.",
+        "Statements and Notifications run under explicit blocking/warning policies, then Accounting closes the period and EOD opens the next date."
+      ]
+    }
+  ],
+  "audit": {
+    "status": "PASS",
+    "serviceCount": 12,
+    "endpointCount": 128,
+    "schemaCount": 132,
+    "resolvedDependencyCallCount": 39,
+    "errors": [],
+    "warnings": []
+  }
+}

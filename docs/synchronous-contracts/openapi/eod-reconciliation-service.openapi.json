@@ -1,0 +1,843 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Moneybags EOD / Reconciliation Orchestrator API",
+    "version": "1.0.0",
+    "description": "Coordinates the business date and ordered synchronous end-of-day controls across Payments, Deposit, Credit Card, Billing, Accounting, Statements, and Notifications."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "API Gateway - public routes only"
+    },
+    {
+      "url": "http://localhost:8091",
+      "description": "Direct service URL"
+    }
+  ],
+  "paths": {
+    "/api/v1/business-date": {
+      "get": {
+        "tags": [
+          "EOD / Reconciliation Orchestrator"
+        ],
+        "summary": "Get the current business date and cutoff state",
+        "operationId": "getApiV1BusinessDate",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessDateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/eod/runs": {
+      "post": {
+        "tags": [
+          "EOD / Reconciliation Orchestrator"
+        ],
+        "summary": "Start one EOD run for a business date",
+        "operationId": "postApiV1EodRuns",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [
+          "payments-service:POST:/internal/v1/payments/eod/cutoff",
+          "payments-service:POST:/internal/v1/payments/eod/drain",
+          "credit-card-service:GET:/internal/v1/credit-card-accounts/eod/readiness",
+          "deposit-account-service:GET:/internal/v1/deposit-accounts/eod/readiness",
+          "deposit-account-service:POST:/internal/v1/deposit-accounts/eod/accruals",
+          "deposit-account-service:POST:/internal/v1/deposit-accounts/eod/fixed-deposit-accruals",
+          "deposit-account-service:POST:/internal/v1/deposit-accounts/eod/fixed-deposit-maturities",
+          "accounting-service:POST:/internal/v1/accounting/fixed-deposit-reconciliation",
+          "deposit-account-service:GET:/internal/v1/deposit-accounts/eod/fixed-deposit-readiness",
+          "bill-generation-service:POST:/internal/v1/bills/eod/close",
+          "accounting-service:POST:/internal/v1/trial-balances",
+          "accounting-service:POST:/internal/v1/eod/reconciliation/runs",
+          "statement-service:POST:/internal/v1/statements/eod/generate",
+          "notification-service:POST:/internal/v1/notifications",
+          "accounting-service:POST:/internal/v1/accounting-periods/{businessDate}/close"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EodRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartEodRunRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/eod/runs/{runId}": {
+      "get": {
+        "tags": [
+          "EOD / Reconciliation Orchestrator"
+        ],
+        "summary": "Get EOD run and step status",
+        "operationId": "getApiV1EodRunsByRunid",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EodRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/eod/runs/{runId}/resume": {
+      "post": {
+        "tags": [
+          "EOD / Reconciliation Orchestrator"
+        ],
+        "summary": "Resume incomplete non-completed steps",
+        "operationId": "postApiV1EodRunsByRunidResume",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EodRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EodResumeRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/eod/runs/{runId}/steps/{stepCode}/retry": {
+      "post": {
+        "tags": [
+          "EOD / Reconciliation Orchestrator"
+        ],
+        "summary": "Retry one failed step",
+        "operationId": "postApiV1EodRunsByRunidStepsByStepcodeRetry",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stepCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EodRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EodStepRetryRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/eod/exceptions/{exceptionId}/resolve": {
+      "post": {
+        "tags": [
+          "EOD / Reconciliation Orchestrator"
+        ],
+        "summary": "Resolve or waive an EOD exception",
+        "operationId": "postApiV1EodExceptionsByExceptionidResolve",
+        "parameters": [
+          {
+            "name": "exceptionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EodRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EodExceptionResolutionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/business-date/open-next": {
+      "post": {
+        "tags": [
+          "EOD / Reconciliation Orchestrator"
+        ],
+        "summary": "Open the next business date after successful close",
+        "operationId": "postApiV1BusinessDateOpenNext",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "admin",
+        "x-consumers": [],
+        "x-calls": [
+          "accounting-service:POST:/internal/v1/accounting-periods/{businessDate}/close",
+          "accounting-service:POST:/internal/v1/accounting-periods/{businessDate}/open"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessDateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenBusinessDateRequest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "BusinessDateResponse": {
+        "type": "object",
+        "required": [
+          "businessDate",
+          "status",
+          "cutoffAt"
+        ],
+        "properties": {
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string"
+          },
+          "cutoffAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "EodExceptionResolutionRequest": {
+        "type": "object",
+        "required": [
+          "resolution",
+          "resolvedBy"
+        ],
+        "properties": {
+          "resolution": {
+            "type": "string"
+          },
+          "resolvedBy": {
+            "type": "string"
+          },
+          "waived": {
+            "type": "boolean"
+          }
+        }
+      },
+      "EodResumeRequest": {
+        "type": "object",
+        "required": [
+          "requestedBy",
+          "reason"
+        ],
+        "properties": {
+          "requestedBy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "EodRunResponse": {
+        "type": "object",
+        "required": [
+          "runId",
+          "businessDate",
+          "status",
+          "steps",
+          "exceptions",
+          "version"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "exceptions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "EodStepRetryRequest": {
+        "type": "object",
+        "required": [
+          "requestedBy",
+          "reason"
+        ],
+        "properties": {
+          "requestedBy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "OpenBusinessDateRequest": {
+        "type": "object",
+        "required": [
+          "businessDate",
+          "openedBy"
+        ],
+        "properties": {
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "openedBy": {
+            "type": "string"
+          }
+        }
+      },
+      "ProblemDetail": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "correlationId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "fieldErrors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "StartEodRunRequest": {
+        "type": "object",
+        "required": [
+          "businessDate",
+          "startedBy"
+        ],
+        "properties": {
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "startedBy": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: deposit-account-service
+          uri: lb://deposit-account-service
+          predicates:
+            - Path=/api/deposit-accounts/**,/api/internal/deposit-accounts/**,/api/internal/deposit-payment-operations/**
+        - id: eod-reconciliation-service
+          uri: lb://eod-reconciliation-service
+          predicates:
+            - Path=/api/v1/eod/**,/api/v1/business-date/**,/api/v1/business-date
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "${CORS_ALLOWED_ORIGIN:http://localhost:8000}"
+            allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+            allowedHeaders: "*"
+            allowCredentials: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway

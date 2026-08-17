@@ -1,0 +1,42 @@
+server:
+  port: 8091
+  shutdown: graceful
+
+spring:
+  application:
+    name: eod-reconciliation-service
+
+eureka:
+  client:
+    enabled: ${EUREKA_ENABLED:true}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+moneybags:
+  security:
+    enabled: ${SECURITY_ENABLED:false}
+  eod:
+    initial-business-date: ${EOD_INITIAL_BUSINESS_DATE:2026-08-13}
+    persistence: ${EOD_PERSISTENCE:memory}
+    stub-peer-clients: ${EOD_STUB_PEER_CLIENTS:true}
+    stub-fail-on: ${EOD_STUB_FAIL_ON:}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: ${HEALTH_SHOW_DETAILS:when_authorized}
+  metrics:
+    tags:
+      service: ${spring.application.name}

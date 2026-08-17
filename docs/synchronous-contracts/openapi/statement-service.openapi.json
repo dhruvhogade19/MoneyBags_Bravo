@@ -1,0 +1,514 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Moneybags Statement Service API",
+    "version": "1.0.0",
+    "description": "Builds downloadable deposit-account and credit-card statements from authoritative account, payment, bill, and customer-contact APIs."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "API Gateway - public routes only"
+    },
+    {
+      "url": "http://localhost:8088",
+      "description": "Direct service URL"
+    }
+  ],
+  "paths": {
+    "/api/v1/statements": {
+      "post": {
+        "tags": [
+          "Statement Service"
+        ],
+        "summary": "Request a statement",
+        "operationId": "postApiV1Statements",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [
+          "cif-service:GET:/internal/v1/cifs/{cifId}/ownership",
+          "deposit-account-service:GET:/internal/v1/deposit-accounts/{accountId}",
+          "credit-card-service:GET:/internal/v1/credit-card-accounts/{accountId}",
+          "payments-service:GET:/internal/v1/payments",
+          "bill-generation-service:GET:/internal/v1/bills"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/statements/{statementId}": {
+      "get": {
+        "tags": [
+          "Statement Service"
+        ],
+        "summary": "Get statement generation status",
+        "operationId": "getApiV1StatementsByStatementid",
+        "parameters": [
+          {
+            "name": "statementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/statements/{statementId}/download": {
+      "get": {
+        "tags": [
+          "Statement Service"
+        ],
+        "summary": "Download a generated statement",
+        "operationId": "getApiV1StatementsByStatementidDownload",
+        "parameters": [
+          {
+            "name": "statementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "public",
+        "x-consumers": [],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinaryDocument"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        }
+      }
+    },
+    "/internal/v1/statements/eod/generate": {
+      "post": {
+        "tags": [
+          "Statement Service"
+        ],
+        "summary": "Generate scheduled statements and account summaries",
+        "operationId": "postInternalV1StatementsEodGenerate",
+        "parameters": [
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-visibility": "internal",
+        "x-consumers": [
+          "eod-reconciliation-service"
+        ],
+        "x-calls": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EodStatementResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "409": {
+            "description": "State, concurrency, or idempotency conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency unavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EodStatementRequest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "BinaryDocument": {
+        "type": "string",
+        "format": "binary"
+      },
+      "EodStatementRequest": {
+        "type": "object",
+        "required": [
+          "eodRunId",
+          "businessDate",
+          "commandReference"
+        ],
+        "properties": {
+          "eodRunId": {
+            "type": "string"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "commandReference": {
+            "type": "string"
+          }
+        }
+      },
+      "EodStatementResponse": {
+        "type": "object",
+        "required": [
+          "statementsGenerated",
+          "failedCount"
+        ],
+        "properties": {
+          "statementsGenerated": {
+            "type": "integer"
+          },
+          "failedCount": {
+            "type": "integer"
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "ProblemDetail": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "correlationId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "fieldErrors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "StatementRequest": {
+        "type": "object",
+        "required": [
+          "cifId",
+          "accountId",
+          "accountType",
+          "fromDate",
+          "toDate",
+          "format"
+        ],
+        "properties": {
+          "cifId": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "accountType": {
+            "type": "string"
+          },
+          "fromDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "toDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "format": {
+            "type": "string"
+          }
+        }
+      },
+      "StatementResponse": {
+        "type": "object",
+        "required": [
+          "statementId",
+          "cifId",
+          "accountId",
+          "status",
+          "requestedAt"
+        ],
+        "properties": {
+          "statementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cifId": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
