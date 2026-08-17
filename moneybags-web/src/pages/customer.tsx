@@ -2,7 +2,7 @@ import { h } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { auth } from "../auth";
 import { ApiError } from "../api";
-import type { Account, Bill, CardAccount, CardApplication, Cif, EligibilityResult, FixedDeposit, Notification, Payment, Product } from "../contracts";
+import type { Account, Bill, CardAccount, CardApplication, Cif, EligibilityResult, FixedDeposit, KycDocument, Notification, Payment, Product } from "../contracts";
 import { EmptyState, ErrorState, Field, Icon, Loading, Money, PageHeader, Panel, Receipt, SelectField, Status, useIdempotencyKeyStore, useRemote } from "../components/common";
 import { navigate } from "../router";
 import { items, services } from "../services";
@@ -14,6 +14,13 @@ function customerId(): string | undefined {
 }
 
 function date(value?: string): string { return formatDate(value); }
+
+const REQUIRED_KYC_DOCUMENTS = [
+  { type: "PAN", label: "PAN card" },
+  { type: "AADHAAR", label: "Aadhaar card" },
+  { type: "ADDRESS_PROOF", label: "Address proof" },
+  { type: "SALARY_PROOF", label: "Salary proof" }
+] as const;
 
 async function activateCustomerProfile(): Promise<Cif> {
   const cif = await services.cif.repairIdentityLink();
@@ -168,18 +175,40 @@ function CifForm({ onCreated, existing, onCancel }: { onCreated: (value: Cif) =>
 export function KycPage() {
   const id = customerId();
   const [revision, setRevision] = useState(0);
+  const [files, setFiles] = useState<Record<string, File | undefined>>({});
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<unknown>();
+  const commands = useIdempotencyKeyStore();
   const remote = useRemote(async (signal) => {
     if (!id) return undefined;
     const [cif, records] = await Promise.all([services.cif.get(id, signal), services.kyc.byCif(id, signal)]);
-    return { cif, latest: records[0] };
+    const latest = records[0];
+    return { cif, latest, documents: latest ? await services.kyc.documents(latest.kycId, signal) : [] };
   }, [id, revision]);
   if (!id) return <OnboardingRequired/>;
   if (remote.loading) return <Loading label="Loading KYC"/>;
   if (remote.error || !remote.data) return <ErrorState error={remote.error} retry={remote.retry}/>;
-  const { cif, latest } = remote.data;
+  const { cif, latest, documents } = remote.data;
   if (!latest) return <><PageHeader title="KYC is being initiated" description="Your CIF profile was created successfully."/><Panel><div class="mb-warning-banner">KYC initiation is still being processed for CIF {cif.cifId}. Refresh in a moment.</div><button class="mb-button mb-button-secondary" onClick={() => setRevision(n => n + 1)}>Refresh KYC status</button></Panel></>;
-  const statusMessage = latest.kycStatus === "APPROVED" ? "Your KYC has been approved." : latest.kycStatus === "REJECTED" ? "Your KYC has been rejected." : latest.kycStatus === "FLAGGED" ? "Your KYC requires additional review." : "Your demo KYC is waiting for bank-admin review.";
-  return <><PageHeader title="Know Your Customer" description={statusMessage} action={<Status value={latest.kycStatus}/>}/><Panel title="Verification status"><div class="mb-timeline"><div class="is-complete"><b>1</b><span>Profile created<small>CIF {cif.cifId}</small></span></div><div class={latest.decision ? "is-complete" : "is-current"}><b>2</b><span>Bank-admin review<small>{latest.decision ?? "Pending decision"}</small></span></div><div class={latest.decision ? "is-complete" : ""}><b>3</b><span>Verification result<small>{latest.reviewedAt ? date(latest.reviewedAt) : "Waiting"}</small></span></div></div><div class="mb-warning-banner">This demo verifies the CIF information entered during onboarding. No physical document upload is required.</div>{latest.rejectionReason && <div class="mb-error"><strong>KYC rejected</strong><p>{latest.rejectionReason}</p></div>}<button class="mb-button mb-button-secondary" onClick={() => setRevision(n => n + 1)}>Refresh status</button></Panel></>;
+  const documentByType = new Map(documents.map(document => [document.documentType, document]));
+  const missing = REQUIRED_KYC_DOCUMENTS.filter(document => !documentByType.has(document.type));
+  const finalised = ["APPROVED", "REJECTED"].includes(latest.kycStatus);
+  const statusMessage = latest.kycStatus === "APPROVED" ? "Your KYC has been approved." : latest.kycStatus === "REJECTED" ? "Your KYC has been rejected." : latest.kycStatus === "FLAGGED" ? "A document needs additional review by the bank." : missing.length ? "Upload the required documents to submit your KYC for review." : "Your documents are with a bank administrator for review.";
+  const upload = async (event: Event) => {
+    event.preventDefault();
+    const selected = missing.map(document => ({ type: document.type, file: files[document.type] })).filter((document): document is { type: typeof REQUIRED_KYC_DOCUMENTS[number]["type"]; file: File } => document.file instanceof File);
+    if (selected.length !== missing.length) { setUploadError(new Error("Select a file for every required document before submitting.")); return; }
+    setUploading(true); setUploadError(undefined);
+    try {
+      await services.kyc.uploadBatch(latest.kycId, selected, commands.keyFor({ kycId: latest.kycId, documents: selected.map(document => document.type) }));
+      commands.reset(); setFiles({}); setRevision(value => value + 1);
+    } catch (error) { setUploadError(error); } finally { setUploading(false); }
+  };
+  return <><PageHeader title="Know Your Customer" description={statusMessage} action={<Status value={latest.kycStatus}/>}/><Panel title="Verification status"><div class="mb-timeline"><div class="is-complete"><b>1</b><span>Profile created<small>CIF {cif.cifId}</small></span></div><div class={documents.length === REQUIRED_KYC_DOCUMENTS.length ? "is-complete" : "is-current"}><b>2</b><span>Documents submitted<small>{documents.length} of {REQUIRED_KYC_DOCUMENTS.length} required documents</small></span></div><div class={latest.decision ? "is-complete" : documents.length === REQUIRED_KYC_DOCUMENTS.length ? "is-current" : ""}><b>3</b><span>Bank-admin review<small>{latest.decision ?? "Waiting for a final decision"}</small></span></div></div>{latest.rejectionReason && <div class="mb-error"><strong>KYC rejected</strong><p>{latest.rejectionReason}</p></div>}{latest.mismatchReason && <div class="mb-warning-banner">Review note: {latest.mismatchReason}</div>}<button class="mb-button mb-button-secondary" onClick={() => setRevision(n => n + 1)}>Refresh status</button></Panel><Panel title="Required documents" action={<span class="mb-document-count">{documents.length}/{REQUIRED_KYC_DOCUMENTS.length} complete</span>}>{uploadError && <ErrorState error={uploadError}/>}<div class="mb-document-list">{REQUIRED_KYC_DOCUMENTS.map(requirement => <CustomerDocumentRow key={requirement.type} requirement={requirement} document={documentByType.get(requirement.type)} file={files[requirement.type]} disabled={finalised || Boolean(documentByType.get(requirement.type))} onFile={(file) => setFiles(current => ({ ...current, [requirement.type]: file }))}/>)}</div>{!finalised && missing.length > 0 && <form class="mb-upload-actions" onSubmit={upload}><p>Upload all remaining documents together. PDF, PNG, or JPEG files up to 10 MB are accepted.</p><button class="mb-button mb-button-primary" disabled={uploading}>{uploading ? "Submitting documents…" : "Submit documents for review"}</button></form>}</Panel></>;
+}
+
+function CustomerDocumentRow({ requirement, document, file, disabled, onFile }: { requirement: typeof REQUIRED_KYC_DOCUMENTS[number]; document?: KycDocument; file?: File; disabled: boolean; onFile: (file?: File) => void }) {
+  return <article class="mb-document-row"><div><strong>{requirement.label}</strong><small>{document ? document.originalFileName : file ? file.name : "Not uploaded"}</small></div>{document ? <Status value={document.verificationStatus}/> : <label class="mb-file-input"><span>{file ? "Change file" : "Choose file"}</span><input type="file" accept="application/pdf,image/png,image/jpeg" disabled={disabled} onChange={(event) => onFile((event.currentTarget as HTMLInputElement).files?.[0])}/></label>}</article>;
 }
 
 export function ProductsPage() {

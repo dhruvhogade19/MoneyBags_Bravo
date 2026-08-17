@@ -19,6 +19,7 @@ export const services = {
     byCif: (cifId: string | number, signal?: AbortSignal) => api.get<Kyc[]>(query("/api/v1/kycs", { cifId }), signal),
     create: (body: unknown, idempotencyKey?: string) => api.post<Kyc>("/api/v1/kycs", body, idempotencyKey),
     documents: (kycId: number, signal?: AbortSignal) => api.get<KycDocument[]>(`/api/v1/kycs/${kycId}/documents`, signal),
+    documentBlob: (kycId: number, documentId: number, signal?: AbortSignal) => api.blob(`/api/v1/kycs/${kycId}/documents/${documentId}`, signal),
     upload: (kycId: number, documentType: string, file: File, idempotencyKey?: string) => {
       const form = new FormData();
       form.append("documentTypes", documentType);

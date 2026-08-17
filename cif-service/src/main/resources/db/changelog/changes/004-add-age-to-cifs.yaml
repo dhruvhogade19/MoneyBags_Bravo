@@ -11,7 +11,7 @@ databaseChangeLog:
                   name: age
                   type: NUMBER(3)
                   constraints:
-                    nullable: false
+                    nullable: true
 
         - sql:
             splitStatements: true

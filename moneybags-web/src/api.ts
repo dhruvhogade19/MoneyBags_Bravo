@@ -77,6 +77,24 @@ export class ApiClient {
   put<T>(path: string, body: unknown, idempotencyKey?: string): Promise<T> { return this.request<T>(path, { method: "PUT", body, idempotent: true, idempotencyKey }); }
   patch<T>(path: string, body: unknown, idempotencyKey?: string): Promise<T> { return this.request<T>(path, { method: "PATCH", body, idempotent: true, idempotencyKey }); }
   delete<T>(path: string, idempotencyKey?: string): Promise<T> { return this.request<T>(path, { method: "DELETE", idempotent: true, idempotencyKey }); }
+
+  async blob(path: string, signal?: AbortSignal): Promise<Blob> {
+    const token = await auth.accessToken();
+    const tenantId = auth.session?.claims.tenant_id;
+    if (!tenantId) throw new Error("The signed session does not contain a tenant identifier");
+    const requestCorrelationId = correlationId();
+    const response = await fetch(`${config.apiBaseUrl}${path}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Tenant-ID": tenantId,
+        "X-Correlation-ID": requestCorrelationId,
+        Accept: "application/pdf,image/png,image/jpeg"
+      },
+      signal
+    });
+    if (!response.ok) throw new ApiError(await parseProblem(response, requestCorrelationId));
+    return response.blob();
+  }
 }
 
 export const api = new ApiClient();
