@@ -36,6 +36,7 @@ class AccountingServiceIntegrationTest {
                 .andExpect(jsonPath("$.paths['/internal/v1/fixed-deposit-postings'].post").exists())
                 .andExpect(jsonPath("$.paths['/internal/v1/account-lifecycle-events'].post").exists())
                 .andExpect(jsonPath("$.paths['/internal/v1/trial-balances'].post").exists())
+                .andExpect(jsonPath("$.paths['/internal/v1/accounting/fixed-deposit-reconciliation'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/journals'].get").exists())
                 .andReturn();
         Path output = Path.of("target", "generated-openapi", "accounting-service.openapi.json");

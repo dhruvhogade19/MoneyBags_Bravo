@@ -1,0 +1,31 @@
+{
+  "info": {
+    "name": "Moneybags EOD Reconciliation",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "eodBaseUrl", "value": "http://localhost:8091" },
+    { "key": "businessDate", "value": "2026-08-13" }
+  ],
+  "item": [
+    {
+      "name": "Current business date",
+      "request": { "method": "GET", "url": "{{eodBaseUrl}}/api/v1/business-date" }
+    },
+    {
+      "name": "Start real EOD run",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "postman-eod-{{businessDate}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"businessDate\": \"{{businessDate}}\",\n  \"startedBy\": \"postman-operator\"\n}"
+        },
+        "url": "{{eodBaseUrl}}/api/v1/eod/runs"
+      }
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import com.moneybags.payments.dto.PaymentDtos.EodControlResponse;
 import com.moneybags.payments.exception.PaymentCutoffException;
 import com.moneybags.payments.repository.PaymentRepository;
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.stereotype.Service;
@@ -38,8 +39,7 @@ public class EodControlService {
 
   public EodControlResponse drain() {
     long pending = payments.countByStatusIn(PENDING);
-    return new EodControlResponse(cutoffDate, pending == 0 ? "DRAINED" : "DRAINING",
-        false, pending);
+    return response(pending == 0 ? "DRAINED" : "DRAINING");
   }
 
   public EodControlResponse reopen() {
@@ -48,7 +48,14 @@ public class EodControlService {
   }
 
   private EodControlResponse response(String status) {
+    long postedCount = cutoffDate == null ? 0 :
+        payments.countByBusinessDateAndAccountingJournalNumberIsNotNull(cutoffDate)
+            + payments.countByBusinessDateAndReversalJournalNumberIsNotNull(cutoffDate);
+    BigDecimal postedTotal = cutoffDate == null ? BigDecimal.ZERO :
+        value(payments.totalPostedAmount(cutoffDate)).add(value(payments.totalReversalAmount(cutoffDate)));
     return new EodControlResponse(cutoffDate, status, !cutoff.get(),
-        payments.countByStatusIn(PENDING));
+        payments.countByStatusIn(PENDING), postedCount, postedTotal.setScale(4));
   }
+
+  private BigDecimal value(BigDecimal amount) { return amount == null ? BigDecimal.ZERO : amount; }
 }
