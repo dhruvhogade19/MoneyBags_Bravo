@@ -70,6 +70,7 @@ $services = @(
     @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088; Profiles = "local" },
     @{ Name = "notification-service"; Directory = "notification-service"; Port = 8090; Profiles = "mock-mail" },
     @{ Name = "bill-generation-service"; Directory = "bill-generation-service"; Port = 8087 },
+    @{ Name = "eod-reconciliation-service"; Directory = "eod-reconciliation-service"; Port = 8091 },
     @{ Name = "api-gateway"; Directory = "api-gateway"; Port = 8080 }
 )
 
@@ -156,6 +157,7 @@ Write-Host "Identity: http://localhost:8093" -ForegroundColor Green
 Write-Host "Product : http://localhost:8083/swagger-ui.html" -ForegroundColor Green
 Write-Host "Payments: http://localhost:8085/swagger-ui/index.html" -ForegroundColor Green
 Write-Host "Accounting: http://localhost:8088/swagger-ui.html" -ForegroundColor Green
+Write-Host "EOD       : http://localhost:8091/swagger-ui.html" -ForegroundColor Green
 Write-Host "Eureka  : http://localhost:8761" -ForegroundColor Green
 Write-Host "Gateway : http://localhost:8080" -ForegroundColor Green
 Write-Host ("Logs    : " + $logDir) -ForegroundColor Green

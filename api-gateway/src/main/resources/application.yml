@@ -57,6 +57,10 @@ spring:
               uri: lb://accounting-service
               predicates:
                 - Path=/api/v1/journals/**,/api/v1/gl-accounts/**,/api/v1/accounting-rules/**,/api/v1/subledger-mappings/**,/api/v1/trial-balances/**,/api/v1/reconciliation/**,/api/v1/accounting-periods/**
+            - id: eod-reconciliation-service
+              uri: lb://eod-reconciliation-service
+              predicates:
+                - Path=/api/v1/eod/**,/api/v1/business-date/**
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
           globalcors:

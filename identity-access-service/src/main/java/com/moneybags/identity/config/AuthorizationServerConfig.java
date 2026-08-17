@@ -154,6 +154,9 @@ public class AuthorizationServerConfig {
                 "kyc:service", "identity:service"));
         clients.add(serviceClient("bill-generation-service", serviceSecret, encoder, serviceTokens,
                 "product:validate", "card:billing", "accounting:service", "notification:service"));
+        clients.add(serviceClient("eod-reconciliation-service", serviceSecret, encoder, serviceTokens,
+                "payment:service", "account:service", "card:eod", "billing:service",
+                "accounting:service", "notification:service", "statements:service"));
         return new InMemoryRegisteredClientRepository(clients);
     }
 

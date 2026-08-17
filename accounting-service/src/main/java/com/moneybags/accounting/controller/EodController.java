@@ -40,6 +40,14 @@ public class EodController {
         return eod.getReconciliation(runId);
     }
 
+    @PostMapping("/internal/v1/accounting/fixed-deposit-reconciliation")
+    ResponseEntity<FinancialReconciliationResponse> fixedDepositReconciliation(
+            @Valid @RequestBody FinancialReconciliationRequest request,
+            @RequestHeader("Idempotency-Key") @Size(max = 160) String key,
+            @RequestHeader("X-Correlation-Id") String correlationId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(eod.reconcile(request, key));
+    }
+
     @PatchMapping("/api/v1/reconciliation/runs/{runId}/items/{itemId}/resolution")
     FinancialReconciliationResponse resolve(@PathVariable String runId, @PathVariable String itemId,
             @Valid @RequestBody ReconciliationResolutionRequest request,
