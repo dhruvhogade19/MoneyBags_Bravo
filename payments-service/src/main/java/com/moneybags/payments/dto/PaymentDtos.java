@@ -32,7 +32,9 @@ public final class PaymentDtos {
 
   public record MerchantPaymentRequest(
       @Schema(example = "101") @NotNull @Positive Long requestorCustomerId,
-      @Schema(example = "101") @NotBlank @Size(max = 150) String creditCardAccountId,
+      @Schema(example = "CC-101") @NotBlank @Size(max = 150)
+      @Pattern(regexp = "(?:CC-)?[1-9][0-9]*", message = "must use a numeric ID or CC-<numeric ID>")
+      String creditCardAccountId,
       @Schema(example = "MERCHANT-001") @NotBlank @Size(max = 150) String merchantId,
       @Schema(example = "50000.00") @NotNull @DecimalMin("0.01")
       @Digits(integer = 15, fraction = 4) BigDecimal amount,
@@ -43,7 +45,9 @@ public final class PaymentDtos {
       @Schema(example = "101") @NotNull @Positive Long requestorCustomerId,
       @Schema(example = "BILL-202608-001") @NotBlank @Size(max = 100) String billId,
       @Schema(example = "dep-acc-001") @NotBlank @Size(max = 150) String sourceDepositAccountId,
-      @Schema(example = "101") @NotBlank @Size(max = 150) String creditCardAccountId,
+      @Schema(example = "CC-101") @NotBlank @Size(max = 150)
+      @Pattern(regexp = "(?:CC-)?[1-9][0-9]*", message = "must use a numeric ID or CC-<numeric ID>")
+      String creditCardAccountId,
       @Schema(example = "25000.00") @NotNull @DecimalMin("0.01")
       @Digits(integer = 15, fraction = 4) BigDecimal amount,
       @Schema(example = "INR") @NotBlank @Pattern(regexp = "[A-Z]{3}") String currencyCode,
@@ -104,6 +108,14 @@ public final class PaymentDtos {
       Instant updatedAt,
       Instant settledAt,
       Instant reversedAt) { }
+
+  public record PaymentStatusHistoryResponse(
+      PaymentStatus fromStatus,
+      PaymentStatus toStatus,
+      String reasonCode,
+      String reasonMessage,
+      String correlationId,
+      Instant changedAt) { }
 
   public record PageResponse<T>(
       List<T> content, int page, int size, long totalElements, int totalPages) { }

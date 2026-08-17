@@ -34,6 +34,8 @@ public class SecurityConfig {
                             .hasAuthority("SCOPE_cif:service")
                         .requestMatchers(HttpMethod.POST, "/api/v1/cifs")
                             .hasAnyAuthority("ROLE_BANK_ADMIN", "SCOPE_cif:write", "SCOPE_cif:service")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/cifs/me/identity-link")
+                            .hasAuthority("SCOPE_cif:write")
                         .requestMatchers(HttpMethod.GET, "/api/v1/cifs/**")
                             .hasAnyAuthority("SCOPE_cif:read", "SCOPE_cif:admin")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/cifs/**")

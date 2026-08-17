@@ -171,6 +171,33 @@ class ProductMasterIntegrationTest {
     }
 
     @Test
+    void depositEligibilityExplainsAgeAndCustomerTypeFailuresPrecisely() throws Exception {
+        mockMvc.perform(post("/internal/v1/products/SAV-REG-001/validate-account-opening")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"openingAmount":2000,"currency":"INR","productVersion":1,
+                                 "age":0,"monthlyIncome":100000,"customerType":"INDIVIDUAL",
+                                 "customerCategory":"REGULAR","kycVerified":true}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(false))
+                .andExpect(jsonPath("$.validationMessages[0]").value(
+                        "Customer must be at least 18 years old; profile age is 0"));
+
+        mockMvc.perform(post("/internal/v1/products/CUR-BIZ-001/validate-account-opening")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"openingAmount":10000,"currency":"INR","productVersion":1,
+                                 "age":30,"monthlyIncome":100000,"customerType":"INDIVIDUAL",
+                                 "customerCategory":"REGULAR","kycVerified":true}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligible").value(false))
+                .andExpect(jsonPath("$.validationMessages[0]").value(
+                        "Product is available to BUSINESS customers; profile customer type is INDIVIDUAL"));
+    }
+
+    @Test
     void treasuryBenchmarkCanBePublishedAndFetched() throws Exception {
         mockMvc.perform(post("/api/benchmarks")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -1,8 +1,12 @@
 target/
 logs/
+.runtime-tmp/
 .idea/
 *.iml
 .vscode/
 *.log
 .env
+.npm-cache/
+moneybags-web/test-dist/
+moneybags-web/test-output/
 

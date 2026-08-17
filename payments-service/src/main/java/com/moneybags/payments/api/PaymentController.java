@@ -22,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/payments")
@@ -57,7 +58,7 @@ public class PaymentController {
   @PreAuthorize("@paymentAuthorization.canUseCustomer(authentication, #request.requestorCustomerId())")
   @Operation(summary = "Pay a merchant using a credit-card hold and capture")
   @RequestBody(content = @Content(examples = @ExampleObject(value = """
-      {"requestorCustomerId":101,"creditCardAccountId":"101",
+      {"requestorCustomerId":101,"creditCardAccountId":"CC-101",
        "merchantId":"MERCHANT-001","amount":50000.00,"currencyCode":"INR",
        "reference":"Merchant purchase"}
       """)))
@@ -73,7 +74,7 @@ public class PaymentController {
   @Operation(summary = "Repay a generated credit-card bill from a deposit account")
   @RequestBody(content = @Content(examples = @ExampleObject(value = """
       {"requestorCustomerId":101,"billId":"BILL-202608-001",
-       "sourceDepositAccountId":"dep-acc-001","creditCardAccountId":"101",
+       "sourceDepositAccountId":"dep-acc-001","creditCardAccountId":"CC-101",
        "amount":25000.00,"currencyCode":"INR","reference":"Card bill repayment"}
       """)))
   public ResponseEntity<PaymentResponse> repayment(
@@ -104,6 +105,13 @@ public class PaymentController {
   @Operation(summary = "Get a payment by ID")
   public PaymentResponse get(@PathVariable String paymentId) {
     return queries.get(paymentId);
+  }
+
+  @GetMapping("/{paymentId}/history")
+  @PreAuthorize("@paymentAuthorization.canAccessPayment(authentication, #paymentId)")
+  @Operation(summary = "Get the ordered lifecycle history for a payment")
+  public List<PaymentStatusHistoryResponse> history(@PathVariable String paymentId) {
+    return queries.history(paymentId);
   }
 
   @GetMapping

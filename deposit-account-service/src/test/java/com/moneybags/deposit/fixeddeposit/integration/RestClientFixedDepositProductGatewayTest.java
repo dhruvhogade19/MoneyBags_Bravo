@@ -42,7 +42,7 @@ class RestClientFixedDepositProductGatewayTest {
 
         FixedDepositProductGateway.ProductTerms terms = gateway.resolve("FD-REG-001", 1L,
                 new BigDecimal("100000"), "INR", 12, TenureUnit.MONTH,
-                InterestPayoutFrequency.AT_MATURITY, valueDate, 65, "INDIVIDUAL",
+                InterestPayoutFrequency.AT_MATURITY, valueDate, 65, new BigDecimal("75000"), "INDIVIDUAL",
                 "SENIOR_CITIZEN", true);
 
         assertThat(terms.annualRate()).isEqualByComparingTo("7.25");
@@ -55,6 +55,7 @@ class RestClientFixedDepositProductGatewayTest {
                 ArgumentCaptor.forClass(ProductMasterClient.AccountOpeningValidationRequest.class);
         verify(client).validateAccountOpening(org.mockito.ArgumentMatchers.eq("FD-REG-001"), request.capture());
         assertThat(request.getValue().customerCategory()).isEqualTo("SENIOR_CITIZEN");
+        assertThat(request.getValue().monthlyIncome()).isEqualByComparingTo("75000");
         assertThat(request.getValue().kycVerified()).isTrue();
     }
 }

@@ -22,7 +22,7 @@ public class FixedDepositQuoteService {
         if (!customer.eligible())
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,"CUSTOMER_NOT_ELIGIBLE","Customer or KYC is not eligible");
         var t=products.resolve(r.productCode(),r.productVersion(),r.principal(),r.currency(),r.tenureValue(),
-                r.tenureUnit(),r.interestPayoutFrequency(),r.valueDate(),customer.age(),customer.customerType(),
+                r.tenureUnit(),r.interestPayoutFrequency(),r.valueDate(),customer.age(),customer.monthlyIncome(),customer.customerType(),
                 customer.customerCategory(),customer.kycVerified());
         var c=calculator.calculate(r.principal(),t.annualRate(),r.valueDate(),r.tenureValue(),r.tenureUnit(),t.compoundingFrequency());
         return new QuoteResponse(t.productCode(),t.productVersion(),t.productName(),t.rateSlabCode(),t.annualRate(),

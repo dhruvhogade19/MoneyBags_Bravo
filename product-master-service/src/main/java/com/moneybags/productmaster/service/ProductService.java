@@ -101,7 +101,7 @@ public class ProductService {
             compareAmount(request.openingAmount(), amount.minimumOpeningBalance(), "Opening amount is below the minimum opening balance", messages);
             if (amount.maximumBalance() != null && request.openingAmount().compareTo(amount.maximumBalance()) > 0) messages.add("Opening amount is above the maximum balance");
         }
-        validateEligibility(product.eligibilityRules(), request.age(), null, request.customerType(), request.customerCategory(), request.kycVerified(), messages);
+        validateEligibility(product.eligibilityRules(), request.age(), request.monthlyIncome(), request.customerType(), request.customerCategory(), request.kycVerified(), messages);
         return new ValidationResponse(messages.isEmpty(), messages, activeFees(product.fees()),
                 product.interestRule(), amount, product.productCode(), product.version(), product.version(),
                 product.productName(), product.category(), product.subtype(), product.currencyCode(),
@@ -219,7 +219,55 @@ public class ProductService {
     private boolean effective(LocalDate from, LocalDate to, LocalDate on) { return !from.isAfter(on) && (to == null || !to.isBefore(on)); }
     private List<String> baseValidation(ProductResponse product, Category category) { return baseValidation(product, category, LocalDate.now()); }
     private List<String> baseValidation(ProductResponse product, Category category, LocalDate on) { List<String> messages = new ArrayList<>(); if (product.category() != category) messages.add("Product category is not " + category); if (product.status() != Status.ACTIVE) messages.add("Product is not active"); if (!effective(product, on)) messages.add("Product is not effective on the requested date"); return messages; }
-    private void validateEligibility(List<EligibilityRuleDto> rules, Integer age, BigDecimal income, CustomerType type, CustomerCategory category, Boolean kyc, List<String> messages) { List<EligibilityRuleDto> matchesType = rules.stream().filter(EligibilityRuleDto::active).filter(rule -> (rule.customerType() == CustomerType.ANY || type == null || rule.customerType() == type) && (rule.customerCategory() == null || rule.customerCategory() == CustomerCategory.ANY || category == null || rule.customerCategory() == category)).toList(); if (matchesType.isEmpty()) { messages.add("No active eligibility rule matches the customer type"); return; } boolean matches = matchesType.stream().anyMatch(rule -> (rule.minimumAge() == null || age != null && age >= rule.minimumAge()) && (rule.maximumAge() == null || age != null && age <= rule.maximumAge()) && (rule.minimumMonthlyIncome() == null || income != null && income.compareTo(rule.minimumMonthlyIncome()) >= 0) && (!rule.kycRequired() || Boolean.TRUE.equals(kyc))); if (!matches) messages.add("Customer does not meet age, income, customer-type, customer-category, or KYC rules"); }
+    private void validateEligibility(List<EligibilityRuleDto> rules, Integer age, BigDecimal income,
+                                     CustomerType type, CustomerCategory category, Boolean kyc,
+                                     List<String> messages) {
+        List<EligibilityRuleDto> active = rules.stream().filter(EligibilityRuleDto::active).toList();
+        if (active.isEmpty()) {
+            messages.add("Product has no active eligibility rule");
+            return;
+        }
+        List<EligibilityRuleDto> matchesType = active.stream()
+                .filter(rule -> rule.customerType() == CustomerType.ANY
+                        || type != null && rule.customerType() == type)
+                .filter(rule -> rule.customerCategory() == null || rule.customerCategory() == CustomerCategory.ANY
+                        || category != null && rule.customerCategory() == category)
+                .toList();
+        if (matchesType.isEmpty()) {
+            String allowedTypes = active.stream().map(rule -> rule.customerType().name()).distinct().sorted()
+                    .collect(java.util.stream.Collectors.joining(", "));
+            messages.add("Product is available to " + allowedTypes + " customers; profile customer type is "
+                    + (type == null ? "not supplied" : type.name()));
+            return;
+        }
+        if (matchesType.stream().anyMatch(rule -> eligible(rule, age, income, kyc))) return;
+
+        Integer minimumAge = matchesType.stream().map(EligibilityRuleDto::minimumAge).filter(Objects::nonNull)
+                .min(Integer::compareTo).orElse(null);
+        Integer maximumAge = matchesType.stream().map(EligibilityRuleDto::maximumAge).filter(Objects::nonNull)
+                .max(Integer::compareTo).orElse(null);
+        BigDecimal minimumIncome = matchesType.stream().map(EligibilityRuleDto::minimumMonthlyIncome)
+                .filter(Objects::nonNull).min(BigDecimal::compareTo).orElse(null);
+        if (minimumAge != null && (age == null || age < minimumAge))
+            messages.add("Customer must be at least " + minimumAge + " years old; profile age is "
+                    + (age == null ? "not supplied" : age));
+        if (maximumAge != null && (age == null || age > maximumAge))
+            messages.add("Customer must be no older than " + maximumAge + " years; profile age is "
+                    + (age == null ? "not supplied" : age));
+        if (minimumIncome != null && (income == null || income.compareTo(minimumIncome) < 0))
+            messages.add("Minimum monthly income is " + minimumIncome.stripTrailingZeros().toPlainString());
+        if (matchesType.stream().allMatch(EligibilityRuleDto::kycRequired) && !Boolean.TRUE.equals(kyc))
+            messages.add("Approved KYC is required");
+        if (messages.isEmpty()) messages.add("Customer does not meet the active product eligibility rule");
+    }
+
+    private boolean eligible(EligibilityRuleDto rule, Integer age, BigDecimal income, Boolean kyc) {
+        return (rule.minimumAge() == null || age != null && age >= rule.minimumAge())
+                && (rule.maximumAge() == null || age != null && age <= rule.maximumAge())
+                && (rule.minimumMonthlyIncome() == null
+                    || income != null && income.compareTo(rule.minimumMonthlyIncome()) >= 0)
+                && (!rule.kycRequired() || Boolean.TRUE.equals(kyc));
+    }
     private void validateAmount(AmountRuleDto amount, List<String> errors) { if (amount == null) return; compare(amount.minimumBalance(), amount.maximumBalance(), "minimumBalance must not exceed maximumBalance", errors); compare(amount.minimumAmount(), amount.maximumAmount(), "minimumAmount must not exceed maximumAmount", errors); compare(amount.minimumTenureMonths(), amount.maximumTenureMonths(), "minimumTenureMonths must not exceed maximumTenureMonths", errors); if (!amount.overdraftAllowed() && positive(amount.overdraftLimit())) errors.add("overdraftLimit must be zero or null when overdraft is not allowed"); }
     private void validateInterest(AbstractInterestPolicy policy, Category category, List<String> errors) { if (policy == null) return; validateDates(policy.getEffectiveFrom(), policy.getEffectiveTo(), "interest policy effectiveTo", errors); compare(policy.getMinimumRate(), policy.getMaximumRate(), "minimumRate must not exceed maximumRate", errors); if (policy.getPricingMode() == PricingMode.FIXED && policy.getAnnualInterestRate() == null) errors.add("FIXED pricing requires annualInterestRate"); if (policy.getPricingMode() == PricingMode.BENCHMARK_PLUS_SPREAD && (policy.getBenchmarkCode() == null || policy.getProductSpread() == null)) errors.add("BENCHMARK_PLUS_SPREAD requires benchmarkCode and productSpread"); if (category == Category.DEPOSIT && policy.getInterestType() != InterestType.CREDIT) errors.add("Deposit interest must use CREDIT interestType"); if (category == Category.CREDIT_CARD && (policy.getInterestType() != InterestType.DEBIT || policy.getInterestCalculationFrequency() != InterestFrequency.DAILY || policy.getInterestPostingFrequency() != InterestPostingFrequency.MONTHLY)) errors.add("Credit-card interest must be DEBIT with DAILY calculation and MONTHLY posting"); }
     private void validateCard(CreditCardRuleDto card, List<String> errors) { if (card == null) return; validateDates(card.effectiveFrom(), card.effectiveTo(), "credit-card policy effectiveTo", errors); compare(card.minimumCreditLimit(), card.maximumCreditLimit(), "minimumCreditLimit must not exceed maximumCreditLimit", errors); if (card.cashAdvanceAllowed() && card.cashAdvanceLimitPercentage() == null) errors.add("cashAdvanceLimitPercentage is required when cash advance is allowed"); if (!card.cashAdvanceAllowed() && card.cashAdvanceLimitPercentage() != null) errors.add("cashAdvanceLimitPercentage must be null when cash advance is not allowed"); }

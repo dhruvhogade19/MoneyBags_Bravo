@@ -7,7 +7,7 @@ import java.time.LocalDate;
 public interface FixedDepositProductGateway {
     ProductTerms resolve(String productCode, Long productVersion, BigDecimal principal, String currency,
                          int tenureValue, TenureUnit tenureUnit, InterestPayoutFrequency payoutFrequency,
-                         LocalDate valueDate, Integer customerAge, String customerType,
+                         LocalDate valueDate, Integer customerAge, BigDecimal monthlyIncome, String customerType,
                          String customerCategory, boolean kycVerified);
 
     record ProductTerms(String productCode, Long productVersion, String productName, String rateSlabCode,

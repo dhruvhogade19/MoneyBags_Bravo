@@ -46,10 +46,16 @@ public class CifServiceImpl implements CifService {
     @Override
     public CifResponse createCif(CreateCifRequest request, String identityUserId, String tenantId) {
         validateSalary(request.employmentType(), request.salary());
-        validateUniqueFieldsForCreate(request);
         if (identityUserId != null && cifRepository.existsByIdentityUserId(identityUserId)) {
             throw new DuplicateResourceException("Authenticated consumer is already linked to a CIF");
         }
+
+        Cif reclaimedCif = reclaimMatchingCif(request, identityUserId, tenantId);
+        if (reclaimedCif != null) {
+            return toCifResponse(reclaimedCif);
+        }
+
+        validateUniqueFieldsForCreate(request);
 
         Cif cif = new Cif();
         copyCreateRequestToEntity(request, cif);
@@ -65,10 +71,53 @@ public class CifServiceImpl implements CifService {
         return toCifResponse(savedCif);
     }
 
+    private Cif reclaimMatchingCif(
+            CreateCifRequest request,
+            String identityUserId,
+            String tenantId
+    ) {
+        if (identityUserId == null || identityUserId.isBlank()) {
+            return null;
+        }
+
+        return cifRepository.findByPanNumber(request.panNumber())
+                .map(existing -> {
+                    if (!matchesIdentityProof(existing, request)) {
+                        throw new DuplicateResourceException("PAN number is already registered");
+                    }
+                    existing.setIdentityUserId(identityUserId);
+                    existing.setTenantId(tenantId == null || tenantId.isBlank()
+                            ? "moneybags"
+                            : tenantId);
+                    return cifRepository.save(existing);
+                })
+                .orElse(null);
+    }
+
+    private boolean matchesIdentityProof(Cif existing, CreateCifRequest request) {
+        return existing.getPanNumber().equalsIgnoreCase(request.panNumber())
+                && existing.getAadhaarNumber().equals(request.aadhaarNumber())
+                && existing.getDob().equals(request.dob())
+                && existing.getEmail().equalsIgnoreCase(request.email())
+                && existing.getNumber().equals(request.number());
+    }
+
     @Override
     @Transactional(readOnly = true)
     public CifResponse getCifById(Long cifId) {
         return toCifResponse(findCifById(cifId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CifResponse getCifByIdentityUserId(String identityUserId) {
+        if (identityUserId == null || identityUserId.isBlank()) {
+            throw new ResourceNotFoundException("No CIF is linked to the authenticated identity");
+        }
+        return cifRepository.findByIdentityUserId(identityUserId)
+                .map(this::toCifResponse)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No CIF is linked to the authenticated identity"));
     }
 
     @Override
@@ -127,6 +176,7 @@ public class CifServiceImpl implements CifService {
                 cif.getCifId(),
                 cif.getDob(),
                 cif.getEmploymentType(),
+                cif.getSalary(),
                 cif.getKycStatus()
         );
     }

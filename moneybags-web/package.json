@@ -1,0 +1,30 @@
+{
+  "name": "moneybags-web",
+  "version": "1.0.0",
+  "description": "An Oracle JavaScript Extension Toolkit(JET) web app",
+  "scripts": {
+    "build": "ojet build",
+    "build:release": "ojet build --release",
+    "serve": "ojet serve --server-port=8000",
+    "serve:stack": "ojet serve --server-port=8000 --server-only",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test tests/*.test.cjs"
+  },
+  "dependencies": {
+    "@oracle/oraclejet": "~17.1.0",
+    "@oracle/oraclejet-core-pack": "~17.1.0"
+  },
+  "devDependencies": {
+    "@oracle/ojet-cli": "~17.1.0",
+    "extract-zip": "^1.7.0",
+    "fs-extra": "^8.1.0",
+    "glob": "10.4.5",
+    "typescript": "5.4.5",
+    "underscore": "^1.10.2",
+    "yargs-parser": "13.1.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "private": true
+}

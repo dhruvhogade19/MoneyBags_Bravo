@@ -151,7 +151,8 @@ public final class ProductDtos {
     public record AccountOpeningValidationRequest(
             @NotNull @DecimalMin("0.0") BigDecimal openingAmount,
             @Pattern(regexp = "[A-Z]{3}") String currency,
-            @Min(0) Integer age, CustomerType customerType, CustomerCategory customerCategory,
+            @Min(0) Integer age, @DecimalMin("0.0") BigDecimal monthlyIncome,
+            CustomerType customerType, CustomerCategory customerCategory,
             @Min(1) Integer tenureMonths, String tenureUnit,
             InterestPostingFrequency interestPayoutFrequency,
             @JsonAlias("kycCompleted") Boolean kycVerified,

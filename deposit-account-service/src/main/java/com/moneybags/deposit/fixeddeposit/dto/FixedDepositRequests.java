@@ -20,7 +20,7 @@ public final class FixedDepositRequests {
         @NotBlank String productCode, @NotNull @Positive Long productVersion,
         @NotNull @DecimalMin("0.01") BigDecimal principal, @NotBlank @Pattern(regexp="[A-Z]{3}") String currency,
         @Min(1) int tenureValue, @NotNull TenureUnit tenureUnit,
-        @NotNull InterestPayoutFrequency interestPayoutFrequency, @NotBlank String fundingAccountId,
+        @NotNull InterestPayoutFrequency interestPayoutFrequency, LocalDate valueDate, @NotBlank String fundingAccountId,
         @NotBlank String payoutAccountId, @NotBlank String servicingBranchId,
         List<@Valid NomineeRequest> nominees, @NotBlank String channel, @Size(max=64) String externalReference) {}
 

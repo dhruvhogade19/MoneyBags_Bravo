@@ -23,6 +23,10 @@ public interface FixedDepositRepository extends JpaRepository<FixedDeposit, Stri
     @Query("select f from FixedDeposit f join fetch f.account where f.id=:id")
     Optional<FixedDeposit> findByIdForUpdate(@Param("id") String id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select f from FixedDeposit f join fetch f.account where f.account.id=:accountId")
+    Optional<FixedDeposit> findByAccountIdForUpdate(@Param("accountId") String accountId);
+
     @Query("select distinct f from FixedDeposit f join f.account a join a.holders h where " +
             "(:customerId is null or h.customerId=:customerId) and (:status is null or f.status=:status) and " +
             "(:maturingBefore is null or f.maturityDate<=:maturingBefore)")

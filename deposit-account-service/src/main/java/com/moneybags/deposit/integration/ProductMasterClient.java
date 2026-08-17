@@ -79,7 +79,7 @@ public class ProductMasterClient {
                             LocalDate effectiveFrom, LocalDate effectiveTo, Boolean active) {}
 
     public record AccountOpeningValidationRequest(
-            BigDecimal openingAmount, String currency, Integer age, String customerType,
+            BigDecimal openingAmount, String currency, Integer age, BigDecimal monthlyIncome, String customerType,
             String customerCategory, Integer tenureMonths, String tenureUnit,
             String interestPayoutFrequency, Boolean kycVerified, Long productVersion,
             LocalDate valueDate) {}

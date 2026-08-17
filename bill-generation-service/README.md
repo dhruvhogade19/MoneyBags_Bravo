@@ -8,6 +8,8 @@ When a bill is generated, Bill Generation calls `POST /internal/v1/notifications
 
 Eureka is disabled by default so the service can run directly on port `8087`. For a full multi-service environment, start Discovery Server and set `EUREKA_ENABLED=true` (and `EUREKA_URL` if it is not `http://localhost:8761/eureka/`).
 
-Run from the repository root with `mvn -pl bill-generation-service -am spring-boot:run`. The relevant APIs are `/internal/v1/bills/generate`, `/api/v1/bills/{billId}`, `/internal/v1/bills/{billId}/summary`, `/internal/v1/bills`, and `/internal/v1/bills/eod/close`.
+Run from the repository root with `mvn -pl bill-generation-service -am spring-boot:run`. The relevant APIs are `/internal/v1/bills/generate`, customer-scoped `GET /api/v1/bills` and `/api/v1/bills/{billId}`, `/internal/v1/bills/{billId}/summary`, `/internal/v1/bills`, and `/internal/v1/bills/eod/close`.
+
+New bills store the owning CIF and the canonical credit-card account reference (`CC-<numeric-id>`). Public list/detail reads restrict consumers to that CIF; bank administrators may search across customers. Bills generated before the ownership migration have no CIF and remain available only through internal/admin access until ownership is reconciled operationally.
 
 After Accounting posts a successful card-payment journal, Payments calls `POST /internal/v1/bills/{billId}/payment-settlements`. The call is idempotent by `paymentId`; Bill Generation records the allocation and transitions the bill to `PARTIALLY_PAID` or `PAID`. Credit Card can call `GET /internal/v1/bills/accounts/{accountId}/closure-eligibility` to determine whether any unpaid bills block closure.

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
+import org.springframework.web.cors.reactive.CorsUtils;
 import reactor.core.publisher.Mono;
 
 @Component
@@ -25,7 +26,9 @@ public class TrustedIdentityHeadersFilter implements WebFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
-        if (path.startsWith("/actuator/health")) return chain.filter(exchange);
+        if (path.startsWith("/actuator/health") || CorsUtils.isPreFlightRequest(exchange.getRequest())) {
+            return chain.filter(exchange);
+        }
         return exchange.getPrincipal().flatMap(principal -> {
             if (!(principal instanceof JwtAuthenticationToken jwt)) return forbidden(exchange, "JWT authentication is required");
             String tenantHeader = exchange.getRequest().getHeaders().getFirst("X-Tenant-ID");

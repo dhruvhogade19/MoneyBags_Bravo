@@ -11,7 +11,7 @@ import java.time.LocalDate;
 public class StubFixedDepositProductGateway implements FixedDepositProductGateway {
     @Override public ProductTerms resolve(String code, Long version, BigDecimal principal, String currency,
                                           int tenure, TenureUnit unit, InterestPayoutFrequency payout, LocalDate valueDate,
-                                          Integer customerAge, String customerType, String customerCategory,
+                                          Integer customerAge, BigDecimal monthlyIncome, String customerType, String customerCategory,
                                           boolean kycVerified) {
         BigDecimal rate = tenure >= 12 ? new BigDecimal("6.75000000") : new BigDecimal("5.50000000");
         return new ProductTerms(code, version, code.replace('-', ' '), "STUB-"+tenure+unit,

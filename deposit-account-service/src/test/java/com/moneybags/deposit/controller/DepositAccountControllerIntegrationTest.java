@@ -8,11 +8,13 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -33,7 +35,8 @@ class DepositAccountControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(eligibilityJson()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.eligible").value(true))
-                .andExpect(jsonPath("$.decisionCode").value("ELIGIBLE"));
+                .andExpect(jsonPath("$.decisionCode").value("ELIGIBLE"))
+                .andExpect(jsonPath("$.messages").isEmpty());
 
         String accountId = open("api-open-read-1", "CIF-API-READ", "EXT-READ-1");
         mockMvc.perform(get("/api/deposit-accounts/{id}", accountId))
@@ -47,7 +50,8 @@ class DepositAccountControllerIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].toStatus").value("PENDING_ACTIVATION"));
         mockMvc.perform(get("/api/deposit-accounts").param("customerId", "CIF-API-READ")
                         .param("status", "PENDING_ACTIVATION").param("page", "0").param("size", "10"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].accountId").value(accountId));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].accountId").value(accountId))
+                .andExpect(jsonPath("$.content[0].productSubtype").value("SAVINGS"));
     }
 
     @Test
@@ -65,6 +69,34 @@ class DepositAccountControllerIntegrationTest {
         mockMvc.perform(get("/internal/v1/deposit-accounts/eod/readiness"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.service").value("deposit-account-service"));
+    }
+
+    @Test
+    void adminDepositOperationsFacadeReportsReadinessAndRunsEodCommands() throws Exception {
+        var admin = user("ops-admin").authorities(
+                new SimpleGrantedAuthority("SCOPE_account:admin"),
+                new SimpleGrantedAuthority("SCOPE_fd:admin"));
+
+        mockMvc.perform(get("/api/deposit-accounts/operations/eod/readiness").with(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ready").isBoolean())
+                .andExpect(jsonPath("$.blockers").isArray())
+                .andExpect(jsonPath("$.depositAccounts.service").value("deposit-account-service"))
+                .andExpect(jsonPath("$.fixedDeposits.pendingFunding").isNumber());
+
+        String accountAccrual = "{\"eodRunId\":\"ADMIN-EOD-1\",\"commandReference\":\"admin-casa-1\",\"businessDate\":\"2026-08-13\",\"currency\":\"INR\"}";
+        mockMvc.perform(post("/api/deposit-accounts/operations/eod/account-accruals").with(admin)
+                        .header("Idempotency-Key", "admin-casa-1")
+                        .contentType(MediaType.APPLICATION_JSON).content(accountAccrual))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eodRunId").value("ADMIN-EOD-1"));
+
+        String fixedDepositAccrual = "{\"eodRunId\":\"ADMIN-FD-EOD-1\",\"commandReference\":\"admin-fd-1\",\"businessDate\":\"2026-08-13\"}";
+        mockMvc.perform(post("/api/deposit-accounts/operations/eod/fixed-deposit-accruals").with(admin)
+                        .header("Idempotency-Key", "admin-fd-1")
+                        .contentType(MediaType.APPLICATION_JSON).content(fixedDepositAccrual))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eodRunId").value("ADMIN-FD-EOD-1"));
     }
 
     @Test

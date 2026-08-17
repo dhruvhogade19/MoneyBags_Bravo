@@ -16,6 +16,8 @@ public interface CifService {
 
     CifResponse getCifById(Long cifId);
 
+    CifResponse getCifByIdentityUserId(String identityUserId);
+
     CifResponse updateCif(Long cifId, UpdateCifRequest request);
 
     CifResponse updateKycStatus(Long cifId, UpdateKycStatusRequest request);

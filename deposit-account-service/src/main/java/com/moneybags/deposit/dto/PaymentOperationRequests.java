@@ -3,6 +3,7 @@ package com.moneybags.deposit.dto;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 
 public final class PaymentOperationRequests {
@@ -30,4 +31,28 @@ public final class PaymentOperationRequests {
 
     public record ReleaseReservationRequest(@NotBlank @Size(max = 64) String paymentId,
                                             @Size(max = 80) String reasonCode) {}
+
+    public record FixedDepositFundingReservationRequest(
+            @NotBlank @Size(max = 64) String paymentId,
+            @NotNull @Positive Long requestorCustomerId,
+            @NotBlank @Size(max = 36) String sourceAccountId,
+            @NotBlank @Size(max = 36) String fixedDepositId,
+            @NotNull @DecimalMin("0.01") BigDecimal amount,
+            @NotBlank @Pattern(regexp = "[A-Z]{3}") String currencyCode,
+            @NotNull Instant expiresAt) {}
+
+    public record FixedDepositFundingSettlementRequest(
+            @NotBlank @Size(max = 36) String reservationId,
+            @NotBlank @Size(max = 36) String fixedDepositId,
+            @NotBlank @Size(max = 100) String journalNumber) {}
+
+    public record FixedDepositPayoutConfirmationRequest(
+            @NotBlank @Size(max = 64) String paymentId,
+            @NotBlank @Size(max = 100) String journalNumber,
+            @NotBlank @Size(max = 36) String payoutAccountId,
+            @NotNull @DecimalMin("0.00") BigDecimal principalAmount,
+            @NotNull @DecimalMin("0.00") BigDecimal interestAmount,
+            @NotNull @DecimalMin("0.01") BigDecimal netPayoutAmount,
+            @NotBlank @Pattern(regexp = "[A-Z]{3}") String currencyCode,
+            @NotBlank @Pattern(regexp = "MATURITY|PREMATURE") String payoutType) {}
 }

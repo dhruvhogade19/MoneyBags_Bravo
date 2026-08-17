@@ -32,12 +32,12 @@ public class RestClientFixedDepositProductGateway implements FixedDepositProduct
     @Override
     public ProductTerms resolve(String code, Long version, BigDecimal principal, String currency,
                                 int tenure, TenureUnit unit, InterestPayoutFrequency payout,
-                                LocalDate valueDate, Integer customerAge, String customerType,
+                                LocalDate valueDate, Integer customerAge, BigDecimal monthlyIncome, String customerType,
                                 String customerCategory, boolean kycVerified) {
         try {
             ProductMasterClient.AccountOpeningValidation decision = client.validateAccountOpening(code,
                     new ProductMasterClient.AccountOpeningValidationRequest(principal, currency, customerAge,
-                            customerType, customerCategory, tenure, unit.name(), payout.name(), kycVerified,
+                            monthlyIncome, customerType, customerCategory, tenure, unit.name(), payout.name(), kycVerified,
                             version, valueDate));
             if (decision == null) {
                 throw new ApiException(HttpStatus.BAD_GATEWAY, "INVALID_PRODUCT_MASTER_RESPONSE",

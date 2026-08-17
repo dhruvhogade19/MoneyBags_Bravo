@@ -52,7 +52,8 @@ An account is eligible only when every bill is `PAID`. The response includes any
 | Endpoint | Consumer / purpose | Key requirements |
 |---|---|---|
 | `POST /internal/v1/bills/generate` | Scheduled process or internal caller creates a statement | `Idempotency-Key`; `accountId`, `billingPeriod`, `businessDate` |
-| `GET /api/v1/bills/{billId}` | Retrieve a bill and lines | Bill ID |
+| `GET /api/v1/bills` | Retrieve bills owned by the authenticated customer | Optional account ID, billing period, status, and paging |
+| `GET /api/v1/bills/{billId}` | Retrieve a customer-owned bill and lines | Bill ID |
 | `GET /internal/v1/bills/{billId}/summary` | Retrieve payment-facing bill totals | Bill ID |
 | `GET /internal/v1/bills` | Search bills | Optional `accountId`, `billingPeriod`, `status`; `page` >= 0; `size` 1–100 |
 | `POST /internal/v1/bills/{billId}/payment-settlements` | Payments reports settled payment | Settlement body described above |

@@ -12,14 +12,26 @@ $servicePorts = @(
     @{ Name = "accounting-service"; Port = 8088 },
     @{ Name = "notification-service"; Port = 8090 },
     @{ Name = "bill-generation-service"; Port = 8087 },
-    @{ Name = "api-gateway"; Port = 8080 }
+    @{ Name = "api-gateway"; Port = 8080 },
+    @{ Name = "moneybags-web"; Port = 8000 }
 )
 
 # spring-boot:run creates a child Java process. Stop the actual port owner first.
 foreach ($service in $servicePorts) {
-    $listeners = Get-NetTCPConnection -State Listen -LocalPort $service.Port -ErrorAction SilentlyContinue
-    foreach ($listener in @($listeners)) {
-        $process = Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue
+    $ownerIds = @(Get-NetTCPConnection -State Listen -LocalPort $service.Port -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty OwningProcess -Unique)
+
+    # Get-NetTCPConnection can return no rows in a non-elevated PowerShell
+    # session. netstat remains available and exposes the exact listener PID.
+    if ($ownerIds.Count -eq 0) {
+        $portPattern = ":" + $service.Port + "\s+.*LISTENING\s+(\d+)\s*$"
+        $ownerIds = @(netstat -ano -p tcp | ForEach-Object {
+            if ($_ -match $portPattern) { [int]$Matches[1] }
+        } | Select-Object -Unique)
+    }
+
+    foreach ($ownerId in $ownerIds) {
+        $process = Get-Process -Id $ownerId -ErrorAction SilentlyContinue
         if ($null -ne $process) {
             Stop-Process -Id $process.Id -Force
             Write-Host ("Stopped " + $service.Name + " port owner (PID " + $process.Id + ", port " + $service.Port + ")")

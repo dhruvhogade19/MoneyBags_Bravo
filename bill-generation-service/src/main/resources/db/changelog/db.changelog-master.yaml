@@ -97,3 +97,25 @@ databaseChangeLog:
             path: db/changelog/changes/003-bill-payment-lifecycle.sql
             splitStatements: true
             stripComments: true
+  - changeSet:
+      id: 004-bill-customer-ownership
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: BILL
+                columnName: CIF_ID
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/004-bill-customer-ownership.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 004a-widen-card-account-reference
+      author: moneybags
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/004a-widen-card-account-reference.sql
+            splitStatements: true
+            stripComments: true

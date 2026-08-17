@@ -4,6 +4,7 @@ import com.moneybags.creditcard.domain.CreditCardTypes.ApplicationStatus;
 import com.moneybags.creditcard.domain.CreditCardTypes.EligibilityStatus;
 import com.moneybags.creditcard.dto.CreditCardDtos.ApplicationRequest;
 import com.moneybags.creditcard.entity.CreditCardApplication;
+import com.moneybags.creditcard.entity.CreditCardAccount;
 import com.moneybags.creditcard.integration.CreditCardReferenceGateway;
 import com.moneybags.creditcard.integration.AccountingLifecycleGateway;
 import com.moneybags.creditcard.repository.CreditCardAccountRepository;
@@ -12,6 +13,7 @@ import com.moneybags.creditcard.repository.CreditCardHoldRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -31,7 +33,7 @@ class CreditCardApplicationDecisionTest {
     private final CreditCardService service = new CreditCardService(applications, accounts, accountService, holds, references, accounting);
 
     @Test
-    void eligibleApplicationIsApprovedAndCreatesAnAccount() {
+    void eligibleApplicationIsPendingForAdminReview() {
         stubCif();
         when(references.validateApplication(eq("VISA"), any(), any())).thenReturn(
                 new CreditCardReferenceGateway.ProductValidation(true,
@@ -44,15 +46,15 @@ class CreditCardApplicationDecisionTest {
 
         var response = service.submit(new ApplicationRequest(501L, "VISA", new BigDecimal("100000.00")));
 
-        assertEquals(ApplicationStatus.APPROVED, response.applicationStatus());
+        assertEquals(ApplicationStatus.PENDING, response.applicationStatus());
         assertEquals(EligibilityStatus.ELIGIBLE, response.eligibilityStatus());
-        assertEquals(new BigDecimal("100000.00"), response.approvedCreditLimit());
+        assertEquals(null, response.approvedCreditLimit());
         assertEquals(new BigDecimal("42.0000"), response.purchaseInterestRateSnapshot());
-        verify(accountService).createForApplication(any(CreditCardApplication.class));
+        verify(accountService, never()).createForApplication(any(CreditCardApplication.class));
     }
 
     @Test
-    void ineligibleApplicationIsRejectedWithoutCreatingAnAccount() {
+    void ineligibleApplicationIsPendingButCannotBeApprovedAutomatically() {
         stubCif();
         when(references.validateApplication(eq("VISA"), any(), any())).thenReturn(
                 new CreditCardReferenceGateway.ProductValidation(false,
@@ -61,10 +63,55 @@ class CreditCardApplicationDecisionTest {
 
         var response = service.submit(new ApplicationRequest(501L, "VISA", new BigDecimal("100000.00")));
 
-        assertEquals(ApplicationStatus.REJECTED, response.applicationStatus());
+        assertEquals(ApplicationStatus.PENDING, response.applicationStatus());
         assertEquals(EligibilityStatus.NOT_ELIGIBLE, response.eligibilityStatus());
         assertEquals(null, response.approvedCreditLimit());
         verify(accountService, never()).createForApplication(any());
+    }
+
+    @Test
+    void adminApprovalCreatesTheCardAccount() {
+        CreditCardApplication application = pendingApplication(EligibilityStatus.ELIGIBLE);
+        CreditCardAccount account = new CreditCardAccount();
+        account.id = 7001L;
+        account.applicationId = application.id;
+        account.cifId = application.cifId;
+        account.productCode = application.productCode;
+        account.sanctionedLimit = application.requestedCreditLimit;
+        account.availableLimit = application.requestedCreditLimit;
+        account.outstandingAmount = BigDecimal.ZERO;
+        when(applications.findById(application.id)).thenReturn(Optional.of(application));
+        when(accountService.createForApplication(application)).thenReturn(account);
+
+        var response = service.approve(application.id);
+
+        assertEquals(ApplicationStatus.APPROVED, application.applicationStatus);
+        assertEquals(application.requestedCreditLimit, application.approvedCreditLimit);
+        assertEquals(7001L, response.accountId());
+        verify(accountService).createForApplication(application);
+    }
+
+    @Test
+    void adminCanRejectAPendingApplication() {
+        CreditCardApplication application = pendingApplication(EligibilityStatus.ELIGIBLE);
+        when(applications.findById(application.id)).thenReturn(Optional.of(application));
+
+        var response = service.reject(application.id);
+
+        assertEquals(ApplicationStatus.REJECTED, response.applicationStatus());
+        verify(accountService, never()).createForApplication(any());
+    }
+
+    private CreditCardApplication pendingApplication(EligibilityStatus eligibilityStatus) {
+        CreditCardApplication application = new CreditCardApplication();
+        application.id = 1001L;
+        application.cifId = 501L;
+        application.productCode = "VISA";
+        application.requestedCreditLimit = new BigDecimal("100000.00");
+        application.purchaseInterestRateSnapshot = new BigDecimal("42.0000");
+        application.applicationStatus = ApplicationStatus.PENDING;
+        application.eligibilityStatus = eligibilityStatus;
+        return application;
     }
 
     private void stubCif() {

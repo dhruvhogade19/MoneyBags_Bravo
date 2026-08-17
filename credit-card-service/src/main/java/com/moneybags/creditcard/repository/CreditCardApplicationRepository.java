@@ -9,5 +9,9 @@ import java.util.List;
 public interface CreditCardApplicationRepository extends JpaRepository<CreditCardApplication, Long> {
     List<CreditCardApplication> findByCifIdOrderBySubmittedAtDesc(Long cifId);
 
+    List<CreditCardApplication> findAllByOrderBySubmittedAtDesc();
+
+    List<CreditCardApplication> findByApplicationStatusOrderBySubmittedAtDesc(ApplicationStatus status);
+
     long countByApplicationStatus(ApplicationStatus status);
 }

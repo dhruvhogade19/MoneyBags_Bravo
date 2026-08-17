@@ -16,6 +16,23 @@ public class KycMapper {
 
         Kyc kyc = new Kyc();
 
+        applyCustomerSnapshot(kyc, request);
+
+        kyc.setInitiatedBy("CIF_SERVICE");
+
+        kyc.setKycStatus(KycStatus.PENDING);
+
+        kyc.setCifSyncStatus(
+                CifSyncStatus.PENDING
+        );
+
+        kyc.setSyncRetryCount(0);
+
+        return kyc;
+    }
+
+    public void applyCustomerSnapshot(Kyc kyc, CreateKycRequest request) {
+
         kyc.setCifId(request.cifId());
         kyc.setTenantId(request.tenantId());
         kyc.setCustomerName(
@@ -29,18 +46,6 @@ public class KycMapper {
         kyc.setAddressLine1(request.address());
         kyc.setEmploymentType(request.employmentType());
         kyc.setSalary(request.salary());
-
-        kyc.setInitiatedBy("CIF_SERVICE");
-
-        kyc.setKycStatus(KycStatus.PENDING);
-
-        kyc.setCifSyncStatus(
-                CifSyncStatus.PENDING
-        );
-
-        kyc.setSyncRetryCount(0);
-
-        return kyc;
     }
 
     public KycResponse toResponse(Kyc kyc) {

@@ -7,6 +7,7 @@ import com.moneybags.cif.dto.response.CifResponse;
 import com.moneybags.cif.dto.response.CreditCardDetailsResponse;
 import com.moneybags.cif.dto.response.CustomerContactDetailsResponse;
 import com.moneybags.cif.dto.response.DepositCreationDetailsResponse;
+import com.moneybags.cif.integration.IdentityServiceClient;
 import com.moneybags.cif.service.CifService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -35,9 +36,11 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 public class CifController {
 
     private final CifService cifService;
+    private final IdentityServiceClient identityServiceClient;
 
-    public CifController(CifService cifService) {
+    public CifController(CifService cifService, IdentityServiceClient identityServiceClient) {
         this.cifService = cifService;
+        this.identityServiceClient = identityServiceClient;
     }
 
 
@@ -69,6 +72,45 @@ public class CifController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
+    }
+
+    @GetMapping("/me")
+    @PreAuthorize("hasRole('CONSUMER') and hasAuthority('SCOPE_cif:read')")
+    @Operation(
+            summary = "Resolve the authenticated consumer CIF",
+            description = "Returns the CIF linked to the signed identity without relying on a possibly stale customer_id token claim."
+    )
+    public ResponseEntity<CifResponse> getMyCif(Authentication authentication) {
+        return ResponseEntity.ok(cifService.getCifByIdentityUserId(identityUserId(authentication)));
+    }
+
+    @PostMapping("/me/identity-link")
+    @PreAuthorize("hasRole('CONSUMER') and hasAuthority('SCOPE_cif:write')")
+    @Operation(
+            summary = "Repair the authenticated consumer identity link",
+            description = "Idempotently synchronizes the existing CIF identifier into Identity before the browser refreshes its token."
+    )
+    public ResponseEntity<CifResponse> repairMyIdentityLink(Authentication authentication) {
+        String userId = identityUserId(authentication);
+        String tenantId = tenantId(authentication);
+        CifResponse cif = cifService.getCifByIdentityUserId(userId);
+        identityServiceClient.linkCustomer(userId, cif.cifId(), tenantId);
+        return ResponseEntity.ok(cif);
+    }
+
+    private static String identityUserId(Authentication authentication) {
+        if (authentication instanceof JwtAuthenticationToken jwt) {
+            return jwt.getToken().getClaimAsString("user_id");
+        }
+        return null;
+    }
+
+    private static String tenantId(Authentication authentication) {
+        if (authentication instanceof JwtAuthenticationToken jwt) {
+            String value = jwt.getToken().getClaimAsString("tenant_id");
+            return value == null || value.isBlank() ? "moneybags" : value;
+        }
+        return "moneybags";
     }
 
 

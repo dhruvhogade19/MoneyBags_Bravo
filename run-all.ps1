@@ -24,6 +24,28 @@ if ($null -eq $java25) {
     throw "JDK 25 was not found under C:\Program Files\Java. Install JDK 25 before starting the services."
 }
 $env:JAVA_HOME = $java25.FullName
+# Maven derives its local repository from Java's user.home. Some restricted
+# launch environments report that property as C:\ even when USERPROFILE is
+# correct, causing every service launcher to fail against C:\.m2. Pin it to the
+# signed-in Windows profile while preserving any other MAVEN_OPTS.
+if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE) -and
+    ($env:MAVEN_OPTS -notmatch '(?:^|\s)-Duser\.home=')) {
+    $userHomeOption = '-Duser.home="' + $env:USERPROFILE + '"'
+    $env:MAVEN_OPTS = (($env:MAVEN_OPTS, $userHomeOption) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
+}
+# Keep Spring Boot's generated servlet/session directories inside a leaf owned
+# by the current Windows identity. A shared directory can contain Spring temp
+# folders created by VS Code, Codex, or the signed-in user; Spring Boot 4 then
+# correctly rejects a folder owned by a different principal.
+$runtimeIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value -replace '[^A-Za-z0-9.-]', '_'
+$runtimeTempDir = Join-Path $projectRoot (".runtime-tmp\" + $runtimeIdentity)
+New-Item -ItemType Directory -Force -Path $runtimeTempDir | Out-Null
+if ($env:JAVA_TOOL_OPTIONS -notmatch '(?:^|\s)-Djava\.io\.tmpdir=') {
+    $javaTempOption = '-Djava.io.tmpdir="' + $runtimeTempDir + '"'
+    $env:JAVA_TOOL_OPTIONS = (($env:JAVA_TOOL_OPTIONS, $javaTempOption) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
+}
 # Some launch environments expose both PATH and Path. PowerShell's
 # Start-Process rejects that case-insensitive duplicate while copying the
 # environment, so normalize it before spawning the Maven launchers.
@@ -49,6 +71,24 @@ if ([string]::IsNullOrWhiteSpace($env:STUB_UPSTREAM_CLIENTS)) {
     # The complete local stack is available, so exercise real service integrations.
     $env:STUB_UPSTREAM_CLIENTS = "false"
 }
+# A developer database commonly has a much smaller Oracle process/session limit
+# than production. Ten independent default Hikari pools can otherwise exhaust
+# the listener before the last service starts (ORA-12516).
+if ([string]::IsNullOrWhiteSpace($env:SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE)) {
+    $env:SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE = "3"
+}
+if ([string]::IsNullOrWhiteSpace($env:SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE)) {
+    $env:SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE = "1"
+}
+# A VPN reconnect can change the machine's preferred IP address while old Eureka
+# registrations are still alive. Local services all run on this machine, so a
+# stable localhost registration prevents the Gateway from routing to a stale VPN IP.
+if ([string]::IsNullOrWhiteSpace($env:EUREKA_INSTANCE_HOSTNAME)) {
+    $env:EUREKA_INSTANCE_HOSTNAME = "localhost"
+}
+if ([string]::IsNullOrWhiteSpace($env:EUREKA_INSTANCE_PREFER_IP_ADDRESS)) {
+    $env:EUREKA_INSTANCE_PREFER_IP_ADDRESS = "false"
+}
 $javaExecutable = Join-Path $java25.FullName "bin\java.exe"
 $javaOutput = & $javaExecutable --version
 $javaExitCode = $LASTEXITCODE
@@ -70,7 +110,8 @@ $services = @(
     @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088; Profiles = "local" },
     @{ Name = "notification-service"; Directory = "notification-service"; Port = 8090; Profiles = "mock-mail" },
     @{ Name = "bill-generation-service"; Directory = "bill-generation-service"; Port = 8087 },
-    @{ Name = "api-gateway"; Directory = "api-gateway"; Port = 8080 }
+    @{ Name = "api-gateway"; Directory = "api-gateway"; Port = 8080 },
+    @{ Name = "moneybags-web"; Directory = "moneybags-web"; Port = 8000; Command = "npm.cmd"; Arguments = "run serve:stack"; HealthPath = "/" }
 )
 
 $occupied = foreach ($service in $services) {
@@ -87,18 +128,40 @@ if ($occupied) {
 }
 
 $processes = @()
+$databaseBackedServices = @(
+    "cif-service", "kyc-service", "product-master-service", "payments-service",
+    "deposit-account-service", "credit-card-service", "accounting-service",
+    "notification-service", "bill-generation-service"
+)
 foreach ($service in $services) {
     $serviceDir = Join-Path $projectRoot $service.Directory
     $stdout = Join-Path $logDir ($service.Name + ".out.log")
     $stderr = Join-Path $logDir ($service.Name + ".err.log")
+    $filePath = "mvn"
     $arguments = "-Dmaven.test.skip=true spring-boot:run"
-    if ($service.ContainsKey("Profiles")) {
+    if ($service.ContainsKey("Command")) {
+        $filePath = $service.Command
+        $arguments = $service.Arguments
+    } elseif ($service.ContainsKey("Profiles")) {
         $arguments += " -Dspring-boot.run.profiles=" + $service.Profiles
     }
-    $process = Start-Process -FilePath "mvn" -ArgumentList $arguments -WorkingDirectory $serviceDir `
+    $process = Start-Process -FilePath $filePath -ArgumentList $arguments -WorkingDirectory $serviceDir `
         -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
     $processes += [pscustomobject]@{ Name = $service.Name; Id = $process.Id; Port = $service.Port }
-    Start-Sleep -Seconds 2
+    if ($databaseBackedServices -contains $service.Name) {
+        # Avoid opening several Liquibase/Hikari sessions at once against the
+        # shared developer Oracle listener. Continue as soon as this service
+        # listens, exits, or reaches its bounded startup window.
+        $serviceDeadline = (Get-Date).AddSeconds(90)
+        do {
+            Start-Sleep -Seconds 2
+            $listener = Get-NetTCPConnection -State Listen -LocalPort $service.Port -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+            $stillRunning = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
+        } while ($null -eq $listener -and $null -ne $stillRunning -and (Get-Date) -lt $serviceDeadline)
+    } else {
+        Start-Sleep -Seconds 2
+    }
 }
 
 $processes | ConvertTo-Json | Set-Content -LiteralPath $pidFile
@@ -125,7 +188,8 @@ $status = foreach ($service in $services) {
     $healthStatus = $null
     if ($listening) {
         try {
-            $healthResponse = Invoke-WebRequest -UseBasicParsing -Uri ("http://localhost:" + $service.Port + "/actuator/health") -TimeoutSec 20
+            $healthPath = if ($service.ContainsKey("HealthPath")) { $service.HealthPath } else { "/actuator/health" }
+            $healthResponse = Invoke-WebRequest -UseBasicParsing -Uri ("http://localhost:" + $service.Port + $healthPath) -TimeoutSec 20
             $healthStatus = [int]$healthResponse.StatusCode
         } catch {
             if ($null -ne $_.Exception.Response) {
@@ -158,7 +222,14 @@ Write-Host "Payments: http://localhost:8085/swagger-ui/index.html" -ForegroundCo
 Write-Host "Accounting: http://localhost:8088/swagger-ui.html" -ForegroundColor Green
 Write-Host "Eureka  : http://localhost:8761" -ForegroundColor Green
 Write-Host "Gateway : http://localhost:8080" -ForegroundColor Green
+Write-Host "Frontend: http://localhost:8000" -ForegroundColor Green
 Write-Host ("Logs    : " + $logDir) -ForegroundColor Green
 Write-Host "Follow deposit logs: Get-Content .\logs\deposit-account-service.out.log -Wait -Tail 100"
 Write-Host "Follow payments logs: Get-Content .\logs\payments-service.out.log -Wait -Tail 100"
 Write-Host "Follow accounting logs: Get-Content .\logs\accounting-service.out.log -Wait -Tail 100"
+
+$failedServices = @($status | Where-Object { $_.Status -ne "UP" })
+if ($failedServices.Count -gt 0) {
+    $names = ($failedServices.Service -join ", ")
+    throw ("MoneyBags startup was incomplete. Check logs for: " + $names)
+}

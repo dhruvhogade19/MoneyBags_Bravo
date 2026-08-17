@@ -29,6 +29,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/credit-cards/applications").hasAuthority("SCOPE_card:apply")
                 .requestMatchers(HttpMethod.GET, "/api/credit-cards/accounts/eod/readiness")
                     .hasAnyAuthority("SCOPE_card:admin", "SCOPE_card-payment:write")
+                .requestMatchers(HttpMethod.GET, "/api/credit-cards/applications")
+                    .hasAuthority("SCOPE_card:admin")
                 .requestMatchers(HttpMethod.GET, "/api/credit-cards/applications/**", "/api/credit-cards/accounts/**")
                     .hasAnyAuthority("SCOPE_card:read", "SCOPE_card:admin", "SCOPE_card-payment:write")
                 .requestMatchers(HttpMethod.POST, "/api/credit-cards/applications/*/approve",

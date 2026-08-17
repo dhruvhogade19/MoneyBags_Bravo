@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#8B1F39">
+    <title>Sign in | MoneyBags</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/styles/login.css}" href="/styles/login.css">
+</head>
+<body>
+<main class="auth-shell">
+    <section class="brand-panel" aria-label="MoneyBags">
+        <a class="brand" th:href="${frontendUrl}" href="http://localhost:8000">
+            <span class="brand-mark" aria-hidden="true">✦</span>
+            <span>moneybags</span>
+        </a>
+
+        <div class="brand-copy">
+            <p class="eyebrow">ONE SECURE HOME</p>
+            <h1>Your money.<br>One calm place.</h1>
+            <p>Accounts, deposits, cards and payments—connected securely across every MoneyBags service.</p>
+        </div>
+
+        <div class="brand-orbit" aria-hidden="true"></div>
+        <p class="brand-footnote"><span>●</span> Protected identity service</p>
+    </section>
+
+    <section class="login-panel">
+        <div class="login-content">
+            <a class="back-link" th:href="${frontendUrl}" href="http://localhost:8000">← Back to MoneyBags</a>
+
+            <div class="security-mark" aria-hidden="true">✦</div>
+            <p class="eyebrow">SECURE SIGN IN</p>
+            <h2>Welcome back</h2>
+            <p class="intro">Use your MoneyBags credentials to continue to your workspace.</p>
+
+            <div class="alert alert-error" role="alert" th:if="${param.error}">
+                That username or password was not recognised. Please try again.
+            </div>
+            <div class="alert alert-success" role="status" th:if="${param.logout}">
+                You have signed out securely.
+            </div>
+
+            <form class="login-form" th:action="@{/login}" action="/login" method="post">
+                <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+                <label for="username">Username</label>
+                <div class="field-wrap">
+                    <span aria-hidden="true">@</span>
+                    <input id="username" name="username" type="text" autocomplete="username"
+                           placeholder="Enter your username" autofocus required>
+                </div>
+
+                <label for="password">Password</label>
+                <div class="field-wrap">
+                    <span aria-hidden="true">◇</span>
+                    <input id="password" name="password" type="password" autocomplete="current-password"
+                           placeholder="Enter your password" required>
+                </div>
+
+                <button type="submit">Continue securely <span aria-hidden="true">→</span></button>
+            </form>
+
+            <div class="signup-link">
+                <span>New to MoneyBags?</span>
+                <a th:href="${frontendUrl + '/signup'}" href="http://localhost:8000/signup">Create a customer account →</a>
+            </div>
+
+            <div class="trust-note">
+                <span class="trust-icon" aria-hidden="true">✓</span>
+                <p><strong>Your session is protected.</strong><br>Authentication is handled by the MoneyBags Identity Service using OAuth 2.0 with PKCE.</p>
+            </div>
+        </div>
+    </section>
+</main>
+</body>
+</html>

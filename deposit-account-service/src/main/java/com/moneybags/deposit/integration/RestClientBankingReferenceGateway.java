@@ -12,6 +12,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.Period;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 @ConditionalOnProperty(name = "moneybags.deposit.stub-upstream-clients", havingValue = "false")
@@ -31,7 +33,7 @@ public class RestClientBankingReferenceGateway implements BankingReferenceGatewa
         try {
             ProductMasterClient.AccountOpeningValidation decision = productClient.validateAccountOpening(productCode,
                     new ProductMasterClient.AccountOpeningValidationRequest(openingAmount, currency,
-                            customer.age(), customer.customerType(), customer.customerCategory(), null,
+                            customer.age(), customer.monthlyIncome(), customer.customerType(), customer.customerCategory(), null,
                             null, null, customer.kycVerified(), productVersion, LocalDate.now()));
             if (decision == null) {
                 throw new ApiException(HttpStatus.BAD_GATEWAY, "INVALID_PRODUCT_MASTER_RESPONSE",
@@ -49,10 +51,15 @@ public class RestClientBankingReferenceGateway implements BankingReferenceGatewa
             boolean supported = "SAVINGS".equalsIgnoreCase(decision.subtype())
                     || "CURRENT".equalsIgnoreCase(decision.subtype());
             boolean eligible = customer.eligible() && decision.eligible() && supported;
-            String code = eligible ? "ELIGIBLE" : supported
-                    ? "REFERENCE_VALIDATION_FAILED" : "UNSUPPORTED_ACCOUNT_TYPE";
+            String code = eligible ? "ELIGIBLE" : !supported
+                    ? "UNSUPPORTED_ACCOUNT_TYPE" : !customer.eligible()
+                    ? "CUSTOMER_OR_KYC_NOT_ELIGIBLE" : "PRODUCT_ELIGIBILITY_FAILED";
+            List<String> messages = new ArrayList<>();
+            if (!customer.eligible()) messages.add("Customer KYC must be approved before opening an account");
+            if (decision.validationMessages() != null) messages.addAll(decision.validationMessages());
+            if (!supported) messages.add("Only Savings and Current products can be opened from this flow");
             return new ValidationResult(eligible, code, decision.productName(), decision.subtype(),
-                    OffsetDateTime.now());
+                    List.copyOf(messages), OffsetDateTime.now());
         } catch (HttpClientErrorException ex) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "PRODUCT_VALIDATION_FAILED",
                     "Product Master rejected the account-opening request");
@@ -66,7 +73,9 @@ public class RestClientBankingReferenceGateway implements BankingReferenceGatewa
     public ValidationResult validateCustomerEligibility(String customerId) {
         CustomerProfile customer = customerProfile(customerId);
         return new ValidationResult(customer.eligible(), customer.eligible()
-                ? "ELIGIBLE" : "CUSTOMER_OR_KYC_NOT_ELIGIBLE", null, null, customer.evaluatedAt());
+                ? "ELIGIBLE" : "CUSTOMER_OR_KYC_NOT_ELIGIBLE", null, null,
+                customer.eligible() ? List.of() : List.of("Customer KYC must be approved"),
+                customer.evaluatedAt());
     }
 
     @Override
@@ -79,7 +88,7 @@ public class RestClientBankingReferenceGateway implements BankingReferenceGatewa
             if (category == null || category.isBlank()) {
                 category = age >= 60 ? "SENIOR_CITIZEN" : "REGULAR";
             }
-            return new CustomerProfile(kycVerified, age, customer.customerType(), category,
+            return new CustomerProfile(kycVerified, age, customer.monthlyIncome(), customer.customerType(), category,
                     kycVerified, OffsetDateTime.now());
         } catch (CallNotPermittedException | RestClientException ex) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "CIF_UNAVAILABLE",

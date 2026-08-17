@@ -1,6 +1,7 @@
 package com.moneybags.cif.repository;
 
 import com.moneybags.cif.entity.Cif;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CifRepository extends JpaRepository<Cif, Long> {
@@ -11,9 +12,13 @@ public interface CifRepository extends JpaRepository<Cif, Long> {
 
     boolean existsByPanNumber(String panNumber);
 
+    Optional<Cif> findByPanNumber(String panNumber);
+
     boolean existsByAadhaarNumber(String aadhaarNumber);
 
     boolean existsByIdentityUserId(String identityUserId);
+
+    Optional<Cif> findByIdentityUserId(String identityUserId);
 
     boolean existsByEmailAndCifIdNot(String email, Long cifId);
 

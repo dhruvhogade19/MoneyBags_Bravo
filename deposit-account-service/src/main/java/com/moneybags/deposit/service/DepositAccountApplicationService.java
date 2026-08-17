@@ -108,7 +108,9 @@ public class DepositAccountApplicationService {
                 request.openingAmount());
         if (!validation.eligible()) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "CUSTOMER_OR_PRODUCT_NOT_ELIGIBLE",
-                    "CIF, KYC or product validation rejected the account opening");
+                    validation.messages().isEmpty()
+                            ? "CIF, KYC or product validation rejected the account opening"
+                            : String.join("; ", validation.messages()));
         }
         if (!"SAVINGS".equalsIgnoreCase(validation.accountType())
                 && !"CURRENT".equalsIgnoreCase(validation.accountType())) {
@@ -174,7 +176,8 @@ public class DepositAccountApplicationService {
     public EligibilityResult checkEligibility(EligibilityCheckRequest request) {
         BankingReferenceGateway.ValidationResult value = referenceGateway.validateAccountOpening(request.customerId(),
                 request.productId(), request.productVersion(), request.currency(), request.openingAmount());
-        return new EligibilityResult(value.eligible(), value.decisionCode(), value.productName(), value.evaluatedAt());
+        return new EligibilityResult(value.eligible(), value.decisionCode(), value.productName(),
+                value.messages(), value.evaluatedAt());
     }
 
     @Transactional(readOnly = true)

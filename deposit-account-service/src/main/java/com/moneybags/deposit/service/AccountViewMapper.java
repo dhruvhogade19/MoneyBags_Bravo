@@ -44,7 +44,7 @@ public class AccountViewMapper {
     public AccountSummaryView summary(DepositAccount account) {
         AccountBalance b = account.getBalance();
         return new AccountSummaryView(account.getId(), mask(account.getAccountNumber()),
-                account.getProductNameSnapshot(), account.getCurrencyCode(), account.getStatus(),
+                account.getProductNameSnapshot(), account.getProductSubtype(), account.getCurrencyCode(), account.getStatus(),
                 b == null ? null : b.getAvailableBalance(), b == null ? null : b.getAsOf(),
                 account.getServicingBranchId(), account.getVersion());
     }

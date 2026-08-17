@@ -7,14 +7,17 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Convert;
+import java.sql.Types;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.NumericBooleanConverter;
 
 @Entity
 @Table(name = "BANK_USER")
 public class BankUser {
     @Id
+    @JdbcTypeCode(Types.CHAR)
     @Column(name = "USER_ID", length = 36, nullable = false, updatable = false)
     private String id;
 

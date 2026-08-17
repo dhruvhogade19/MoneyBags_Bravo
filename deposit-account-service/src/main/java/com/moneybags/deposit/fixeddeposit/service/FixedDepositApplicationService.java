@@ -6,6 +6,8 @@ import com.moneybags.deposit.exception.ApiException;
 import com.moneybags.deposit.fixeddeposit.calculation.FixedDepositInterestCalculator;
 import com.moneybags.deposit.fixeddeposit.dto.FixedDepositRequests.BookingRequest;
 import com.moneybags.deposit.fixeddeposit.dto.FixedDepositResponses.*;
+import com.moneybags.deposit.dto.PaymentOperationRequests.*;
+import com.moneybags.deposit.dto.PaymentOperationResponses.*;
 import com.moneybags.deposit.fixeddeposit.entity.*;
 import com.moneybags.deposit.fixeddeposit.integration.FixedDepositProductGateway;
 import com.moneybags.deposit.fixeddeposit.repository.*;
@@ -50,10 +52,11 @@ public class FixedDepositApplicationService {
     @Transactional
     public FixedDepositView book(BookingRequest r, String operationReference, String actor, String correlationId) {
         var primaryCustomer=validateCustomers(r);
-        LocalDate valueDate=LocalDate.now();
+        // Preserve the value date used for the quote. Null keeps older clients compatible.
+        LocalDate valueDate=r.valueDate()==null?LocalDate.now():r.valueDate();
         var terms=products.resolve(r.productCode(),r.productVersion(),r.principal(),r.currency(),r.tenureValue(),
                 r.tenureUnit(),r.interestPayoutFrequency(),valueDate,primaryCustomer.age(),
-                primaryCustomer.customerType(),primaryCustomer.customerCategory(),primaryCustomer.kycVerified());
+                primaryCustomer.monthlyIncome(),primaryCustomer.customerType(),primaryCustomer.customerCategory(),primaryCustomer.kycVerified());
         var calculation=calculator.calculate(r.principal(),terms.annualRate(),valueDate,r.tenureValue(),r.tenureUnit(),terms.compoundingFrequency());
         AccountBalance source=lockEligibleLinkedAccount(r.fundingAccountId(),r.primaryCustomerId(),r.currency(),true);
         lockEligibleLinkedAccount(r.payoutAccountId(),r.primaryCustomerId(),r.currency(),false);
@@ -80,29 +83,106 @@ public class FixedDepositApplicationService {
         if(r.nominees()!=null) for(var n:r.nominees()) nomineeRepository.save(new AccountNominee(UUID.randomUUID().toString(),accountId,
                 n.customerReference(),pii.encrypt(n.name()),n.relationshipCode(),n.allocationPercentage()));
 
-        String reservationId=UUID.randomUUID().toString();
-        FundReservation reservation=new FundReservation(reservationId,operationReference,PaymentOperationType.FIXED_DEPOSIT_FUNDING,
-                r.fundingAccountId(),accountId,null,r.primaryCustomerId(),r.principal(),r.currency(),OffsetDateTime.now().plusMinutes(5));
-        reservation.transitionTo(ReservationStatus.SETTLED);reservationRepository.save(reservation);
-        String debitRef=operationReference+"-SOURCE", creditRef=operationReference+"-FD";
-        BigDecimal sourceBefore=source.getLedgerBalance(); source.debit(r.principal(),debitRef);
-        AccountBalance fdBalance=balanceRepository.findByAccountIdForUpdate(accountId).orElseThrow();
-        BigDecimal fdBefore=fdBalance.getLedgerBalance(); fdBalance.creditLedgerOnly(r.principal(),creditRef);
-        transactionRepository.save(new DepositAccountTransaction(UUID.randomUUID().toString(),r.fundingAccountId(),operationReference,reservationId,
-                DepositTransactionType.DEBIT,PaymentOperationType.FIXED_DEPOSIT_FUNDING,r.principal(),r.currency(),sourceBefore,source.getLedgerBalance(),correlationId));
-        transactionRepository.save(new DepositAccountTransaction(UUID.randomUUID().toString(),accountId,operationReference,reservationId,
-                DepositTransactionType.CREDIT,PaymentOperationType.FIXED_DEPOSIT_FUNDING,r.principal(),r.currency(),fdBefore,fdBalance.getLedgerBalance(),correlationId));
-        fd.setStatus(FixedDepositStatus.ACTIVE); fd.setUpdatedAt(OffsetDateTime.now()); account.setStatus(AccountStatus.ACTIVE);
-        account.setOpenedAt(OffsetDateTime.now()); account.setUpdatedAt(OffsetDateTime.now()); account.setUpdatedBy(actor);
-        OffsetDateTime openedAt=account.getOpenedAt();accountingLifecycle.publishOpening(new AccountingLifecycleGateway.AccountOpenedEvent("DEPOSIT-OPEN:"+accountId,"DEPOSIT_ACCOUNT_OPENED","DEPOSIT_ACCOUNT",accountId,r.productCode(),r.currency(),openedAt.toLocalDate(),openedAt),"DEPOSIT-OPEN:"+accountId,correlationId);
-        historyRepository.save(new AccountStatusHistory(UUID.randomUUID().toString(),accountId,AccountStatus.PENDING_ACTIVATION,
-                AccountStatus.ACTIVE,"FD_FUNDED",null,actor,"USER",correlationId));
         auditRepository.save(new AuditLog(UUID.randomUUID().toString(),fdId,"BOOK_FIXED_DEPOSIT","SUCCESS",actor,"USER",
-                "FD_FUNDED",null,Hashing.sha256(fdId+r.principal()),correlationId));
-        notificationOutbox.enqueue(r.primaryCustomerId(), "DEPOSIT_ACCOUNT_CREATED", accountId,
-                "deposit-account-" + accountId + "-created", Map.of("accountType", "Fixed Deposit", "accountId", accountId));
+                "PENDING_FUNDING",null,Hashing.sha256(fdId+r.principal()),correlationId));
         return view(fd);
     }
+
+    @Transactional
+    public FixedDepositFundingReservationView reserveFunding(FixedDepositFundingReservationRequest r,
+                                                               String actor, String correlationId) {
+        Optional<FundReservation> existing=reservationRepository.findByPaymentIdAndOperationType(
+                r.paymentId(),PaymentOperationType.FIXED_DEPOSIT_FUNDING);
+        if(existing.isPresent())return fundingReservationView(existing.get());
+        FixedDeposit fd=fdRepository.findByIdForUpdate(r.fixedDepositId()).orElseThrow(()->
+                new ApiException(HttpStatus.NOT_FOUND,"FIXED_DEPOSIT_NOT_FOUND","Fixed deposit not found"));
+        if(fd.getStatus()!=FixedDepositStatus.PENDING_FUNDING)
+            throw new ApiException(HttpStatus.CONFLICT,"FIXED_DEPOSIT_NOT_PENDING_FUNDING","Fixed deposit is not awaiting funding");
+        if(!fd.getFundingAccountId().equals(r.sourceAccountId())||fd.getPrincipal().compareTo(r.amount())!=0||
+                !fd.getCurrencyCode().equals(r.currencyCode()))
+            throw new ApiException(HttpStatus.CONFLICT,"FIXED_DEPOSIT_FUNDING_MISMATCH","Funding request does not match the booked fixed deposit");
+        String customerId=String.valueOf(r.requestorCustomerId());
+        AccountBalance source=lockEligibleLinkedAccount(r.sourceAccountId(),customerId,r.currencyCode(),true);
+        if(source.getAvailableBalance().compareTo(r.amount())<0)
+            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,"INSUFFICIENT_FUNDS","Funding account has insufficient available balance");
+        BigDecimal before=source.getAvailableBalance();String reservationId=UUID.randomUUID().toString();
+        source.reserve(r.amount(),reservationId);
+        FundReservation reservation=new FundReservation(reservationId,r.paymentId(),PaymentOperationType.FIXED_DEPOSIT_FUNDING,
+                r.sourceAccountId(),fd.getAccount().getId(),null,customerId,r.amount(),r.currencyCode(),
+                OffsetDateTime.ofInstant(r.expiresAt(),ZoneOffset.UTC));
+        reservationRepository.save(reservation);
+        transactionRepository.save(new DepositAccountTransaction(UUID.randomUUID().toString(),r.sourceAccountId(),r.paymentId(),reservationId,
+                DepositTransactionType.PAYMENT_HOLD,PaymentOperationType.FIXED_DEPOSIT_FUNDING,r.amount(),r.currencyCode(),before,
+                source.getAvailableBalance(),correlationId));
+        auditRepository.save(new AuditLog(UUID.randomUUID().toString(),fd.getId(),"RESERVE_FD_FUNDING","SUCCESS",actor,"SERVICE",
+                "FUNDS_RESERVED",null,Hashing.sha256(r.paymentId()),correlationId));
+        return fundingReservationView(reservation);
+    }
+
+    @Transactional
+    public FixedDepositFundingSettlementView settleFunding(String paymentId,
+            FixedDepositFundingSettlementRequest r,String actor,String correlationId){
+        FundReservation reservation=reservationRepository.findLockedByPaymentIdAndOperationType(paymentId,
+                PaymentOperationType.FIXED_DEPOSIT_FUNDING).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,
+                "PAYMENT_OPERATION_NOT_FOUND","Fixed-deposit funding reservation not found"));
+        FixedDeposit fd=fdRepository.findByIdForUpdate(r.fixedDepositId()).orElseThrow();
+        if(!reservation.getId().equals(r.reservationId())||!reservation.getTargetAccountId().equals(fd.getAccount().getId()))
+            throw new ApiException(HttpStatus.CONFLICT,"PAYMENT_RESERVATION_MISMATCH","Reservation does not match this fixed deposit");
+        if(reservation.getStatus()==ReservationStatus.SETTLED)return fundingSettlementView(reservation,fd);
+        if(reservation.getStatus()!=ReservationStatus.ACTIVE||!reservation.getExpiresAt().isAfter(OffsetDateTime.now()))
+            throw new ApiException(HttpStatus.CONFLICT,"RESERVATION_NOT_ACTIVE","Funding reservation is not active");
+        AccountBalance source=balanceRepository.findByAccountIdForUpdate(reservation.getSourceAccountId()).orElseThrow();
+        AccountBalance target=balanceRepository.findByAccountIdForUpdate(reservation.getTargetAccountId()).orElseThrow();
+        BigDecimal sourceBefore=source.getLedgerBalance(),targetBefore=target.getLedgerBalance();
+        source.captureDebit(reservation.getAmount(),paymentId+":FD_SOURCE");target.creditLedgerOnly(reservation.getAmount(),paymentId+":FD_TARGET");
+        transactionRepository.save(new DepositAccountTransaction(UUID.randomUUID().toString(),source.getAccountId(),paymentId,reservation.getId(),
+                DepositTransactionType.DEBIT,PaymentOperationType.FIXED_DEPOSIT_FUNDING,reservation.getAmount(),reservation.getCurrencyCode(),sourceBefore,source.getLedgerBalance(),correlationId));
+        transactionRepository.save(new DepositAccountTransaction(UUID.randomUUID().toString(),target.getAccountId(),paymentId,reservation.getId(),
+                DepositTransactionType.CREDIT,PaymentOperationType.FIXED_DEPOSIT_FUNDING,reservation.getAmount(),reservation.getCurrencyCode(),targetBefore,target.getLedgerBalance(),correlationId));
+        reservation.transitionTo(ReservationStatus.SETTLED);fd.setStatus(FixedDepositStatus.ACTIVE);fd.setUpdatedAt(OffsetDateTime.now());
+        DepositAccount account=fd.getAccount();account.setStatus(AccountStatus.ACTIVE);account.setOpenedAt(OffsetDateTime.now());
+        account.setUpdatedAt(OffsetDateTime.now());account.setUpdatedBy(actor);OffsetDateTime openedAt=account.getOpenedAt();
+        accountingLifecycle.publishOpening(new AccountingLifecycleGateway.AccountOpenedEvent("DEPOSIT-OPEN:"+account.getId(),"DEPOSIT_ACCOUNT_OPENED",
+                "DEPOSIT_ACCOUNT",account.getId(),account.getProductId(),fd.getCurrencyCode(),openedAt.toLocalDate(),openedAt),
+                "DEPOSIT-OPEN:"+account.getId(),correlationId);
+        historyRepository.save(new AccountStatusHistory(UUID.randomUUID().toString(),account.getId(),AccountStatus.PENDING_ACTIVATION,
+                AccountStatus.ACTIVE,"FD_FUNDED",r.journalNumber(),actor,"SERVICE",correlationId));
+        auditRepository.save(new AuditLog(UUID.randomUUID().toString(),fd.getId(),"SETTLE_FD_FUNDING","SUCCESS",actor,"SERVICE",
+                "FD_FUNDED",r.journalNumber(),Hashing.sha256(paymentId),correlationId));
+        String customerId=account.getHolders().stream().filter(holder->holder.getRole()==HolderRole.PRIMARY).findFirst().orElseThrow().getCustomerId();
+        notificationOutbox.enqueue(customerId,"DEPOSIT_ACCOUNT_CREATED",account.getId(),"deposit-account-"+account.getId()+"-created",
+                Map.of("accountType","Fixed Deposit","accountId",account.getId()));
+        return fundingSettlementView(reservation,fd);
+    }
+
+    @Transactional
+    public FixedDepositFundingReservationView releaseFunding(String reservationId,ReleaseReservationRequest r,
+                                                               String actor,String correlationId){
+        FundReservation reservation=reservationRepository.findLockedById(reservationId).orElseThrow(()->
+                new ApiException(HttpStatus.NOT_FOUND,"RESERVATION_NOT_FOUND","Reservation not found"));
+        if(reservation.getOperationType()!=PaymentOperationType.FIXED_DEPOSIT_FUNDING||!reservation.getPaymentId().equals(r.paymentId()))
+            throw new ApiException(HttpStatus.CONFLICT,"PAYMENT_RESERVATION_MISMATCH","Reservation is not owned by this funding payment");
+        if(reservation.getStatus()==ReservationStatus.ACTIVE){AccountBalance source=balanceRepository.findByAccountIdForUpdate(reservation.getSourceAccountId()).orElseThrow();
+            BigDecimal before=source.getAvailableBalance();source.release(reservation.getAmount(),r.paymentId()+":FD_RELEASE");
+            transactionRepository.save(new DepositAccountTransaction(UUID.randomUUID().toString(),source.getAccountId(),r.paymentId(),reservationId,
+                    DepositTransactionType.HOLD_RELEASE,PaymentOperationType.FIXED_DEPOSIT_FUNDING,reservation.getAmount(),reservation.getCurrencyCode(),before,source.getAvailableBalance(),correlationId));
+            reservation.transitionTo(ReservationStatus.RELEASED);FixedDeposit fd=fdRepository.findByAccountIdForUpdate(reservation.getTargetAccountId()).orElseThrow();
+            fd.setStatus(FixedDepositStatus.FUNDING_FAILED);fd.setUpdatedAt(OffsetDateTime.now());
+            auditRepository.save(new AuditLog(UUID.randomUUID().toString(),fd.getId(),"RELEASE_FD_FUNDING","SUCCESS",actor,"SERVICE",
+                    r.reasonCode(),null,Hashing.sha256(r.paymentId()),correlationId));}
+        return fundingReservationView(reservation);
+    }
+
+    private FixedDepositFundingReservationView fundingReservationView(FundReservation r){return new FixedDepositFundingReservationView(
+            r.getId(),r.getPaymentId(),r.getOperationType().name(),r.getStatus().name(),r.getSourceAccountId(),r.getTargetAccountId(),
+            fixedDepositIdFor(r),r.getAmount(),r.getCurrencyCode(),r.getExpiresAt().toInstant());}
+    private String fixedDepositIdFor(FundReservation reservation){
+        if(reservation.getExternalTargetId()!=null)return reservation.getExternalTargetId();
+        return fdRepository.findByAccountIdForUpdate(reservation.getTargetAccountId()).map(FixedDeposit::getId).orElse(null);
+    }
+    private FixedDepositFundingSettlementView fundingSettlementView(FundReservation r,FixedDeposit fd){return new FixedDepositFundingSettlementView(
+            r.getId(),r.getPaymentId(),r.getOperationType().name(),r.getStatus().name(),fd.getId(),fd.getStatus().name(),
+            transactionRepository.findByPaymentIdOrderByCreatedAtAsc(r.getPaymentId()).stream().map(DepositAccountTransaction::getId).toList());}
 
     @Transactional(readOnly=true) public FixedDepositView get(String id){return view(load(id));}
     @Transactional(readOnly=true) public Page<FixedDepositView> search(String customerId, FixedDepositStatus status,
@@ -134,10 +214,14 @@ public class FixedDepositApplicationService {
         AccountBalance balance=balanceRepository.findByAccountIdForUpdate(accountId).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"LINKED_ACCOUNT_NOT_FOUND","Linked account not found"));
         DepositAccount a=balance.getAccount();
         if(a.getProductSubtype()==ProductSubtype.FIXED_DEPOSIT||a.getStatus()!=AccountStatus.ACTIVE||!currency.equals(a.getCurrencyCode())||
-                a.getHolders().stream().noneMatch(h->h.getCustomerId().equals(customerId)&&h.getStatus()==RecordStatus.ACTIVE))
+                a.getHolders().stream().noneMatch(h->sameCustomer(h.getCustomerId(),customerId)&&h.getStatus()==RecordStatus.ACTIVE))
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,funding?"FUNDING_ACCOUNT_INELIGIBLE":"PAYOUT_ACCOUNT_INELIGIBLE","Linked account is not eligible");
         return balance;
     }
+    private boolean sameCustomer(String stored,String requested){
+        return Objects.equals(stored,requested)||Objects.equals(stripCifPrefix(stored),stripCifPrefix(requested));
+    }
+    private String stripCifPrefix(String value){return value!=null&&value.regionMatches(true,0,"CIF-",0,4)?value.substring(4):value;}
     private FixedDeposit load(String id){return fdRepository.findDetailedById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"FIXED_DEPOSIT_NOT_FOUND","Fixed deposit not found"));}
     private FixedDepositView view(FixedDeposit f){DepositAccount a=f.getAccount(); return new FixedDepositView(f.getId(),a.getId(),mask(a.getAccountNumber()),a.getProductId(),a.getProductVersion(),f.getStatus(),f.getPrincipal(),f.getCurrencyCode(),f.getBookedAnnualRate(),f.getValueDate(),f.getMaturityDate(),f.getExpectedInterest(),f.getExpectedMaturityAmount(),f.getAccruedInterest(),f.getFundingAccountId(),f.getPayoutAccountId(),f.getVersion());}
     private String mask(String n){return n.length()<4?"****":"****"+n.substring(n.length()-4);} private String blank(String v){return v==null||v.isBlank()?null:v;}

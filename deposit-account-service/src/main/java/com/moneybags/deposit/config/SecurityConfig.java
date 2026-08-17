@@ -30,6 +30,8 @@ public class SecurityConfig {
                     .hasAuthority("SCOPE_deposit-payment:write")
                 .requestMatchers("/api/internal/deposit-accounts/*/eligibility")
                     .hasAnyAuthority("SCOPE_deposit-payment:write", "SCOPE_account:service")
+                .requestMatchers("/api/deposit-accounts/operations/**")
+                    .hasAnyAuthority("SCOPE_account:admin", "SCOPE_fd:admin")
                 .requestMatchers("/api/internal/**", "/internal/v1/**").hasAuthority("SCOPE_account:service")
                 .requestMatchers(HttpMethod.GET, "/api/deposit-accounts/fixed-deposits/**")
                     .hasAnyAuthority("SCOPE_fd:read", "SCOPE_fd:admin")

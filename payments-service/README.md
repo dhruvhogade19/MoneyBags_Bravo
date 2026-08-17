@@ -68,7 +68,7 @@ Header: `Idempotency-Key: merchant-demo-001`
 ```json
 {
   "requestorCustomerId": 101,
-  "creditCardAccountId": "101",
+  "creditCardAccountId": "CC-101",
   "merchantId": "MERCHANT-001",
   "amount": 50000.00,
   "currencyCode": "INR",
@@ -87,7 +87,7 @@ Header: `Idempotency-Key: repayment-demo-001`
   "requestorCustomerId": 101,
   "billId": "BILL-202608-001",
   "sourceDepositAccountId": "dep-acc-001",
-  "creditCardAccountId": "101",
+  "creditCardAccountId": "CC-101",
   "amount": 25000.00,
   "currencyCode": "INR",
   "reference": "Credit-card bill repayment"
@@ -115,9 +115,14 @@ Supply an `Idempotency-Key` header to the recovery endpoint.
 
 ```text
 GET /api/v1/payments/{paymentId}
+GET /api/v1/payments/{paymentId}/history
 GET /api/v1/payments?customerId=101&page=0&size=20
 GET /internal/payments?accountId=dep-acc-001&from=2026-08-01&to=2026-08-31&page=0&size=100
 ```
+
+Bank administrators use `/api/v1/payments/operations` to search by business date/status, cut off
+or reopen new-payment intake, check EOD drain state, retry pending Accounting reversals, and retry
+pending Billing callbacks. These endpoints require `payment:admin` or the `BANK_ADMIN` role.
 
 ### Fixed-deposit funding
 

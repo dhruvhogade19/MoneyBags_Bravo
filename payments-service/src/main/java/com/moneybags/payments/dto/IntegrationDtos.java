@@ -1,5 +1,6 @@
 package com.moneybags.payments.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -82,10 +83,10 @@ public final class IntegrationDtos {
       String sourceService, String eventType, Instant occurredAt, LocalDate businessDate,
       String currencyCode, String status, BigDecimal totalDebit, BigDecimal totalCredit,
       String correlationId, Instant postedAt, Boolean idempotentReplay,
-      String reversalOfJournalNumber) { }
+      @JsonAlias("reversalOfJournalNumber") String reversesJournalNumber) { }
 
   public record AccountingLookupResponse(
-      String externalReference, String outcome, String journalNumber,
+      String externalReference, @JsonAlias("outcome") String status, String journalNumber,
       Instant receivedAt, Instant completedAt, String rejectionCode,
       String rejectionMessage, AccountingResponse journal) { }
 

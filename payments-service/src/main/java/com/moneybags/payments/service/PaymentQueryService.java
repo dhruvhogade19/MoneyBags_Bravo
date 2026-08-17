@@ -65,6 +65,16 @@ public class PaymentQueryService {
     return page(result.map(PaymentSupportService::response));
   }
 
+  @Transactional(readOnly = true)
+  public List<PaymentStatusHistoryResponse> history(String paymentId) {
+    require(paymentId);
+    return history.findByPaymentIdOrderByChangedAtAsc(paymentId).stream()
+        .map(row -> new PaymentStatusHistoryResponse(row.getFromStatus(), row.getToStatus(),
+            row.getReasonCode(), row.getReasonMessage(), row.getCorrelationId(),
+            row.getChangedAt()))
+        .toList();
+  }
+
   public PaymentResponse cancel(String paymentId) {
     Payment payment = require(paymentId);
     if (payment.getStatus() == PaymentStatus.CANCELLED) return PaymentSupportService.response(payment);

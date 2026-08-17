@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.sql.Date;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -89,8 +90,27 @@ class FixedDepositClosureControllerIntegrationTest {
                 "\"externalReference\":\"" + unique + "\"}";
         var result = mvc.perform(post("/api/deposit-accounts/fixed-deposits")
                         .header("Idempotency-Key", unique).contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("PENDING_FUNDING")).andReturn();
+        JsonNode fd=mapper.readTree(result.getResponse().getContentAsString());
+        fund(fd.path("fixedDepositId").asText(),"payment-"+unique);
+        return mapper.readTree(mvc.perform(get("/api/deposit-accounts/fixed-deposits/{id}",fd.path("fixedDepositId").asText()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andReturn().getResponse().getContentAsString());
+    }
+
+    private void fund(String fdId,String paymentId) throws Exception {
+        String reserve="{\"paymentId\":\""+paymentId+"\",\"requestorCustomerId\":1001,"+
+                "\"sourceAccountId\":\"seed-sav-source-001\",\"fixedDepositId\":\""+fdId+"\","+
+                "\"amount\":1000,\"currencyCode\":\"INR\",\"expiresAt\":\""+Instant.now().plusSeconds(300)+"\"}";
+        var held=mvc.perform(post("/internal/v1/deposit-payment-operations/fixed-deposit-funding/reservations")
+                        .header("Idempotency-Key",paymentId+"-reserve").contentType(MediaType.APPLICATION_JSON).content(reserve))
                 .andExpect(status().isCreated()).andReturn();
-        return mapper.readTree(result.getResponse().getContentAsString());
+        String reservationId=mapper.readTree(held.getResponse().getContentAsString()).path("reservationId").asText();
+        String settle="{\"reservationId\":\""+reservationId+"\",\"fixedDepositId\":\""+fdId+"\","+
+                "\"journalNumber\":\"JRN-"+paymentId+"\"}";
+        mvc.perform(post("/internal/v1/deposit-payment-operations/fixed-deposit-funding/{paymentId}/settle",paymentId)
+                        .header("Idempotency-Key",paymentId+"-settle").contentType(MediaType.APPLICATION_JSON).content(settle))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.fixedDepositStatus").value("ACTIVE"));
     }
 
     private String prematureRequest() {

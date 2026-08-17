@@ -20,6 +20,7 @@ import com.moneybags.kycservice.enums.VerificationStatus;
 import com.moneybags.kycservice.enums.NotificationSyncStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,13 +37,15 @@ public class KycService {
     private final CifClient cifClient;
     private final NotificationClient notificationClient;
     private final KycDocumentRepository documentRepository;
+    private final boolean documentsRequiredForDecision;
 
     public KycService(
             KycRepository kycRepository,
             KycMapper kycMapper,
             CifClient cifClient,
             NotificationClient notificationClient,
-            KycDocumentRepository documentRepository
+            KycDocumentRepository documentRepository,
+            @Value("${moneybags.kyc.documents-required-for-decision:false}") boolean documentsRequiredForDecision
     ) {
 
         this.kycRepository = kycRepository;
@@ -50,6 +53,7 @@ public class KycService {
         this.cifClient = cifClient;
         this.notificationClient = notificationClient;
         this.documentRepository = documentRepository;
+        this.documentsRequiredForDecision = documentsRequiredForDecision;
     }
 
     @Transactional
@@ -61,10 +65,15 @@ public class KycService {
 
         var existing = kycRepository.findFirstByCifIdOrderByCreatedAtDesc(request.cifId());
         if (existing.isPresent()) {
-            if (!existing.get().getTenantId().equals(request.tenantId())) {
+            Kyc latest = existing.get();
+            if (!latest.getTenantId().equals(request.tenantId())) {
                 throw new BadRequestException("CIF is already associated with a KYC case in another tenant");
             }
-            return kycMapper.toResponse(existing.get());
+            if (latest.getKycStatus() == KycStatus.PENDING
+                    || latest.getKycStatus() == KycStatus.FLAGGED) {
+                refreshPendingCase(latest, request);
+                return kycMapper.toResponse(kycRepository.save(latest));
+            }
         }
 
         Kyc kyc = kycMapper.toEntity(request);
@@ -72,6 +81,26 @@ public class KycService {
         Kyc savedKyc = kycRepository.save(kyc);
 
         return kycMapper.toResponse(savedKyc);
+    }
+
+    private void refreshPendingCase(Kyc kyc, CreateKycRequest request) {
+        kycMapper.applyCustomerSnapshot(kyc, request);
+        kyc.setKycStatus(KycStatus.PENDING);
+        kyc.setDecision(null);
+        kyc.setRejectionReason(null);
+        kyc.setMismatchReason(null);
+        kyc.setReviewedBy(null);
+        kyc.setReviewedAt(null);
+        kyc.setCifSyncStatus(CifSyncStatus.PENDING);
+        kyc.setSyncRetryCount(0);
+        kyc.setLastSyncAttemptAt(null);
+        kyc.setLastSyncError(null);
+        kyc.setCifSyncedAt(null);
+        kyc.setNotificationSyncStatus(NotificationSyncStatus.NOT_REQUIRED);
+        kyc.setNotificationRetryCount(0);
+        kyc.setLastNotificationAttemptAt(null);
+        kyc.setLastNotificationError(null);
+        kyc.setNotificationSentAt(null);
     }
 
     private void validateEmploymentSnapshot(CreateKycRequest request) {
@@ -221,19 +250,21 @@ public class KycService {
             );
         }
 
-        List<com.moneybags.kycservice.entity.KycDocument> documents =
-                documentRepository.findAllByKycKycId(kyc.getKycId());
-        java.util.Set<DocumentType> present = documents.stream()
-                .map(com.moneybags.kycservice.entity.KycDocument::getDocumentType)
-                .collect(java.util.stream.Collectors.toSet());
-        java.util.Set<DocumentType> missing = java.util.EnumSet.allOf(DocumentType.class);
-        missing.removeAll(present);
-        if (!missing.isEmpty()) {
-            throw new BadRequestException("All required KYC documents must be uploaded before a decision. Missing: "
-                    + missing);
-        }
-        if (documents.stream().anyMatch(document -> document.getVerificationStatus() == VerificationStatus.PENDING)) {
-            throw new BadRequestException("Every KYC document must be VERIFIED or MISMATCH before a decision");
+        if (documentsRequiredForDecision) {
+            List<com.moneybags.kycservice.entity.KycDocument> documents =
+                    documentRepository.findAllByKycKycId(kyc.getKycId());
+            java.util.Set<DocumentType> present = documents.stream()
+                    .map(com.moneybags.kycservice.entity.KycDocument::getDocumentType)
+                    .collect(java.util.stream.Collectors.toSet());
+            java.util.Set<DocumentType> missing = java.util.EnumSet.allOf(DocumentType.class);
+            missing.removeAll(present);
+            if (!missing.isEmpty()) {
+                throw new BadRequestException("All required KYC documents must be uploaded before a decision. Missing: "
+                        + missing);
+            }
+            if (documents.stream().anyMatch(document -> document.getVerificationStatus() == VerificationStatus.PENDING)) {
+                throw new BadRequestException("Every KYC document must be VERIFIED or MISMATCH before a decision");
+            }
         }
     }
 

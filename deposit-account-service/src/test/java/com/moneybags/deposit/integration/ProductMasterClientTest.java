@@ -30,7 +30,7 @@ class ProductMasterClientTest {
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer service-token"))
                 .andExpect(content().json("""
-                        {"openingAmount":100000,"currency":"INR","age":30,"customerType":"INDIVIDUAL",
+                        {"openingAmount":100000,"currency":"INR","age":30,"monthlyIncome":75000,"customerType":"INDIVIDUAL",
                          "customerCategory":"REGULAR","tenureMonths":12,"tenureUnit":"MONTH",
                          "interestPayoutFrequency":"AT_MATURITY","kycVerified":true,
                          "productVersion":1,"valueDate":"2026-08-14"}
@@ -47,7 +47,7 @@ class ProductMasterClientTest {
 
         ProductMasterClient.AccountOpeningValidation decision = client.validateAccountOpening("FD-REG-001",
                 new ProductMasterClient.AccountOpeningValidationRequest(new BigDecimal("100000"), "INR", 30,
-                        "INDIVIDUAL", "REGULAR", 12, "MONTH", "AT_MATURITY", true, 1L,
+                        new BigDecimal("75000"), "INDIVIDUAL", "REGULAR", 12, "MONTH", "AT_MATURITY", true, 1L,
                         LocalDate.of(2026, 8, 14)));
 
         assertThat(decision.eligible()).isTrue();

@@ -53,8 +53,10 @@ public class BillGenerationApplication {
         @Id
         @Column(name = "BILL_ID", length = 36)
         String id;
-        @Column(name = "ACCOUNT_ID", nullable = false)
+        @Column(name = "ACCOUNT_ID", nullable = false, length = 64)
         String accountId;
+        @Column(name = "CIF_ID")
+        Long cifId;
         @Column(name = "PRODUCT_CODE", nullable = false)
         String productCode;
         @Column(name = "BILLING_PERIOD", nullable = false)
@@ -83,9 +85,10 @@ public class BillGenerationApplication {
         protected Bill() {
         }
 
-        Bill(String id, String accountId, String productCode, String period, LocalDate date, String currency, BigDecimal previous, BigDecimal total, BigDecimal minimum, LocalDate due) {
+        Bill(String id, String accountId, Long cifId, String productCode, String period, LocalDate date, String currency, BigDecimal previous, BigDecimal total, BigDecimal minimum, LocalDate due) {
             this.id = id;
             this.accountId = accountId;
+            this.cifId = cifId;
             this.productCode = productCode;
             this.billingPeriod = period;
             this.businessDate = date;
@@ -368,7 +371,9 @@ public class BillGenerationApplication {
 
         @SuppressWarnings("unchecked")
         public BillingInputs fetch(String accountId, LocalDate from, LocalDate to) {
-            Map<String, Object> c = card.get().uri("/internal/v1/credit-card-accounts/{id}/billing-details", accountId).retrieve().body(Map.class);
+            String rawAccountId = accountId.startsWith("CC-") ? accountId.substring(3) : accountId;
+            String accountReference = accountId.startsWith("CC-") ? accountId : "CC-" + accountId;
+            Map<String, Object> c = card.get().uri("/internal/v1/credit-card-accounts/{id}/billing-details", rawAccountId).retrieve().body(Map.class);
             if (c == null)
                 throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "CARD_UNAVAILABLE", "Credit Card returned no account");
             Object cifValue = c.get("cifId");
@@ -387,10 +392,10 @@ public class BillGenerationApplication {
             Map<String, Object> cr = (Map<String, Object>) p.get("creditCardRule");
             List<Map<String, Object>> fs = (List<Map<String, Object>>) p.getOrDefault("fees", List.of());
             List<Fee> fees = fs.stream().map(f -> new Fee((String) f.get("feeType"), decimal(f.get("feeAmount")), (String) f.get("frequency"), Boolean.TRUE.equals(f.get("active")))).toList();
-            Map<String, Object> page = accounting.get().uri(b -> b.path("/internal/v1/ledger-entries").queryParam("accountReference", "CC-" + accountId).queryParam("from", from).queryParam("to", to).queryParam("size", 500).build()).retrieve().body(Map.class);
+            Map<String, Object> page = accounting.get().uri(b -> b.path("/internal/v1/ledger-entries").queryParam("accountReference", accountReference).queryParam("from", from).queryParam("to", to).queryParam("size", 500).build()).retrieve().body(Map.class);
             List<Map<String, Object>> entries = page == null ? List.of() : (List<Map<String, Object>>) page.getOrDefault("content", List.of());
             List<Activity> acts = entries.stream().map(e -> new Activity(String.valueOf(e.getOrDefault("eventType", "PURCHASE")), String.valueOf(e.getOrDefault("journalNumber", UUID.randomUUID())), String.valueOf(e.getOrDefault("narration", "Ledger entry")), decimal(e.get("debitAmount")).subtract(decimal(e.get("creditAmount"))).abs(), OffsetDateTime.now(ZoneOffset.UTC))).toList();
-            return new BillingInputs(new Product(productCode, (String) p.get("currencyCode"), (String) ir.getOrDefault("policyVersion", "V1"), (String) ir.getOrDefault("policyVersion", "V1"), decimal(c.get("purchaseInterestRate")), decimal(cr.get("minimumPaymentPercentage")), decimal(cr.get("minimumPaymentAmount")), ((Number) cr.get("paymentDueDays")).intValue(), fees), new Card(accountId, cifId, productCode, (String) c.get("status"), decimal(c.get("outstandingAmount"))), acts);
+            return new BillingInputs(new Product(productCode, (String) p.get("currencyCode"), (String) ir.getOrDefault("policyVersion", "V1"), (String) ir.getOrDefault("policyVersion", "V1"), decimal(c.get("purchaseInterestRate")), decimal(cr.get("minimumPaymentPercentage")), decimal(cr.get("minimumPaymentAmount")), ((Number) cr.get("paymentDueDays")).intValue(), fees), new Card(accountReference, cifId, productCode, (String) c.get("status"), decimal(c.get("outstandingAmount"))), acts);
         }
 
         public void postCalculatedCharges(String billId, String accountId, LocalDate date, String currency, List<Activity> charges) {
@@ -421,21 +426,22 @@ public class BillGenerationApplication {
         public BillResponse generate(String key, GenerateRequest request) {
             if (!request.billingPeriod.matches("\\d{4}-\\d{2}"))
                 throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BILLING_PERIOD", "billingPeriod must be YYYY-MM");
-            String keyHash = sha(key), requestHash = sha(request.accountId + "|" + request.billingPeriod + "|" + request.businessDate);
+            String accountReference = canonicalCardAccountReference(request.accountId);
+            String keyHash = sha(key), requestHash = sha(accountReference + "|" + request.billingPeriod + "|" + request.businessDate);
             List<Idempotency> known = em.createQuery("select i from Idempotency i where i.scope=:s and i.keyHash=:k", Idempotency.class).setParameter("s", "BILL_GENERATE").setParameter("k", keyHash).getResultList();
             if (!known.isEmpty()) {
                 if (!known.getFirst().requestHash.equals(requestHash))
                     throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_CONFLICT", "Idempotency key was used with a different request");
                 return get(known.getFirst().resourceId);
             }
-            List<Bill> duplicates = em.createQuery("select b from Bill b where b.accountId=:a and b.billingPeriod=:p", Bill.class).setParameter("a", request.accountId).setParameter("p", request.billingPeriod).getResultList();
+            List<Bill> duplicates = em.createQuery("select b from Bill b where b.accountId=:a and b.billingPeriod=:p", Bill.class).setParameter("a", accountReference).setParameter("p", request.billingPeriod).getResultList();
             if (!duplicates.isEmpty())
                 throw new ApiException(HttpStatus.CONFLICT, "BILL_ALREADY_EXISTS", "A bill already exists for this account and period");
             YearMonth ym = YearMonth.parse(request.billingPeriod);
-            BillingInputs inputs = upstream.fetch(request.accountId, ym.atDay(1), ym.atEndOfMonth());
+            BillingInputs inputs = upstream.fetch(accountReference, ym.atDay(1), ym.atEndOfMonth());
             if (!"ACTIVE".equals(inputs.card.status))
                 throw new ApiException(HttpStatus.CONFLICT, "CARD_NOT_ACTIVE", "Credit card is not active");
-            List<Bill> prior = em.createQuery("select b from Bill b where b.accountId=:a and b.billingPeriod<:p order by b.billingPeriod desc", Bill.class).setParameter("a", request.accountId).setParameter("p", request.billingPeriod).setMaxResults(1).getResultList();
+            List<Bill> prior = em.createQuery("select b from Bill b where b.accountId=:a and b.billingPeriod<:p order by b.billingPeriod desc", Bill.class).setParameter("a", accountReference).setParameter("p", request.billingPeriod).setMaxResults(1).getResultList();
             BigDecimal previous = prior.isEmpty() ? inputs.card.outstanding : prior.getFirst().totalDue.subtract(prior.getFirst().paidAmount).max(BigDecimal.ZERO);
             List<Activity> lines = new ArrayList<>();
             lines.add(new Activity("PREVIOUS_BALANCE", "OPENING-" + request.billingPeriod, "Previous statement balance", previous, request.businessDate.atStartOfDay().atOffset(ZoneOffset.UTC)));
@@ -457,7 +463,7 @@ public class BillGenerationApplication {
             net = net.add(fees).max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP);
             BigDecimal minimum = net.multiply(inputs.product.minimumPercentage).divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP).max(inputs.product.minimumAmount).min(net);
             String billId = UUID.randomUUID().toString();
-            Bill bill = new Bill(billId, request.accountId, inputs.product.code, request.billingPeriod, request.businessDate, inputs.product.currency, previous, net, minimum, request.businessDate.plusDays(inputs.product.dueDays));
+            Bill bill = new Bill(billId, accountReference, inputs.card.cifId, inputs.product.code, request.billingPeriod, request.businessDate, inputs.product.currency, previous, net, minimum, request.businessDate.plusDays(inputs.product.dueDays));
             em.persist(bill);
             lines.forEach(l -> em.persist(new BillLine(billId, l)));
             em.persist(new BillSnapshot(billId, inputs.product, write(inputs.product.fees)));
@@ -465,7 +471,7 @@ public class BillGenerationApplication {
             em.persist(new Idempotency("BILL_GENERATE", keyHash, requestHash, billId));
             em.persist(new Audit(billId));
             em.flush();
-            upstream.postCalculatedCharges(billId, request.accountId, request.businessDate, inputs.product.currency, lines.stream().filter(l -> "INTEREST".equals(l.type) || "FEE".equals(l.type)).toList());
+            upstream.postCalculatedCharges(billId, accountReference, request.businessDate, inputs.product.currency, lines.stream().filter(l -> "INTEREST".equals(l.type) || "FEE".equals(l.type)).toList());
             notifications.sendBillGenerated(inputs.card.cifId, billId, request.billingPeriod,
                     inputs.product.currency, net, bill.paymentDueDate);
             return toResponse(bill, lines);
@@ -476,6 +482,14 @@ public class BillGenerationApplication {
             Bill b = em.find(Bill.class, id);
             if (b == null) throw new ApiException(HttpStatus.NOT_FOUND, "BILL_NOT_FOUND", "Bill was not found");
             return toResponse(b, em.createQuery("select l from BillLine l where l.billId=:b order by l.occurredAt", BillLine.class).setParameter("b", id).getResultList().stream().map(l -> new Activity(l.type, l.reference, l.description, l.amount, l.occurredAt)).toList());
+        }
+
+        @Transactional(readOnly = true)
+        public BillResponse getForCustomer(String id, long cifId) {
+            List<Bill> owned = em.createQuery("select b from Bill b where b.id=:id and b.cifId=:cif", Bill.class)
+                    .setParameter("id", id).setParameter("cif", cifId).getResultList();
+            if (owned.isEmpty()) throw new ApiException(HttpStatus.NOT_FOUND, "BILL_NOT_FOUND", "Bill was not found");
+            return get(id);
         }
 
         @Transactional
@@ -506,6 +520,16 @@ public class BillGenerationApplication {
         public BillPage search(String account, String period, String status, int page, int size) {
             String q = "select b from Bill b where (:a is null or b.accountId=:a) and (:p is null or b.billingPeriod=:p) and (:s is null or b.status=:s) order by b.generatedAt desc";
             List<Bill> all = em.createQuery(q, Bill.class).setParameter("a", account).setParameter("p", period).setParameter("s", status).getResultList();
+            int from = Math.min(page * size, all.size()), to = Math.min(from + size, all.size());
+            return new BillPage(all.subList(from, to).stream().map(b -> get(b.id)).toList(), page, size, all.size());
+        }
+
+        @Transactional(readOnly = true)
+        public BillPage searchForCustomer(long cifId, String account, String period, String status, int page, int size) {
+            String canonicalAccount = account == null || account.isBlank() ? null : canonicalCardAccountReference(account);
+            String q = "select b from Bill b where b.cifId=:cif and (:a is null or b.accountId=:a) and (:p is null or b.billingPeriod=:p) and (:s is null or b.status=:s) order by b.generatedAt desc";
+            List<Bill> all = em.createQuery(q, Bill.class).setParameter("cif", cifId).setParameter("a", canonicalAccount)
+                    .setParameter("p", period).setParameter("s", status).getResultList();
             int from = Math.min(page * size, all.size()), to = Math.min(from + size, all.size());
             return new BillPage(all.subList(from, to).stream().map(b -> get(b.id)).toList(), page, size, all.size());
         }
@@ -549,6 +573,10 @@ public class BillGenerationApplication {
             } catch (Exception e) {
                 throw new IllegalStateException(e);
             }
+        }
+
+        private static String canonicalCardAccountReference(String accountId) {
+            return accountId.startsWith("CC-") ? accountId : "CC-" + accountId;
         }
     }
 

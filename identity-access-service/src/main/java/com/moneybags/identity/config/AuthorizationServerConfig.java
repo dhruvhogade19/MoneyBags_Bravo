@@ -1,6 +1,8 @@
 package com.moneybags.identity.config;
 
 import com.moneybags.identity.user.BankPrincipal;
+import com.moneybags.identity.user.BankUser;
+import com.moneybags.identity.user.BankUserRepository;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
@@ -19,6 +21,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -51,6 +54,9 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 import org.springframework.http.MediaType;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableMethodSecurity
@@ -60,7 +66,7 @@ public class AuthorizationServerConfig {
             "openid", "profile", "product:read", "cif:read", "cif:write", "kyc:read", "kyc:write",
             "account:read", "account:open", "account:write",
             "account:close", "fd:read", "fd:open", "fd:close", "payment:read", "payment:write",
-            "card:read", "card:apply", "notification:read");
+            "card:read", "card:apply", "billing:read", "notification:read");
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -68,6 +74,7 @@ public class AuthorizationServerConfig {
         OAuth2AuthorizationServerConfigurer authorizationServer =
                 new OAuth2AuthorizationServerConfigurer();
         http.securityMatcher(authorizationServer.getEndpointsMatcher())
+                .cors(Customizer.withDefaults())
                 .with(authorizationServer, server -> server.oidc(Customizer.withDefaults()))
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions.defaultAuthenticationEntryPointFor(
@@ -81,10 +88,13 @@ public class AuthorizationServerConfig {
     @Bean
     @Order(2)
     SecurityFilterChain applicationSecurityFilterChain(HttpSecurity http) throws Exception {
-        return http.authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health/**", "/error").permitAll()
+        return http.cors(Customizer.withDefaults())
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/identity/registrations"))
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/login", "/styles/**", "/actuator/health/**", "/error",
+                                "/api/v1/identity/registrations").permitAll()
                         .anyRequest().authenticated())
-                .formLogin(Customizer.withDefaults())
+                .formLogin(form -> form.loginPage("/login").permitAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt
                         .jwtAuthenticationConverter(resourceServerJwtAuthenticationConverter())))
                 .build();
@@ -109,6 +119,19 @@ public class AuthorizationServerConfig {
     @Bean
     PasswordEncoder passwordEncoder() {
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+
+    @Bean
+    CorsConfigurationSource corsConfigurationSource(
+            @Value("${moneybags.identity.cors-allowed-origin:http://localhost:8000}") String allowedOrigin) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of(allowedOrigin));
+        configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Content-Type", "Authorization"));
+        configuration.setAllowCredentials(true);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
     @Bean
@@ -165,6 +188,7 @@ public class AuthorizationServerConfig {
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
                 .redirectUri(redirectUri)
+                .postLogoutRedirectUri(redirectUri)
                 .clientSettings(ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
                 .tokenSettings(tokens);
         scopes.forEach(builder::scope);
@@ -185,21 +209,17 @@ public class AuthorizationServerConfig {
     }
 
     @Bean
-    OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer() {
+    OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(BankUserRepository users) {
         return context -> {
             if (!OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) return;
             Object principal = context.getPrincipal().getPrincipal();
             if (principal instanceof BankPrincipal user) {
-                List<String> roles = user.getAuthorities().stream()
-                        .map(authority -> authority.getAuthority())
-                        .filter(authority -> authority.startsWith("ROLE_"))
-                        .map(authority -> authority.substring(5))
-                        .toList();
-                context.getClaims().claim("roles", roles)
+                ResolvedBankIdentity identity = resolveBankIdentity(user, users);
+                context.getClaims().claim("roles", identity.roles())
                         .claim("user_id", user.userId())
-                        .claim("tenant_id", user.tenantId());
-                if (user.customerId() != null) context.getClaims().claim("customer_id", user.customerId());
-                if (roles.contains("CONSUMER") && !roles.contains("BANK_ADMIN")) {
+                        .claim("tenant_id", identity.tenantId());
+                if (identity.customerId() != null) context.getClaims().claim("customer_id", identity.customerId());
+                if (identity.roles().contains("CONSUMER") && !identity.roles().contains("BANK_ADMIN")) {
                     Set<String> safeScopes = new LinkedHashSet<>(context.getAuthorizedScopes());
                     safeScopes.retainAll(CONSUMER_SCOPES);
                     context.getClaims().claim("scope", safeScopes);
@@ -212,6 +232,24 @@ public class AuthorizationServerConfig {
             context.getClaims().audience(List.of("moneybags-api"));
         };
     }
+
+    static ResolvedBankIdentity resolveBankIdentity(BankPrincipal user, BankUserRepository users) {
+        BankUser current = users.findById(user.userId()).orElse(null);
+        if (current == null) {
+            List<String> roles = user.getAuthorities().stream()
+                    .map(authority -> authority.getAuthority())
+                    .filter(authority -> authority.startsWith("ROLE_"))
+                    .map(authority -> authority.substring(5))
+                    .toList();
+            return new ResolvedBankIdentity(roles, user.tenantId(), user.customerId());
+        }
+        List<String> roles = Arrays.stream(current.getRoles().split("[,\\s]+"))
+                .filter(role -> !role.isBlank())
+                .toList();
+        return new ResolvedBankIdentity(roles, current.getTenantId(), current.getCustomerId());
+    }
+
+    record ResolvedBankIdentity(List<String> roles, String tenantId, String customerId) {}
 
     @Bean
     AuthorizationServerSettings authorizationServerSettings(

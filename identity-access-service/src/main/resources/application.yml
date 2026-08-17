@@ -9,9 +9,9 @@ spring:
   application:
     name: identity-access-service
   datasource:
-    url: ${IDENTITY_DB_URL:${MONEYBAGS_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
-    username: ${IDENTITY_DB_USERNAME:MONEYBAGS_IDENTITY}
-    password: ${IDENTITY_DB_PASSWORD:}
+    url: ${MONEYBAGS_DB_URL:${IDENTITY_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
+    username: ${MONEYBAGS_DB_USERNAME:${IDENTITY_DB_USERNAME:MONEYBAGS_IDENTITY}}
+    password: ${MONEYBAGS_DB_PASSWORD:${IDENTITY_DB_PASSWORD:}}
     driver-class-name: oracle.jdbc.OracleDriver
   jpa:
     open-in-view: false
@@ -24,14 +24,21 @@ spring:
 moneybags:
   identity:
     issuer: ${OAUTH2_ISSUER_URI:http://localhost:8093}
+    cors-allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:8000}
+    frontend-url: ${MONEYBAGS_FRONTEND_URL:http://localhost:8000}
+    registration:
+      enabled: ${IDENTITY_SELF_REGISTRATION_ENABLED:false}
     clients:
       consumer:
-        redirect-uri: ${CONSUMER_OIDC_REDIRECT_URI:http://127.0.0.1:8000/login/oauth2/code/moneybags-consumer}
+        redirect-uri: ${CONSUMER_OIDC_REDIRECT_URI:http://localhost:8000/}
       admin:
-        redirect-uri: ${ADMIN_OIDC_REDIRECT_URI:http://127.0.0.1:8001/login/oauth2/code/moneybags-admin}
+        redirect-uri: ${ADMIN_OIDC_REDIRECT_URI:http://localhost:8000/}
       service-secret: ${M2M_CLIENT_SECRET:}
 
 eureka:
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+    prefer-ip-address: ${EUREKA_INSTANCE_PREFER_IP_ADDRESS:false}
   client:
     enabled: ${EUREKA_ENABLED:true}
     service-url:

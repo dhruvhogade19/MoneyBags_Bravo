@@ -27,7 +27,9 @@ public class LocalUserBootstrap implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         createIfAbsent("admin@moneybags.local", adminPassword, null, "BANK_ADMIN");
-        createIfAbsent("consumer@moneybags.local", consumerPassword, "101", "CONSUMER");
+        // A new consumer is intentionally not linked to a customer yet. The CIF
+        // onboarding flow creates the customer and links its generated ID.
+        createIfAbsent("consumer@moneybags.local", consumerPassword, null, "CONSUMER");
     }
 
     private void createIfAbsent(String username, String password, String customerId, String role) {

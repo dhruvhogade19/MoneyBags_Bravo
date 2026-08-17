@@ -1,6 +1,7 @@
 package com.moneybags.payments.service;
 
 import com.moneybags.payments.domain.InstrumentType;
+import com.moneybags.payments.domain.CreditCardAccountReference;
 import com.moneybags.payments.domain.Payment;
 import com.moneybags.payments.domain.PaymentStatus;
 import com.moneybags.payments.domain.PaymentType;
@@ -220,14 +221,18 @@ public class PaymentOrchestrationService {
   public PaymentResponse merchantPayment(MerchantPaymentRequest request, String key,
                                          String correlationId) {
     eod.assertOpen();
-    String fingerprint = PaymentSupportService.fingerprint("MERCHANT_PAYMENT", request);
+    String cardReference = CreditCardAccountReference.canonical(request.creditCardAccountId());
+    MerchantPaymentRequest normalizedRequest = new MerchantPaymentRequest(
+        request.requestorCustomerId(), cardReference, request.merchantId(), request.amount(),
+        request.currencyCode(), request.reference());
+    String fingerprint = PaymentSupportService.fingerprint("MERCHANT_PAYMENT", normalizedRequest);
     Optional<PaymentResponse> existing = support.existing(request.requestorCustomerId(), key,
         fingerprint);
     if (existing.isPresent()) return existing.get();
 
     Payment payment = newPayment(request.requestorCustomerId(), key, fingerprint,
         PaymentType.CREDIT_CARD_MERCHANT_PAYMENT, InstrumentType.CREDIT_CARD_ACCOUNT,
-        request.creditCardAccountId(), InstrumentType.MERCHANT, request.merchantId(),
+        cardReference, InstrumentType.MERCHANT, request.merchantId(),
         request.merchantId(), null, request.amount(), request.currencyCode(), request.reference(),
         correlationId);
     support.initial(payment);
@@ -236,7 +241,8 @@ public class PaymentOrchestrationService {
       support.transition(payment, PaymentStatus.PENDING_RESERVATION,
           "CARD_VALIDATION_STARTED", null);
       CardHoldResponse hold = support.attempt(payment, "CARD_HOLD", CARD,
-          () -> cards.createHold(request.creditCardAccountId(), payment.getPaymentId(),
+          () -> cards.createHold(CreditCardAccountReference.serviceAccountId(cardReference),
+              payment.getPaymentId(),
               request.amount(), correlationId));
       payment.setCardHoldId(String.valueOf(hold.holdId()));
       payments.save(payment);
@@ -249,7 +255,8 @@ public class PaymentOrchestrationService {
       support.transition(payment, PaymentStatus.PENDING_SETTLEMENT,
           "ACCOUNTING_POSTED", null);
       support.attempt(payment, "CARD_CAPTURE", CARD,
-          () -> cards.captureHold(request.creditCardAccountId(), payment.getCardHoldId(),
+          () -> cards.captureHold(CreditCardAccountReference.serviceAccountId(cardReference),
+              payment.getCardHoldId(),
               correlationId));
       support.transition(payment, PaymentStatus.SETTLED, "CARD_HOLD_CAPTURED", null);
       notifyFinal(payment, "PAYMENT_SUCCESS", null);
@@ -262,7 +269,11 @@ public class PaymentOrchestrationService {
   public PaymentResponse cardRepayment(CardRepaymentRequest request, String key,
                                        String correlationId) {
     eod.assertOpen();
-    String fingerprint = PaymentSupportService.fingerprint("CARD_REPAYMENT", request);
+    String cardReference = CreditCardAccountReference.canonical(request.creditCardAccountId());
+    CardRepaymentRequest normalizedRequest = new CardRepaymentRequest(
+        request.requestorCustomerId(), request.billId(), request.sourceDepositAccountId(),
+        cardReference, request.amount(), request.currencyCode(), request.reference());
+    String fingerprint = PaymentSupportService.fingerprint("CARD_REPAYMENT", normalizedRequest);
     Optional<PaymentResponse> existing = support.existing(request.requestorCustomerId(), key,
         fingerprint);
     if (existing.isPresent()) return existing.get();
@@ -270,7 +281,7 @@ public class PaymentOrchestrationService {
     Payment payment = newPayment(request.requestorCustomerId(), key, fingerprint,
         PaymentType.CREDIT_CARD_REPAYMENT, InstrumentType.DEPOSIT_ACCOUNT,
         request.sourceDepositAccountId(), InstrumentType.CREDIT_CARD_ACCOUNT,
-        request.creditCardAccountId(), null, request.billId(), request.amount(),
+        cardReference, null, request.billId(), request.amount(),
         request.currencyCode(), request.reference(), correlationId);
     support.initial(payment);
     boolean depositCaptured = false;
@@ -290,7 +301,7 @@ public class PaymentOrchestrationService {
       ReservationResponse reservation = support.attempt(payment, "DEPOSIT_RESERVE", DEPOSIT,
           () -> deposit.reserveCardRepayment(new CardRepaymentReservationRequest(
               payment.getPaymentId(), request.requestorCustomerId(),
-              request.sourceDepositAccountId(), request.creditCardAccountId(), request.amount(),
+              request.sourceDepositAccountId(), cardReference, request.amount(),
               request.currencyCode(), Instant.now().plusSeconds(300)), correlationId));
       payment.setDepositReservationId(reservation.reservationId());
       payments.save(payment);
@@ -307,7 +318,8 @@ public class PaymentOrchestrationService {
               payment.getDepositReservationId(), correlationId));
       depositCaptured = true;
       support.attempt(payment, "CARD_BILLPAID", CARD,
-          () -> cards.payBill(request.creditCardAccountId(), payment.getPaymentId(),
+          () -> cards.payBill(CreditCardAccountReference.serviceAccountId(cardReference),
+              payment.getPaymentId(),
               request.amount(), correlationId));
 
       payment.setBillingSettlementAt(Instant.now());
@@ -350,7 +362,7 @@ public class PaymentOrchestrationService {
       if (exception.getStatus() != 408 && exception.getStatus() != 504) throw exception;
       AccountingLookupResponse lookup = support.attempt(payment, "ACCOUNTING_LOOKUP", ACCOUNTING,
           () -> accounting.findByReference(key, payment.getCorrelationId()));
-      if (!"POSTED".equals(lookup.outcome()) || lookup.journalNumber() == null) throw exception;
+      if (!"POSTED".equals(lookup.status()) || lookup.journalNumber() == null) throw exception;
       if (lookup.journal() != null) return lookup.journal();
       return new AccountingResponse(lookup.journalNumber(), null, key, "PAYMENTS-SERVICE",
           payment.getPaymentType().name(), Instant.now(), payment.getBusinessDate(),
@@ -402,7 +414,7 @@ public class PaymentOrchestrationService {
       if (exception.getStatus() != 408 && exception.getStatus() != 504) throw exception;
       AccountingLookupResponse lookup = support.attempt(payment, "ACCOUNTING_FD_LOOKUP", ACCOUNTING,
           () -> accounting.findFixedDepositByReference(key, payment.getCorrelationId()));
-      if (!"POSTED".equals(lookup.outcome()) || lookup.journalNumber() == null) throw exception;
+      if (!"POSTED".equals(lookup.status()) || lookup.journalNumber() == null) throw exception;
       if (lookup.journal() != null) return lookup.journal();
       return new AccountingResponse(lookup.journalNumber(), null, key, "PAYMENTS-SERVICE",
           "FD_" + postingType, Instant.now(), payment.getBusinessDate(),
@@ -502,7 +514,9 @@ public class PaymentOrchestrationService {
     if (payment.getCardHoldId() == null) return;
     try {
       support.attempt(payment, "CARD_RELEASE", CARD,
-          () -> cards.releaseHold(payment.getSourceAccountId(), payment.getCardHoldId(),
+          () -> cards.releaseHold(
+              CreditCardAccountReference.serviceAccountId(payment.getSourceAccountId()),
+              payment.getCardHoldId(),
               payment.getCorrelationId()));
     } catch (RuntimeException releaseFailure) {
       support.recordIgnoredFailure(payment, "CARD_RELEASE", CARD, releaseFailure);
@@ -559,7 +573,8 @@ public class PaymentOrchestrationService {
   private void validateBill(CardRepaymentRequest request, BillSummary bill) {
     if (!request.billId().equals(bill.billId()))
       throw new BusinessValidationException("Bill identifier does not match");
-    if (!request.creditCardAccountId().equals(bill.accountId()))
+    if (!CreditCardAccountReference.canonical(request.creditCardAccountId())
+        .equals(CreditCardAccountReference.canonical(bill.accountId())))
       throw new BusinessValidationException("Bill belongs to a different card account");
     if (!"GENERATED".equals(bill.status()) && !"PARTIALLY_PAID".equals(bill.status())
         && !"OVERDUE".equals(bill.status()))

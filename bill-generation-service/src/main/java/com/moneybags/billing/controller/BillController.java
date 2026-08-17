@@ -13,6 +13,8 @@ import com.moneybags.billing.BillGenerationApplication.PaymentSettlementRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
+import java.util.List;
 
 @RestController
 @RequestMapping
@@ -39,7 +42,7 @@ public class BillController {
                 "service", "bill-generation-service", "status", "UP",
                 "documentation", "/swagger-ui.html", "health", "/actuator/health",
                 "generateBill", "POST /internal/v1/bills/generate",
-                "findBills", "GET /internal/v1/bills", "getBill", "GET /api/v1/bills/{billId}");
+                "findBills", "GET /api/v1/bills", "getBill", "GET /api/v1/bills/{billId}");
     }
 
     @PostMapping("/internal/v1/bills/generate")
@@ -49,8 +52,26 @@ public class BillController {
     }
 
     @GetMapping("/api/v1/bills/{billId}")
-    BillResponse get(@PathVariable String billId) {
-        return service.get(billId);
+    BillResponse get(@PathVariable String billId,
+                     @RequestHeader(name = "X-Customer-ID", required = false) String gatewayCustomerId,
+                     @AuthenticationPrincipal Jwt jwt) {
+        Long customerId = customerId(jwt, gatewayCustomerId);
+        return customerId == null ? service.get(billId) : service.getForCustomer(billId, customerId);
+    }
+
+    @GetMapping("/api/v1/bills")
+    BillPage customerSearch(@RequestHeader(name = "X-Customer-ID", required = false) String gatewayCustomerId,
+                            @AuthenticationPrincipal Jwt jwt,
+                            @RequestParam(required = false) String accountId,
+                            @RequestParam(required = false) String billingPeriod,
+                            @RequestParam(required = false) String status,
+                            @RequestParam(defaultValue = "0") int page,
+                            @RequestParam(defaultValue = "20") int size) {
+        validatePage(page, size);
+        Long customerId = customerId(jwt, gatewayCustomerId);
+        return customerId == null
+                ? service.search(accountId, billingPeriod, status, page, size)
+                : service.searchForCustomer(customerId, accountId, billingPeriod, status, page, size);
     }
 
     @GetMapping("/internal/v1/bills/{billId}")
@@ -64,9 +85,7 @@ public class BillController {
                     @RequestParam(required = false) String status,
                     @RequestParam(defaultValue = "0") int page,
                     @RequestParam(defaultValue = "20") int size) {
-        if (page < 0 || size < 1 || size > 100) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PAGE", "page must be >= 0 and size must be 1..100");
-        }
+        validatePage(page, size);
         return service.search(accountId, billingPeriod, status, page, size);
     }
 
@@ -91,5 +110,33 @@ public class BillController {
     CloseResponse close(@RequestHeader("Idempotency-Key") @NotBlank String ignored,
                         @Valid @RequestBody CloseRequest request) {
         return service.close(request);
+    }
+
+    private static void validatePage(int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PAGE", "page must be >= 0 and size must be 1..100");
+        }
+    }
+
+    private static Long customerId(Jwt jwt, String gatewayCustomerId) {
+        if (jwt != null) {
+            List<String> roles = jwt.getClaimAsStringList("roles");
+            if (roles != null && roles.contains("BANK_ADMIN")) return null;
+            Object claim = jwt.getClaim("customer_id");
+            if (claim == null) throw new ApiException(HttpStatus.FORBIDDEN, "CUSTOMER_CONTEXT_REQUIRED", "Customer identity is required");
+            long authenticated = Long.parseLong(claim.toString());
+            if (gatewayCustomerId != null && authenticated != Long.parseLong(gatewayCustomerId)) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "CUSTOMER_CONTEXT_MISMATCH", "Customer identity does not match the gateway context");
+            }
+            return authenticated;
+        }
+        if (gatewayCustomerId == null || gatewayCustomerId.isBlank()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "CUSTOMER_CONTEXT_REQUIRED", "X-Customer-ID is required");
+        }
+        try {
+            return Long.parseLong(gatewayCustomerId);
+        } catch (NumberFormatException exception) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_CUSTOMER_CONTEXT", "X-Customer-ID must be numeric");
+        }
     }
 }

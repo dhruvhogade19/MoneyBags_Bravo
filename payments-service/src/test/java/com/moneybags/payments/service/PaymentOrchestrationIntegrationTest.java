@@ -44,12 +44,18 @@ class PaymentOrchestrationIntegrationTest {
 
   @Test
   void settlesMerchantPaymentUsingHoldAndCapture() {
-    PaymentResponse result = orchestration.merchantPayment(new MerchantPaymentRequest(
+    MerchantPaymentRequest request = new MerchantPaymentRequest(
         103L, "101", "MERCHANT-001", new BigDecimal("1000.00"), "INR",
-        "Shop purchase"), "merchant-key-1", "trace-3");
+        "Shop purchase");
+    PaymentResponse result = orchestration.merchantPayment(request, "merchant-key-1", "trace-3");
+    PaymentResponse replay = orchestration.merchantPayment(new MerchantPaymentRequest(
+        103L, "CC-101", "MERCHANT-001", new BigDecimal("1000.00"), "INR",
+        "Shop purchase"), "merchant-key-1", "trace-3b");
     assertThat(result.status()).describedAs("failure=%s: %s", result.failureCode(),
         result.failureMessage()).isEqualTo(PaymentStatus.SETTLED);
     assertThat(result.cardHoldId()).isNotBlank();
+    assertThat(result.sourceAccountId()).isEqualTo("CC-101");
+    assertThat(replay.paymentId()).isEqualTo(result.paymentId());
   }
 
   @Test
@@ -59,6 +65,7 @@ class PaymentOrchestrationIntegrationTest {
         new BigDecimal("2500.00"), "INR", "Card bill repayment"),
         "repayment-key-1", "trace-4");
     assertThat(result.status()).isEqualTo(PaymentStatus.SETTLED);
+    assertThat(result.destinationAccountId()).isEqualTo("CC-101");
     PageResponse<StatementActivity> statement = queries.statements("dep-statement",
         LocalDate.now().minusDays(1), LocalDate.now().plusDays(1), 0, 100);
     assertThat(statement.content()).extracting(StatementActivity::paymentId)

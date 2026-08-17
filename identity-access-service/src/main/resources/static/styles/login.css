@@ -1,0 +1,238 @@
+:root {
+    color-scheme: light;
+    --vela-brand-dark: #8b1f39;
+    --vela-brand-primary: #a53246;
+    --vela-brand-active: #c54b5d;
+    --vela-brand-soft: #af4147;
+    --vela-brand-button: #b33c52;
+    --vela-page: #f4e7e8;
+    --vela-main: #fefbf9;
+    --vela-white: #fffefe;
+    --vela-blush: #f6ddd5;
+    --vela-blush-light: #fbefed;
+    --vela-border: #e9ced0;
+    --vela-text: #2b1720;
+    --vela-muted: #755f68;
+    --vela-success: #267a55;
+    --vela-success-bg: #e7f4ed;
+    --vela-danger: #a62f43;
+    --vela-danger-bg: #fbe6e9;
+    --vela-focus: rgba(139, 31, 57, .24);
+    --vela-white-muted: rgba(255, 254, 254, .76);
+    --vela-white-faint: rgba(255, 254, 254, .10);
+    --vela-shadow-soft: 0 12px 32px rgba(93, 24, 46, .08);
+    --vela-shadow-button: 0 8px 20px rgba(139, 31, 57, .20);
+    --vela-radius-small: 12px;
+    --vela-radius-medium: 16px;
+    --vela-radius-card: 24px;
+    --vela-radius-shell: 32px;
+}
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 32px;
+    color: var(--vela-text);
+    background: var(--vela-page);
+    font-family: "Poppins", "Segoe UI", Arial, sans-serif;
+}
+
+a { color: inherit; }
+
+.auth-shell {
+    width: min(1180px, 100%);
+    min-height: min(760px, calc(100vh - 64px));
+    display: grid;
+    grid-template-columns: 1.08fr .92fr;
+    overflow: hidden;
+    border: 1px solid var(--vela-border);
+    border-radius: var(--vela-radius-shell);
+    background: var(--vela-main);
+    box-shadow: var(--vela-shadow-soft);
+}
+
+.brand-panel {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 48px;
+    color: var(--vela-white);
+    background: linear-gradient(160deg, var(--vela-brand-dark), var(--vela-brand-soft));
+}
+
+.brand {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    width: fit-content;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -.03em;
+    text-decoration: none;
+}
+
+.brand-mark, .security-mark {
+    display: grid;
+    place-items: center;
+    border-radius: var(--vela-radius-small);
+    color: var(--vela-brand-dark);
+    background: var(--vela-white);
+}
+
+.brand-mark { width: 48px; height: 48px; font-size: 24px; }
+.brand-copy { position: relative; z-index: 2; margin: auto 0; max-width: 620px; }
+.eyebrow { margin: 0 0 16px; font-size: 12px; font-weight: 600; letter-spacing: .08em; }
+.brand-copy .eyebrow { color: var(--vela-white-muted); }
+
+.brand-copy h1 {
+    margin: 0 0 24px;
+    font-size: clamp(48px, 5vw, 64px);
+    line-height: 1.04;
+    font-weight: 700;
+    letter-spacing: -.05em;
+}
+
+.brand-copy > p:last-child {
+    max-width: 580px;
+    margin: 0;
+    color: var(--vela-white-muted);
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.brand-footnote { position: relative; z-index: 2; margin: 0; color: var(--vela-white-muted); font-size: 12px; }
+.brand-footnote span { color: var(--vela-blush); }
+
+.brand-orbit, .brand-orbit::after {
+    position: absolute;
+    border: 80px solid var(--vela-white-faint);
+    border-radius: 50%;
+    content: "";
+}
+
+.brand-orbit { right: -224px; bottom: -240px; width: 520px; height: 520px; }
+.brand-orbit::after { inset: 64px; border-width: 64px; }
+
+.login-panel {
+    display: grid;
+    place-items: center;
+    padding: 48px;
+    background: var(--vela-main);
+}
+
+.login-content { width: min(440px, 100%); }
+.back-link { display: inline-block; margin-bottom: 48px; color: var(--vela-brand-dark); font-size: 14px; font-weight: 600; text-decoration: none; }
+.back-link:hover { color: var(--vela-brand-primary); }
+
+.security-mark {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 20px;
+    color: var(--vela-white);
+    background: var(--vela-brand-dark);
+}
+
+.login-content > .eyebrow { margin-bottom: 12px; color: var(--vela-brand-primary); }
+h2 { margin: 0; font-size: 32px; line-height: 1.2; font-weight: 700; letter-spacing: -.03em; }
+.intro { margin: 16px 0 32px; color: var(--vela-muted); font-size: 15px; line-height: 1.6; }
+
+.alert { margin: 0 0 24px; padding: 12px 16px; border-radius: var(--vela-radius-small); font-size: 14px; line-height: 1.5; }
+.alert-error { color: var(--vela-danger); background: var(--vela-danger-bg); }
+.alert-success { color: var(--vela-success); background: var(--vela-success-bg); }
+.login-form { display: grid; }
+.login-form label { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+
+.field-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 48px;
+    margin-bottom: 20px;
+    padding: 0 16px;
+    border: 1px solid var(--vela-border);
+    border-radius: var(--vela-radius-small);
+    background: var(--vela-white);
+    transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.field-wrap:focus-within { border-color: var(--vela-brand-dark); box-shadow: 0 0 0 3px var(--vela-focus); }
+.field-wrap span { color: var(--vela-brand-dark); font-weight: 700; }
+.field-wrap input { width: 100%; height: 100%; padding: 0; border: 0; outline: 0; color: var(--vela-text); background: transparent; font: inherit; }
+.field-wrap input::placeholder { color: var(--vela-muted); opacity: .72; }
+
+button {
+    min-height: 48px;
+    margin-top: 4px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: var(--vela-radius-small);
+    color: var(--vela-white);
+    background: linear-gradient(135deg, var(--vela-brand-dark), var(--vela-brand-button));
+    box-shadow: var(--vela-shadow-button);
+    cursor: pointer;
+    font: 600 14px/1 "Poppins", "Segoe UI", Arial, sans-serif;
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+button:hover { transform: translateY(-1px); }
+button:active { transform: translateY(0); }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--vela-focus); outline-offset: 3px; }
+
+.signup-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; color: var(--vela-muted); font-size: 13px; }
+.signup-link a { color: var(--vela-brand-dark); font-weight: 600; text-decoration: none; }
+.signup-link a:hover { color: var(--vela-brand-primary); }
+
+.trust-note { display: flex; gap: 12px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--vela-border); color: var(--vela-muted); }
+.trust-note p { margin: 0; font-size: 12px; line-height: 1.6; }
+.trust-note strong { color: var(--vela-text); }
+.trust-icon { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; color: var(--vela-white); background: var(--vela-success); font-size: 12px; }
+
+@media (max-height: 800px) and (min-width: 851px) {
+    body { padding: 16px; }
+    .auth-shell { min-height: calc(100vh - 32px); }
+    .brand-panel { padding: 40px; }
+    .brand-copy h1 { font-size: 48px; }
+    .login-panel { padding: 32px 48px; }
+    .back-link { margin-bottom: 24px; }
+    .security-mark { width: 40px; height: 40px; margin-bottom: 12px; }
+    .login-content > .eyebrow { margin-bottom: 8px; }
+    .intro { margin: 12px 0 20px; }
+    .field-wrap { margin-bottom: 16px; }
+    .trust-note { margin-top: 20px; padding-top: 16px; }
+}
+
+@media (max-width: 850px) {
+    body { padding: 16px; }
+    .auth-shell { grid-template-columns: 1fr; min-height: auto; border-radius: var(--vela-radius-shell); }
+    .brand-panel { min-height: 280px; padding: 32px; }
+    .brand-copy { margin-top: 48px; }
+    .brand-copy h1 { font-size: 40px; }
+    .brand-copy > p:last-child, .brand-footnote { display: none; }
+    .login-panel { padding: 40px 32px 48px; }
+    .back-link { margin-bottom: 32px; }
+}
+
+@media (max-width: 480px) {
+    body { padding: 0; background: var(--vela-main); }
+    .auth-shell { min-height: 100vh; border: 0; border-radius: 0; box-shadow: none; }
+    .brand-panel { min-height: 240px; padding: 24px; }
+    .brand { font-size: 20px; }
+    .brand-mark { width: 48px; height: 48px; }
+    .brand-copy { margin-top: 40px; }
+    .brand-copy h1 { margin-bottom: 0; font-size: 40px; }
+    .login-panel { place-items: start center; padding: 32px 24px 48px; }
+    .security-mark { display: none; }
+    h2 { font-size: 30px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+}

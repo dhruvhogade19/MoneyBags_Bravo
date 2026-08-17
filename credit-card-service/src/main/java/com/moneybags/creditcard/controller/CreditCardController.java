@@ -1,6 +1,7 @@
 package com.moneybags.creditcard.controller;
 
 import com.moneybags.creditcard.dto.CreditCardDtos.*;
+import com.moneybags.creditcard.domain.CreditCardTypes.ApplicationStatus;
 import com.moneybags.creditcard.service.CreditCardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,8 +27,8 @@ public class CreditCardController {
     }
 
     @Operation(tags = "Customer / Admin - Applications", summary = "Submit a credit-card application",
-            description = "Intended customer/channel API; authentication is not currently enforced. CIF ID, product code, and requested credit limit are supplied by the client. Eligibility is validated through CIF and Product Master; eligible applications are approved and create an account automatically.")
-    @ApiResponses({@ApiResponse(responseCode = "201", description = "Application decision recorded", content = @Content(schema = @Schema(implementation = ApplicationResponse.class))),
+            description = "CIF ID, product code, and requested credit limit are supplied by the client. Eligibility is validated through CIF and Product Master, then the application remains pending for a bank-admin decision.")
+    @ApiResponses({@ApiResponse(responseCode = "201", description = "Pending application recorded", content = @Content(schema = @Schema(implementation = ApplicationResponse.class))),
             @ApiResponse(responseCode = "400", description = ERROR_SCHEMA), @ApiResponse(responseCode = "404", description = "CIF or referenced resource not found"), @ApiResponse(responseCode = "409", description = ERROR_SCHEMA)})
     @PostMapping("/applications")
     @PreAuthorize("@creditCardAuthorization.canAccessCif(authentication, #r.cifId())")
@@ -53,9 +54,18 @@ public class CreditCardController {
         return service.applications(cifId);
     }
 
+    @Operation(tags = "Customer / Admin - Applications", summary = "List credit-card applications for admin review")
+    @GetMapping("/applications")
+    @PreAuthorize("hasAuthority('SCOPE_card:admin') or hasRole('BANK_ADMIN')")
+    List<ApplicationResponse> applicationsForReview(
+            @RequestParam(name = "status", required = false) ApplicationStatus status) {
+        return service.applications(status);
+    }
+
     @Operation(tags = "Customer / Admin - Applications", summary = "Approve an application", description = "Intended admin-only operation; authentication/roles are not currently enforced. A pending eligible application receives its requested limit and creates an account.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Application approved and account created", content = @Content(schema = @Schema(implementation = AccountResponse.class))), @ApiResponse(responseCode = "404", description = ERROR_SCHEMA), @ApiResponse(responseCode = "409", description = "Application is not pending or is ineligible")})
     @PostMapping("/applications/{applicationId}/approve")
+    @PreAuthorize("hasAuthority('SCOPE_card:admin') or hasRole('BANK_ADMIN')")
     AccountResponse approve(@Parameter(description = "Credit-card application ID.", required = true, example = "1001") @PathVariable("applicationId") Long applicationId) {
         return service.approve(applicationId);
     }
@@ -63,6 +73,7 @@ public class CreditCardController {
     @Operation(tags = "Customer / Admin - Applications", summary = "Reject an application", description = "Intended admin-only operation; authentication/roles are not currently enforced. Only pending applications can be rejected.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Application rejected", content = @Content(schema = @Schema(implementation = ApplicationResponse.class))), @ApiResponse(responseCode = "404", description = ERROR_SCHEMA), @ApiResponse(responseCode = "409", description = "Application is not pending")})
     @PostMapping("/applications/{applicationId}/reject")
+    @PreAuthorize("hasAuthority('SCOPE_card:admin') or hasRole('BANK_ADMIN')")
     ApplicationResponse reject(@Parameter(description = "Credit-card application ID.", required = true, example = "1001") @PathVariable("applicationId") Long applicationId) {
         return service.reject(applicationId);
     }

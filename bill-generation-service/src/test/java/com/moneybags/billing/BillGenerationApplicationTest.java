@@ -29,6 +29,10 @@ class BillGenerationApplicationTest {
         assertThat(generated.minimumAmountDue()).isLessThanOrEqualTo(generated.totalAmountDue());
         assertThat(generated.lines()).extracting(BillGenerationApplication.BillLineResponse::lineType)
                 .contains("PREVIOUS_BALANCE", "PURCHASE", "PAYMENT", "INTEREST");
+        assertThat(generated.accountId()).startsWith("CC-");
+        assertThat(service.searchForCustomer(101L, null, "2026-08", null, 0, 20).content())
+                .extracting(BillGenerationApplication.BillResponse::billId).contains(generated.billId());
+        assertThat(service.searchForCustomer(999L, null, "2026-08", null, 0, 20).content()).isEmpty();
     }
 
     @Test

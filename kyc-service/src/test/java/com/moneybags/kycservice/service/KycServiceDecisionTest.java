@@ -45,7 +45,7 @@ class KycServiceDecisionTest {
         cifClient = mock(CifClient.class);
         notificationClient = mock(NotificationClient.class);
         service = new KycService(repository, mock(KycMapper.class), cifClient, notificationClient,
-                documentRepository);
+                documentRepository, true);
         kyc = new Kyc();
         kyc.setCifId(42L);
         kyc.setTenantId("tenant-a");
@@ -89,6 +89,28 @@ class KycServiceDecisionTest {
         assertThat(kyc.getKycStatus()).isEqualTo(KycStatus.APPROVED);
         assertThat(kyc.getReviewedBy()).isEqualTo("admin-user");
         assertThat(kyc.getNotificationSyncStatus()).isEqualTo(NotificationSyncStatus.SENT);
+        verify(cifClient).updateKycStatus(42L, KycStatus.APPROVED);
+    }
+
+    @Test
+    void demoModeAllowsApprovalWithoutPhysicalDocuments() {
+        KycService demoService = new KycService(
+                repository,
+                mock(KycMapper.class),
+                cifClient,
+                notificationClient,
+                documentRepository,
+                false
+        );
+
+        demoService.makeDecision(
+                7L,
+                new KycDecisionRequest(KycDecision.APPROVED, null),
+                "admin-user"
+        );
+
+        assertThat(kyc.getKycStatus()).isEqualTo(KycStatus.APPROVED);
+        assertThat(kyc.getReviewedBy()).isEqualTo("admin-user");
         verify(cifClient).updateKycStatus(42L, KycStatus.APPROVED);
     }
 

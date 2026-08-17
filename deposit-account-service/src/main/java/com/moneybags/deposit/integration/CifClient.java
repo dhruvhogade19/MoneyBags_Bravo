@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Component
@@ -25,13 +26,13 @@ public class CifClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record DepositCreationDetails(String cifId, LocalDate dob, String employmentType,
-                                  String kycStatus) {
+                                  BigDecimal monthlyIncome, String kycStatus) {
         public LocalDate dateOfBirth() {
             return dob;
         }
 
         public String customerType() {
-            return "INDIVIDUAL";
+            return "BUSINESS".equalsIgnoreCase(employmentType) ? "BUSINESS" : "INDIVIDUAL";
         }
 
         public String customerCategory() {

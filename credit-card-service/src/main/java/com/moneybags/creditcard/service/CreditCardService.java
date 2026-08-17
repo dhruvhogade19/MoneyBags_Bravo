@@ -60,26 +60,18 @@ public class CreditCardService {
         a.submittedAt = now;
         a.updatedAt = now;
 
-        if (!validation.eligible()) {
-            a.applicationStatus = ApplicationStatus.REJECTED;
-            a.eligibilityStatus = EligibilityStatus.NOT_ELIGIBLE;
-            a.approvedCreditLimit = null;
-            a.purchaseInterestRateSnapshot = null;
-            return application(applications.save(a));
-        }
-
-        if (validation.applicableInterestRule() == null
-                || validation.applicableInterestRule().annualInterestRate() == null) {
+        if (validation.eligible() && (validation.applicableInterestRule() == null
+                || validation.applicableInterestRule().annualInterestRate() == null)) {
             throw new ApiException(HttpStatus.BAD_GATEWAY,
                     "Eligible Product Master response is missing applicableInterestRule.annualInterestRate");
         }
-        a.applicationStatus = ApplicationStatus.APPROVED;
-        a.eligibilityStatus = EligibilityStatus.ELIGIBLE;
-        a.approvedCreditLimit = request.requestedCreditLimit();
-        a.purchaseInterestRateSnapshot = validation.applicableInterestRule().annualInterestRate();
-        var savedApplication = applications.save(a);
-        accountService.createForApplication(savedApplication);
-        return application(savedApplication);
+        a.applicationStatus = ApplicationStatus.PENDING;
+        a.eligibilityStatus = validation.eligible() ? EligibilityStatus.ELIGIBLE : EligibilityStatus.NOT_ELIGIBLE;
+        a.approvedCreditLimit = null;
+        a.purchaseInterestRateSnapshot = validation.applicableInterestRule() == null
+                ? null
+                : validation.applicableInterestRule().annualInterestRate();
+        return application(applications.save(a));
     }
 
     @Transactional(readOnly = true)
@@ -90,6 +82,14 @@ public class CreditCardService {
     @Transactional(readOnly = true)
     public List<ApplicationResponse> applications(Long cifId) {
         return applications.findByCifIdOrderBySubmittedAtDesc(cifId).stream().map(this::application).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ApplicationResponse> applications(ApplicationStatus status) {
+        var values = status == null
+                ? applications.findAllByOrderBySubmittedAtDesc()
+                : applications.findByApplicationStatusOrderBySubmittedAtDesc(status);
+        return values.stream().map(this::application).toList();
     }
 
     @Transactional

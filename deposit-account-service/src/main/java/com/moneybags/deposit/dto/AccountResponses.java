@@ -3,6 +3,7 @@ package com.moneybags.deposit.dto;
 import com.moneybags.deposit.domain.DomainTypes.AccountStatus;
 import com.moneybags.deposit.domain.DomainTypes.HolderRole;
 import com.moneybags.deposit.domain.DomainTypes.LimitType;
+import com.moneybags.deposit.domain.DomainTypes.ProductSubtype;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -24,7 +25,7 @@ public final class AccountResponses {
                               String status, OffsetDateTime validFrom, OffsetDateTime validTo) {}
 
     public record AccountSummaryView(String accountId, String maskedAccountNumber, String productName,
-                                     String currency, AccountStatus status, BigDecimal availableBalance,
+                                     ProductSubtype productSubtype, String currency, AccountStatus status, BigDecimal availableBalance,
                                      OffsetDateTime balanceAsOf, String servicingBranchId, long version) {}
 
     public record AccountDetailView(String accountId, String maskedAccountNumber, AccountStatus status,
@@ -39,7 +40,7 @@ public final class AccountResponses {
                                     String actorType, OffsetDateTime changedAt, String correlationId) {}
 
     public record EligibilityResult(boolean eligible, String decisionCode, String productName,
-                                    OffsetDateTime evaluatedAt) {}
+                                    List<String> messages, OffsetDateTime evaluatedAt) {}
 
     public record AccountEligibilityView(String accountId, AccountStatus status, boolean debitAllowed,
                                          boolean creditAllowed, String currency, List<LimitView> limits,
