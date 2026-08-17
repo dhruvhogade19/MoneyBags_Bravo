@@ -1,12 +1,29 @@
 package com.moneybags.eod;
 
-import com.moneybags.eod.EodController.*;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moneybags.eod.EodController.BusinessDateResponse;
+import com.moneybags.eod.EodController.EodExceptionResolutionRequest;
+import com.moneybags.eod.EodController.EodRunResponse;
+import com.moneybags.eod.EodController.ExceptionResponse;
+import com.moneybags.eod.EodController.OpenBusinessDateRequest;
+import com.moneybags.eod.EodController.StartEodRunRequest;
+import com.moneybags.eod.EodController.StepResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.*;
+import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Supplier;
 
 @Service
 class EodOrchestrationService {
@@ -29,151 +46,258 @@ class EodOrchestrationService {
             new StepDefinition("ACCOUNTING_PERIOD_OPEN", 16, "accounting-service", "POST", "/internal/v1/accounting-periods/{businessDate}/open")
     );
 
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+
     private final PeerOperations peers;
+    private final EodBusinessDateRepository businessDates;
+    private final EodRunRepository runs;
+    private final EodExceptionRepository exceptions;
+    private final ObjectMapper json;
+    private final TransactionTemplate transactions;
+    private final LocalDate initialBusinessDate;
     private final String currency;
-    private final Map<String, RunState> runs = new LinkedHashMap<>();
-    private final Map<String, String> idempotency = new HashMap<>();
-    private LocalDate businessDate;
-    private String dateStatus = "OPEN";
-    private long dateVersion = 1;
 
     EodOrchestrationService(PeerOperations peers,
+                            EodBusinessDateRepository businessDates,
+                            EodRunRepository runs,
+                            EodExceptionRepository exceptions,
+                            ObjectMapper json,
+                            PlatformTransactionManager transactionManager,
                             @Value("${moneybags.eod.initial-business-date:2026-08-13}") LocalDate initialDate,
                             @Value("${moneybags.eod.currency:INR}") String currency) {
-        this.peers = peers; this.businessDate = initialDate; this.currency = currency;
+        this.peers = peers;
+        this.businessDates = businessDates;
+        this.runs = runs;
+        this.exceptions = exceptions;
+        this.json = json;
+        this.transactions = new TransactionTemplate(transactionManager);
+        this.initialBusinessDate = initialDate;
+        this.currency = currency;
     }
 
     synchronized BusinessDateResponse businessDate() {
-        return new BusinessDateResponse(businessDate, dateStatus, null, null, null, dateVersion);
+        return inTransaction(() -> businessDateResponse(currentBusinessDate(false)));
     }
 
     synchronized EodRunResponse start(String key, StartEodRunRequest request) {
-        String priorRunId = idempotency.get(key);
-        if (priorRunId != null) return response(runs.get(priorRunId));
-        LocalDate requestedDate = request.businessDate() == null ? businessDate : request.businessDate();
-        if (!requestedDate.equals(businessDate) || !"OPEN".equals(dateStatus))
-            throw new EodConflictException("Business date is not open for EOD processing: " + requestedDate);
-        RunState run = new RunState(UUID.randomUUID().toString(), requestedDate, request.startedBy());
-        STEPS.forEach(step -> run.steps.add(new StepState(step)));
-        runs.put(run.id, run); idempotency.put(key, run.id); dateStatus = "EOD_IN_PROGRESS";
-        executeFrom(run, 0);
-        return response(run);
+        StartDecision decision = inTransaction(() -> {
+            var existing = runs.findByIdempotencyKey(key);
+            if (existing.isPresent()) return new StartDecision(existing.get().id(), true);
+
+            EodBusinessDateEntity current = currentBusinessDate(true);
+            LocalDate requestedDate = request.businessDate() == null ? current.businessDate() : request.businessDate();
+            if (!requestedDate.equals(current.businessDate()) || !"OPEN".equals(current.status())) {
+                throw new EodConflictException("Business date is not open for EOD processing: " + requestedDate);
+            }
+
+            EodRunEntity run = new EodRunEntity(UUID.randomUUID().toString(), key, requestedDate,
+                    request.startedBy(), STEPS);
+            current.startEod();
+            runs.saveAndFlush(run);
+            businessDates.saveAndFlush(current);
+            return new StartDecision(run.id(), false);
+        });
+
+        if (!decision.existing()) executeFrom(decision.runId(), 0);
+        return get(decision.runId());
     }
 
-    synchronized EodRunResponse get(String runId) { return response(requireRun(runId)); }
+    synchronized EodRunResponse get(String runId) {
+        return inTransaction(() -> response(requireRun(runId)));
+    }
 
     synchronized EodRunResponse resume(String runId) {
-        RunState run = requireRun(runId);
-        int firstIncomplete = firstIncomplete(run);
-        if (firstIncomplete < run.steps.size()) executeFrom(run, firstIncomplete);
-        return response(run);
+        int firstIncomplete = inTransaction(() -> firstIncomplete(requireRun(runId)));
+        if (firstIncomplete < STEPS.size()) executeFrom(runId, firstIncomplete);
+        return get(runId);
     }
 
     synchronized EodRunResponse retry(String runId, String stepCode) {
-        RunState run = requireRun(runId);
         int index = indexOf(stepCode);
         if (index < 0) throw new EodNotFoundException("EOD step not found: " + stepCode);
-        executeFrom(run, index);
-        return response(run);
+        inTransaction(() -> {
+            requireRun(runId).requireStep(stepCode);
+            return null;
+        });
+        executeFrom(runId, index);
+        return get(runId);
     }
 
     synchronized EodRunResponse resolve(String exceptionId, EodExceptionResolutionRequest request) {
-        for (RunState run : runs.values()) {
-            for (ExceptionState exception : run.exceptions) {
-                if (exception.id.equals(exceptionId)) {
-                    exception.status = request.waived() ? "WAIVED" : "RESOLVED";
-                    exception.resolution = request.resolution(); exception.resolvedBy = request.resolvedBy();
-                    exception.resolvedAt = Instant.now(); return response(run);
-                }
-            }
-        }
-        throw new EodNotFoundException("EOD exception not found: " + exceptionId);
+        return inTransaction(() -> {
+            EodExceptionEntity exception = exceptions.findById(exceptionId)
+                    .orElseThrow(() -> new EodNotFoundException("EOD exception not found: " + exceptionId));
+            exception.resolve(request.resolution(), request.resolvedBy(), request.waived());
+            exceptions.saveAndFlush(exception);
+            return response(exception.run());
+        });
     }
 
     synchronized BusinessDateResponse openNext(OpenBusinessDateRequest request) {
-        LocalDate next = request.businessDate() == null ? businessDate.plusDays(1) : request.businessDate();
-        if (!next.isAfter(businessDate)) throw new EodConflictException("The next business date must be after the current date");
-        businessDate = next; dateStatus = "OPEN"; dateVersion++; return businessDate();
+        return inTransaction(() -> {
+            EodBusinessDateEntity current = currentBusinessDate(true);
+            LocalDate next = request.businessDate() == null
+                    ? current.businessDate().plusDays(1) : request.businessDate();
+            if (!next.isAfter(current.businessDate())) {
+                throw new EodConflictException("The next business date must be after the current date");
+            }
+            current.advanceTo(next);
+            businessDates.saveAndFlush(current);
+            return businessDateResponse(current);
+        });
     }
 
-    private void executeFrom(RunState run, int start) {
-        run.status = "RUNNING"; run.completedAt = null;
-        EodContext context = new EodContext(run.id, run.businessDate, run.startedBy, currency);
-        for (int i = start; i < run.steps.size(); i++) {
-            StepState state = run.steps.get(i);
-            if (state.status.equals("COMPLETED")) continue;
-            state.status = "RUNNING"; state.startedAt = Instant.now(); state.attemptCount++;
+    private void executeFrom(String runId, int start) {
+        for (int i = start; i < STEPS.size(); i++) {
+            StepDefinition definition = STEPS.get(i);
+            StepExecution execution = inTransaction(() -> prepareStep(runId, definition));
+            if (execution == null) continue;
+
+            Map<String, Object> output;
             try {
-                state.output = peers.execute(state.definition, context, completedOutputs(run));
-                state.status = "COMPLETED"; state.completedAt = Instant.now(); state.errorCode = null; state.message = null;
-                run.exceptions.stream().filter(e -> e.stepCode.equals(state.definition.code()) && e.status.equals("OPEN"))
-                        .forEach(e -> { e.status = "RESOLVED"; e.resolution = "Step retry completed"; e.resolvedBy = "SYSTEM"; e.resolvedAt = Instant.now(); });
+                output = peers.execute(definition, execution.context(), execution.outputs());
             } catch (PeerOperationException exception) {
-                state.status = "FAILED"; state.completedAt = Instant.now(); state.errorCode = exception.code();
-                state.message = exception.getMessage(); run.status = "FAILED"; dateStatus = "EOD_FAILED";
-                run.exceptions.add(new ExceptionState(state.definition.code(), exception.code(), exception.getMessage(), exception.details()));
+                fail(runId, definition.code(), exception.code(), exception.getMessage(), exception.details());
                 return;
             } catch (RuntimeException exception) {
-                state.status = "FAILED"; state.completedAt = Instant.now(); state.errorCode = "UPSTREAM_ERROR";
-                state.message = exception.getMessage(); run.status = "FAILED"; dateStatus = "EOD_FAILED";
-                run.exceptions.add(new ExceptionState(state.definition.code(), "UPSTREAM_ERROR", exception.getMessage(), Map.of()));
+                fail(runId, definition.code(), "UPSTREAM_ERROR", exception.getMessage(), Map.of());
                 return;
             }
+
+            Map<String, Object> storedOutput = output == null ? Map.of() : output;
+            inTransaction(() -> {
+                EodRunEntity run = requireRun(runId);
+                EodRunStepEntity step = run.requireStep(definition.code());
+                step.markCompleted(writeJson(storedOutput));
+                run.exceptions().stream()
+                        .filter(value -> value.stepCode().equals(definition.code()) && "OPEN".equals(value.status()))
+                        .forEach(EodExceptionEntity::resolveAfterRetry);
+                runs.saveAndFlush(run);
+                return null;
+            });
         }
-        run.status = "COMPLETED"; run.completedAt = Instant.now();
-        businessDate = run.businessDate.plusDays(1); dateStatus = "OPEN"; dateVersion++;
+
+        inTransaction(() -> {
+            EodRunEntity run = requireRun(runId);
+            if (run.steps().stream().allMatch(step -> "COMPLETED".equals(step.status()))) {
+                run.markCompleted();
+                EodBusinessDateEntity current = currentBusinessDate(true);
+                if (current.businessDate().equals(run.businessDate())) {
+                    current.advanceTo(run.businessDate().plusDays(1));
+                    businessDates.saveAndFlush(current);
+                }
+                runs.saveAndFlush(run);
+            }
+            return null;
+        });
     }
 
-    private Map<String, Map<String, Object>> completedOutputs(RunState run) {
+    private StepExecution prepareStep(String runId, StepDefinition definition) {
+        EodRunEntity run = requireRun(runId);
+        EodRunStepEntity step = run.requireStep(definition.code());
+        if ("COMPLETED".equals(step.status())) return null;
+
+        run.markRunning();
+        step.markRunning();
+        EodBusinessDateEntity current = currentBusinessDate(true);
+        if (current.businessDate().equals(run.businessDate())) current.startEod();
+        runs.saveAndFlush(run);
+        businessDates.saveAndFlush(current);
+        return new StepExecution(new EodContext(run.id(), run.businessDate(), run.startedBy(), currency),
+                completedOutputs(run));
+    }
+
+    private void fail(String runId, String stepCode, String errorCode, String message,
+                      Map<String, Object> details) {
+        inTransaction(() -> {
+            EodRunEntity run = requireRun(runId);
+            Map<String, Object> storedDetails = new LinkedHashMap<>(details == null ? Map.of() : details);
+            storedDetails.put("message", Objects.toString(message, ""));
+            run.markFailed(run.requireStep(stepCode), errorCode, message, writeJson(storedDetails));
+            EodBusinessDateEntity current = currentBusinessDate(true);
+            if (current.businessDate().equals(run.businessDate())) current.markFailed();
+            runs.saveAndFlush(run);
+            businessDates.saveAndFlush(current);
+            return null;
+        });
+    }
+
+    private Map<String, Map<String, Object>> completedOutputs(EodRunEntity run) {
         Map<String, Map<String, Object>> result = new LinkedHashMap<>();
-        run.steps.stream().filter(step -> step.status.equals("COMPLETED"))
-                .forEach(step -> result.put(step.definition.code(), step.output));
+        run.steps().stream().filter(step -> "COMPLETED".equals(step.status()))
+                .forEach(step -> result.put(step.code(), readJson(step.outputJson())));
         return result;
     }
 
-    private int firstIncomplete(RunState run) {
-        for (int i = 0; i < run.steps.size(); i++) if (!run.steps.get(i).status.equals("COMPLETED")) return i;
-        return run.steps.size();
+    private int firstIncomplete(EodRunEntity run) {
+        for (int i = 0; i < run.steps().size(); i++) {
+            if (!"COMPLETED".equals(run.steps().get(i).status())) return i;
+        }
+        return run.steps().size();
     }
 
     private int indexOf(String stepCode) {
-        for (int i = 0; i < STEPS.size(); i++) if (STEPS.get(i).code().equalsIgnoreCase(stepCode)) return i;
+        for (int i = 0; i < STEPS.size(); i++) {
+            if (STEPS.get(i).code().equalsIgnoreCase(stepCode)) return i;
+        }
         return -1;
     }
 
-    private RunState requireRun(String runId) {
-        return Optional.ofNullable(runs.get(runId)).orElseThrow(() -> new EodNotFoundException("EOD run not found: " + runId));
+    private EodBusinessDateEntity currentBusinessDate(boolean lock) {
+        var current = lock
+                ? businessDates.findForUpdate(EodBusinessDateEntity.CURRENT_RECORD_ID)
+                : businessDates.findById(EodBusinessDateEntity.CURRENT_RECORD_ID);
+        return current.orElseGet(() -> businessDates.saveAndFlush(new EodBusinessDateEntity(initialBusinessDate)));
     }
 
-    private EodRunResponse response(RunState run) {
-        return new EodRunResponse(run.id, run.businessDate, run.status, run.startedBy, run.startedAt, run.completedAt,
-                run.steps.stream().map(step -> new StepResponse(step.definition.code(), step.definition.sequence(),
-                        step.definition.providerService(), step.definition.method(), step.definition.path(), step.status,
-                        run.id + ":" + step.definition.code(), step.attemptCount, step.startedAt, step.completedAt,
-                        step.errorCode, step.message, step.output)).toList(),
-                run.exceptions.stream().map(value -> new ExceptionResponse(value.id, value.stepCode, "ERROR",
-                        value.errorCode, value.details, value.status, value.resolution, value.resolvedBy,
-                        value.resolvedAt)).toList(), 1);
+    private EodRunEntity requireRun(String runId) {
+        return runs.findById(runId)
+                .orElseThrow(() -> new EodNotFoundException("EOD run not found: " + runId));
     }
 
-    private static final class RunState {
-        final String id; final LocalDate businessDate; final String startedBy; final Instant startedAt = Instant.now();
-        final List<StepState> steps = new ArrayList<>(); final List<ExceptionState> exceptions = new ArrayList<>();
-        String status = "PENDING"; Instant completedAt;
-        RunState(String id, LocalDate businessDate, String startedBy) { this.id = id; this.businessDate = businessDate; this.startedBy = startedBy; }
+    private BusinessDateResponse businessDateResponse(EodBusinessDateEntity value) {
+        return new BusinessDateResponse(value.businessDate(), value.status(), instant(value.cutoffAt()),
+                instant(value.openedAt()), instant(value.closedAt()), value.version());
     }
-    private static final class StepState {
-        final StepDefinition definition; String status = "PENDING"; int attemptCount; Instant startedAt;
-        Instant completedAt; String errorCode; String message; Map<String, Object> output = Map.of();
-        StepState(StepDefinition definition) { this.definition = definition; }
+
+    private EodRunResponse response(EodRunEntity run) {
+        return new EodRunResponse(run.id(), run.businessDate(), run.status(), run.startedBy(),
+                instant(run.startedAt()), instant(run.completedAt()),
+                run.steps().stream().map(step -> new StepResponse(step.code(), step.sequence(),
+                        step.providerService(), step.method(), step.path(), step.status(), step.commandReference(),
+                        step.attemptCount(), instant(step.startedAt()), instant(step.completedAt()),
+                        step.errorCode(), step.message(), readJson(step.outputJson()))).toList(),
+                run.exceptions().stream().map(value -> new ExceptionResponse(value.id(), value.stepCode(),
+                        value.severity(), value.errorCode(), readJson(value.detailsJson()), value.status(),
+                        value.resolution(), value.resolvedBy(), instant(value.resolvedAt()))).toList(),
+                run.apiVersion());
     }
-    private static final class ExceptionState {
-        final String id = UUID.randomUUID().toString(); final String stepCode; final String errorCode;
-        final Map<String, Object> details; String status = "OPEN"; String resolution; String resolvedBy; Instant resolvedAt;
-        ExceptionState(String stepCode, String errorCode, String message, Map<String, Object> details) {
-            this.stepCode = stepCode; this.errorCode = errorCode;
-            Map<String, Object> values = new LinkedHashMap<>(details); values.put("message", Objects.toString(message, ""));
-            this.details = Collections.unmodifiableMap(values);
+
+    private String writeJson(Map<String, Object> value) {
+        try {
+            return json.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("EOD state could not be serialized", exception);
         }
     }
+
+    private Map<String, Object> readJson(String value) {
+        if (value == null || value.isBlank()) return Map.of();
+        try {
+            return json.readValue(value, MAP_TYPE);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Stored EOD state is invalid", exception);
+        }
+    }
+
+    private <T> T inTransaction(Supplier<T> work) {
+        return transactions.execute(status -> work.get());
+    }
+
+    private static Instant instant(OffsetDateTime value) {
+        return value == null ? null : value.toInstant();
+    }
+
+    private record StartDecision(String runId, boolean existing) {}
+    private record StepExecution(EodContext context, Map<String, Map<String, Object>> outputs) {}
 }

@@ -6,6 +6,27 @@ spring:
     import: optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: eod-reconciliation-service
+  datasource:
+    url: ${MONEYBAGS_EOD_DB_URL:${MONEYBAGS_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
+    username: ${MONEYBAGS_EOD_DB_USERNAME:${MONEYBAGS_DB_USERNAME:moneybags}}
+    password: ${MONEYBAGS_EOD_DB_PASSWORD:${MONEYBAGS_DB_PASSWORD:moneybags}}
+    driver-class-name: oracle.jdbc.OracleDriver
+    hikari:
+      maximum-pool-size: ${EOD_DB_POOL_MAX:8}
+      minimum-idle: ${EOD_DB_POOL_MIN:1}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:15000}
+      validation-timeout: 1000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
 eureka:
   client:
     enabled: ${EUREKA_ENABLED:true}
