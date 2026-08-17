@@ -62,17 +62,17 @@ html[data-mb-theme="dark"]  { /* shared dark tokens */ }
 
 Change those two blocks to retheme the whole product. Every page should consume tokens, never make its own palette.
 
-### Try the Pip-inspired palette from the reference
+### Try the Vela Burgundy palette
 
-The supplied coral/plum reference is available as an optional preset in `src/css/theme-presets.css`.
+The supplied Vela Burgundy Light palette is available as an optional preset in `src/css/theme-presets.css`. It uses Poppins, burgundy gradients only for high-emphasis areas, blush/white surfaces, and Vela's rounded-card scale.
 
 For a persistent local preview, change the opening tag in `src/index.html`:
 
 ```html
-<html lang="en" data-mb-theme="light" data-mb-palette="pip">
+<html lang="en" data-mb-theme="light" data-mb-palette="vela">
 ```
 
-Run the app, use the existing dark/light toggle, and compare both Pip modes. Switch back to the default with:
+Run the app, use the existing dark/light toggle, and compare both Vela modes. Switch back to the default with:
 
 ```html
 data-mb-palette="moneybag"
@@ -81,15 +81,15 @@ data-mb-palette="moneybag"
 For a temporary browser-only experiment, run this in the browser console:
 
 ```js
-document.documentElement.dataset.mbPalette = 'pip';
+document.documentElement.dataset.mbPalette = 'vela';
 ```
 
 It resets after refresh. The light/dark toggle and the palette are independent, so a team can compare a brand palette in both modes.
 
 ### Add a future palette
 
-1. Copy the two `pip` selector blocks in `src/css/theme-presets.css`.
-2. Rename `pip` to a short, stable name such as `aurora`.
+1. Copy the two `vela` selector blocks in `src/css/theme-presets.css`.
+2. Rename `vela` to a short, stable name such as `aurora`.
 3. Change values only, keeping every `--mb-*` variable present.
 4. Check both modes, keyboard focus, disabled states, success/error states, mobile layout, and readable text contrast.
 5. Add the new palette name and a screenshot to the pull request description.
