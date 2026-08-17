@@ -50,7 +50,8 @@ public final class CreditCardDtos {
     public record AccountResponse(Long accountId, Long applicationId, Long cifId, String productCode, Integer age,
                                   BigDecimal salary, String cardNumber, BigDecimal sanctionedLimit,
                                   BigDecimal purchaseInterestRateSnapshot, BigDecimal availableLimit,
-                                  BigDecimal outstandingAmount, AccountStatus status, OffsetDateTime openedAt) {
+                                  BigDecimal outstandingAmount, AccountStatus status, OffsetDateTime openedAt,
+                                  String accountReference) {
     }
 
     @Schema(description = "Credit reservation hold returned to Payment Service.")
@@ -69,7 +70,7 @@ public final class CreditCardDtos {
     @Schema(description = "Trusted billing view of a credit-card account.")
     public record BillingAccountDetails(Long accountId, Long cifId, String productCode,
                                        BigDecimal purchaseInterestRate, BigDecimal outstandingAmount,
-                                       AccountStatus status) {
+                                       AccountStatus status, String accountReference) {
     }
 
     @Schema(description = "End-of-day readiness and any closure blockers.")

@@ -1,0 +1,71 @@
+server:
+  port: ${SERVER_PORT:8091}
+  shutdown: graceful
+spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  application:
+    name: eod-reconciliation-service
+  datasource:
+    url: ${MONEYBAGS_EOD_DB_URL:${MONEYBAGS_DB_URL:jdbc:oracle:thin:@//localhost:1522/FREEPDB1}}
+    username: ${MONEYBAGS_EOD_DB_USERNAME:${MONEYBAGS_DB_USERNAME:moneybags}}
+    password: ${MONEYBAGS_EOD_DB_PASSWORD:${MONEYBAGS_DB_PASSWORD:moneybags}}
+    driver-class-name: oracle.jdbc.OracleDriver
+    hikari:
+      maximum-pool-size: ${EOD_DB_POOL_MAX:8}
+      minimum-idle: ${EOD_DB_POOL_MIN:1}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:15000}
+      validation-timeout: 1000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+eureka:
+  client:
+    enabled: ${EUREKA_ENABLED:true}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+moneybags:
+  security:
+    enabled: ${SECURITY_ENABLED:true}
+    m2m:
+      token-uri: ${M2M_TOKEN_URI:http://localhost:8093/oauth2/token}
+      client-id: ${M2M_CLIENT_ID:eod-reconciliation-service}
+      client-secret: ${M2M_CLIENT_SECRET:}
+      scope: ${M2M_SCOPE:payment:service account:service card:eod billing:service accounting:service notification:service statements:service}
+  eod:
+    initial-business-date: ${EOD_INITIAL_BUSINESS_DATE:2026-08-13}
+    currency: ${EOD_CURRENCY:INR}
+    notification-cif-id: ${EOD_NOTIFICATION_CIF_ID:101}
+  clients:
+    payments:
+      base-url: ${PAYMENTS_URL:http://localhost:8085}
+    credit-card:
+      base-url: ${CREDIT_CARD_URL:http://localhost:8084}
+    deposit-account:
+      base-url: ${DEPOSIT_ACCOUNT_URL:http://localhost:8086}
+    bill-generation:
+      base-url: ${BILL_GENERATION_URL:http://localhost:8087}
+    accounting:
+      base-url: ${ACCOUNTING_URL:http://localhost:8088}
+    statements:
+      base-url: ${STATEMENTS_URL:http://localhost:8089}
+    notification:
+      base-url: ${NOTIFICATION_URL:http://localhost:8090}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

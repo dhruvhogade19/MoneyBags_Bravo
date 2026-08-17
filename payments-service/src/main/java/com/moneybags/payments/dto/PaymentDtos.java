@@ -126,7 +126,8 @@ public final class PaymentDtos {
       @NotBlank @Size(max = 100) String commandReference) { }
 
   public record EodControlResponse(
-      LocalDate businessDate, String status, boolean newPaymentIntake, long pendingPayments) { }
+      LocalDate businessDate, String status, boolean newPaymentIntake, long pendingPayments,
+      long postedJournalCount, BigDecimal postedDebitTotal) { }
 
   public record ReversalRequest(
       @NotBlank @Size(max = 250) @Schema(example = "Retrying compensation after peer recovery")

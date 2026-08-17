@@ -13,6 +13,7 @@ $servicePorts = @(
     @{ Name = "notification-service"; Port = 8090 },
     @{ Name = "bill-generation-service"; Port = 8087 },
     @{ Name = "ui-bff"; Port = 8000 },
+    @{ Name = "eod-reconciliation-service"; Port = 8091 },
     @{ Name = "api-gateway"; Port = 8080 }
 )
 

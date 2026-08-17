@@ -26,6 +26,7 @@ class AuthorizationServerConfigTest {
         var payments = clients.findByClientId("payments-service");
         var billing = clients.findByClientId("bill-generation-service");
         var cif = clients.findByClientId("cif-service");
+        var eod = clients.findByClientId("eod-reconciliation-service");
 
         assertThat(consumer).isNotNull();
         assertThat(consumer.getScopes()).contains("account:read", "payment:write", "billing:read");
@@ -42,6 +43,10 @@ class AuthorizationServerConfigTest {
                 "product:validate", "card:billing", "accounting:service", "notification:service");
         assertThat(cif).isNotNull();
         assertThat(cif.getScopes()).containsExactlyInAnyOrder("kyc:service", "identity:service");
+        assertThat(eod).isNotNull();
+        assertThat(eod.getScopes()).containsExactlyInAnyOrder(
+                "payment:service", "account:service", "card:eod", "billing:service",
+                "accounting:service", "notification:service", "statements:service");
     }
 
     @Test

@@ -18,8 +18,9 @@ Spring Boot services for the Moneybags banking platform. Each service owns its O
 | `accounting-service` | 8088 | Accounting journals, posting rules and financial ledger operations |
 | `notification-service` | 8090 | Internal delivery and customer notification history |
 | `bill-generation-service` | 8087 | Credit-card billing cycles, bills and payment settlement |
+| `eod-reconciliation-service` | 8091 | Business-date control and ordered EOD orchestration across peer services |
 
-Payments is included in the Maven reactor and coordinates peer services through synchronous REST calls. Deposit uses stubbed CIF/Product Master validation by default; production mode resolves configured peers through Spring `RestClient` and Eureka. Accounting is started by `run-all.ps1`; it is currently built independently rather than included in the root Maven reactor.
+Payments and EOD are included in the Maven reactor and coordinate peer services through synchronous REST calls. Deposit uses stubbed CIF/Product Master validation by default; production mode resolves configured peers through Spring `RestClient` and Eureka. Accounting and EOD are both started by `run-all.ps1`.
 
 ## Technology
 
@@ -92,6 +93,7 @@ Useful URLs:
 - Payments Swagger UI: `http://localhost:8085/swagger-ui/index.html`
 - Service Swagger UI: `http://localhost:8086/swagger-ui.html`
 - Accounting Swagger UI: `http://localhost:8088/swagger-ui.html`
+- EOD Swagger UI: `http://localhost:8091/swagger-ui.html`
 - Health: `http://localhost:8086/actuator/health`
 
 Stop launcher-created processes with `./stop-all.ps1`.
@@ -127,9 +129,14 @@ $env:CIF_URL = "https://cif.internal"
 $env:PRODUCT_MASTER_URL = "http://product-master-service"
 $env:NOTIFICATION_URL = "http://notification-service"
 $env:NOTIFICATION_DISPATCH_ENABLED = "true"
+$env:EOD_INITIAL_BUSINESS_DATE = "2026-08-13"
+$env:EOD_STATEMENTS_ENABLED = "false"
 ```
 
 Spring RestClient propagates the correlation ID and obtains a short-lived client-credentials token for upstream calls. Product Master validation uses `POST /internal/v1/products/{productCode}/validate-account-opening`.
+When `STUB_UPSTREAM_CLIENTS=false`, Deposit reads the authoritative ledger balance from Accounting at
+`GET /internal/v1/account-balances/{accountReference}`. `ACCOUNTING_URL` may point directly to an Accounting instance;
+when omitted, the default `http://accounting-service` address is resolved through Eureka.
 The detailed access matrix and deployment checklist are in [`docs/SECURITY_IMPLEMENTATION.md`](docs/SECURITY_IMPLEMENTATION.md).
 For FD pricing, Deposit uses `customerCategory` from CIF when present; until CIF publishes that optional field,
 it derives `SENIOR_CITIZEN` at age 60 or above and `REGULAR` otherwise from the trusted date of birth.

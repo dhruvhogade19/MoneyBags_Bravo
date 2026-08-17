@@ -32,7 +32,7 @@ eureka:
     service-url.defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
 moneybags:
   security:
-    enabled: ${SECURITY_ENABLED:true}
+    enabled: ${BILLING_SECURITY_ENABLED:${SECURITY_ENABLED:true}}
     m2m:
       token-uri: ${M2M_TOKEN_URI:http://localhost:8093/oauth2/token}
       client-id: ${M2M_CLIENT_ID:bill-generation-service}

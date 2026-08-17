@@ -4,6 +4,7 @@ import com.moneybags.payments.domain.Payment;
 import com.moneybags.payments.domain.PaymentStatus;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -23,6 +24,16 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
   Page<Payment> findByBusinessDateOrderByCreatedAtAsc(LocalDate businessDate, Pageable pageable);
 
   long countByStatusIn(List<PaymentStatus> statuses);
+
+  long countByBusinessDateAndAccountingJournalNumberIsNotNull(LocalDate businessDate);
+
+  long countByBusinessDateAndReversalJournalNumberIsNotNull(LocalDate businessDate);
+
+  @Query("select sum(p.amount) from Payment p where p.businessDate = :businessDate and p.accountingJournalNumber is not null")
+  BigDecimal totalPostedAmount(@Param("businessDate") LocalDate businessDate);
+
+  @Query("select sum(p.amount) from Payment p where p.businessDate = :businessDate and p.reversalJournalNumber is not null")
+  BigDecimal totalReversalAmount(@Param("businessDate") LocalDate businessDate);
 
   @Query("select p from Payment p where (p.sourceAccountId = :accountId or "
       + "p.destinationAccountId = :accountId) and p.createdAt >= :from and p.createdAt < :to "
