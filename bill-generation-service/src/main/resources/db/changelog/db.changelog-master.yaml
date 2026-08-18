@@ -119,3 +119,31 @@ databaseChangeLog:
             path: db/changelog/changes/004a-widen-card-account-reference.sql
             splitStatements: true
             stripComments: true
+  - changeSet:
+      id: 005-customer-statements
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: BILL
+                columnName: PERIOD_START
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/005-customer-statements.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 006-bill-idempotency-processing-status
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: IDEMPOTENCY_RECORD
+                columnName: PROCESSING_STATUS
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/006-bill-idempotency-processing-status.sql
+            splitStatements: true
+            stripComments: true

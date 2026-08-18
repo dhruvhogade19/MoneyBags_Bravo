@@ -56,7 +56,7 @@ spring:
             - id: accounting-service
               uri: lb://accounting-service
               predicates:
-                - Path=/api/v1/journals/**,/api/v1/gl-accounts/**,/api/v1/accounting-rules/**,/api/v1/subledger-mappings/**,/api/v1/trial-balances/**,/api/v1/reconciliation/**,/api/v1/accounting-periods/**
+                - Path=/api/v1/journals/**,/api/v1/gl-accounts/**,/api/v1/accounting-rules/**,/api/v1/subledger-mappings/**,/api/v1/trial-balances/**,/api/v1/reconciliations/**,/api/v1/accounting-periods/**,/api/v1/account-ledgers/**,/api/v1/accounting/**
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
           globalcors:

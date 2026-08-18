@@ -1,6 +1,8 @@
 package com.moneybags.accounting.service;
 
 import com.moneybags.accounting.api.AccountingDtos.*;
+import com.moneybags.accounting.domain.DomainTypes.GlAccountType;
+import com.moneybags.accounting.domain.DomainTypes.RecordStatus;
 import com.moneybags.accounting.entity.*;
 import com.moneybags.accounting.exception.ApiException;
 import com.moneybags.accounting.repository.*;
@@ -52,8 +54,10 @@ public class ConfigurationService {
     public GlAccountResponse getGl(String glCode) { return gl(loadGl(glCode)); }
 
     @Transactional(readOnly = true)
-    public GlAccountPage listGl(int page, int size) {
-        Page<GlAccount> values = glAccounts.findAll(PageRequest.of(page, size, Sort.by("glCode")));
+    public GlAccountPage listGl(String search, GlAccountType accountType, RecordStatus status, String currency,
+                                int page, int size) {
+        Page<GlAccount> values = glAccounts.search(blankToNull(search), accountType, status,
+                blankToNull(currency), PageRequest.of(page, size, Sort.by("glCode")));
         return new GlAccountPage(values.map(this::gl).getContent(), page, size, values.getTotalElements(),
                 values.getTotalPages());
     }
@@ -101,8 +105,10 @@ public class ConfigurationService {
     }
 
     @Transactional(readOnly = true)
-    public AccountingRulePage listRules(int page, int size) {
-        Page<AccountingRule> values = rules.findAll(PageRequest.of(page, size,
+    public AccountingRulePage listRules(String search, String eventType, RecordStatus status, String currency,
+                                         int page, int size) {
+        Page<AccountingRule> values = rules.search(blankToNull(search), blankToNull(eventType), status,
+                blankToNull(currency), PageRequest.of(page, size,
                 Sort.by("ruleCode").ascending().and(Sort.by("ruleVersion").descending())));
         return new AccountingRulePage(values.map(this::rule).getContent(), page, size,
                 values.getTotalElements(), values.getTotalPages());
@@ -129,8 +135,10 @@ public class ConfigurationService {
     }
 
     @Transactional(readOnly = true)
-    public SubledgerMappingPage listMappings(int page, int size) {
-        Page<SubledgerMapping> values = mappings.findAll(PageRequest.of(page, size, Sort.by("mappingCode")));
+    public SubledgerMappingPage listMappings(String search, String glCode, RecordStatus status, String currency,
+                                              int page, int size) {
+        Page<SubledgerMapping> values = mappings.search(blankToNull(search), blankToNull(glCode), status,
+                blankToNull(currency), PageRequest.of(page, size, Sort.by("mappingCode")));
         return new SubledgerMappingPage(values.map(this::mapping).getContent(), page, size,
                 values.getTotalElements(), values.getTotalPages());
     }
@@ -146,6 +154,7 @@ public class ConfigurationService {
                     "Active subledger mapping not found: " + code);
     }
     private String correlation() { return MDC.get("correlationId") == null ? "unknown" : MDC.get("correlationId"); }
+    private String blankToNull(String value) { return value == null || value.isBlank() ? null : value; }
     private GlAccountResponse gl(GlAccount value) { return new GlAccountResponse(value.getGlCode(), value.getName(),
             value.getAccountType(), value.getNormalBalance(), value.getCurrencyCode(), value.getParentGlCode(),
             value.getStatus(), value.getVersion()); }

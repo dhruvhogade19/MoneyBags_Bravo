@@ -9,10 +9,11 @@ import { navigate, usePath } from "../router";
 import { LandingPage } from "../pages/landing";
 import { SignupPage } from "../pages/signup";
 import {
-  BillPayPage, BillsPage, CardApplyPage, CardsPage, CustomerDashboard,
+  BillPayPage, CardApplyPage, CardsPage, CustomerDashboard,
   KycPage, MerchantPaymentPage, NotificationsPage, PaymentDetailPage, PaymentsPage,
-  ProductsPage, ProfilePage, StatementsPage, TransferPage
+  ProductsPage, ProfilePage, RepaymentsPage, StatementsPage, TransferPage
 } from "../pages/customer";
+import { BillingDashboardPage, BillingStatementWizard } from "../pages/billing";
 import {
   DepositAccountClosePage, DepositAccountDetailPage, DepositAccountManagePage,
   DepositAccountOpenPage, DepositAccountsPage, DepositRequestsPage,
@@ -20,10 +21,11 @@ import {
   FixedDepositPrematureClosurePage, FixedDepositsPortfolioPage
 } from "../pages/deposits";
 import {
-  AccountingCollection, CardBillingOperations, JournalSearch, KycWorkQueue,
+  AccountingCollection, CardBillingOperations, CustomerNotificationOperations, JournalSearch, KycWorkQueue,
   OperationsDashboard, OperationsPlaceholder, PaymentOperations, ProductAdministration
 } from "../pages/operations";
 import { DepositCustomerSearch, DepositOperationsDashboard, FixedDepositEodConsole } from "../pages/deposit-operations";
+import { AccountingConfigurationPage, AccountingOverviewPage, AccountingTransactionsPage } from "../pages/accounting";
 import { isNavigationPathActive } from "../utils";
 import { services } from "../services";
 
@@ -50,10 +52,10 @@ const operationsNavigation: NavigationItem[] = [
   { label: "FD EOD console", icon: "fact_check", path: "/ops/deposits/eod" },
   { label: "Cards & billing", icon: "credit_card", path: "/ops/cards" },
   { label: "Payments", icon: "payments", path: "/ops/payments" },
-  { label: "Journals", icon: "receipt_long", path: "/ops/accounting/journals" },
-  { label: "GL accounts", icon: "menu_book", path: "/ops/accounting/gl" },
-  { label: "Rules & mappings", icon: "schema", path: "/ops/accounting/rules" },
-  { label: "Reconciliation & EOD", icon: "fact_check", path: "/ops/eod" },
+  { label: "Customers & email", icon: "contact_mail", path: "/ops/customers" },
+  { label: "Accounting overview", icon: "dashboard", path: "/ops/accounting/overview" },
+  { label: "Journals & ledger", icon: "receipt_long", path: "/ops/accounting/transactions" },
+  { label: "GL configuration", icon: "schema", path: "/ops/accounting/configuration" },
   { label: "Access admin", icon: "admin_panel_settings", path: "/ops/access" }
 ];
 
@@ -69,20 +71,25 @@ function matchRoute(path: string): ComponentChildren {
     "/app/requests": <DepositRequestsPage />,
     "/app/cards": <CardsPage />, "/app/cards/apply": <CardApplyPage />,
     "/app/payments": <PaymentsPage />, "/app/payments/transfer": <TransferPage />,
-    "/app/payments/merchant": <MerchantPaymentPage />,
-    "/app/bills": <BillsPage />, "/app/statements": <StatementsPage />,
+    "/app/payments/merchant": <MerchantPaymentPage />, "/app/payments/repay": <RepaymentsPage />,
+    "/app/bills": <BillingDashboardPage />, "/app/bills/generate": <BillingStatementWizard />, "/app/statements": <StatementsPage />,
     "/app/notifications": <NotificationsPage />,
     "/ops/overview": <OperationsDashboard />, "/ops/kyc": <KycWorkQueue />,
-    "/ops/products": <ProductAdministration />, "/ops/accounting/journals": <JournalSearch />,
-    "/ops/accounting/gl": <AccountingCollection kind="gl" />,
-    "/ops/accounting/rules": <AccountingCollection kind="rules" />,
-    "/ops/accounting/mappings": <AccountingCollection kind="mappings" />,
+    "/ops/products": <ProductAdministration />,
+    "/ops/accounting/overview": <AccountingOverviewPage />,
+    "/ops/accounting/transactions": <AccountingTransactionsPage />,
+    "/ops/accounting/configuration": <AccountingConfigurationPage />,
+    "/ops/accounting/journals": <AccountingTransactionsPage />,
+    "/ops/accounting/gl": <AccountingConfigurationPage />,
+    "/ops/accounting/rules": <AccountingConfigurationPage />,
+    "/ops/accounting/mappings": <AccountingConfigurationPage />,
     "/ops/deposits": <DepositOperationsDashboard />,
     "/ops/deposits/search": <DepositCustomerSearch />,
     "/ops/deposits/eod": <FixedDepositEodConsole />,
     "/ops/cards": <CardBillingOperations />,
     "/ops/payments": <PaymentOperations />,
-    "/ops/eod": <OperationsPlaceholder title="Reconciliation & EOD" description="Operate control totals, breaks and close-of-day runs." blocker="Reconciliation and EOD services are not present in this repository." />,
+    "/ops/customers": <CustomerNotificationOperations />,
+    "/ops/eod": <AccountingOverviewPage />,
     "/ops/access": <OperationsPlaceholder title="Access administration" description="Manage users, roles and client access." blocker="Identity supports user creation and lookup by ID, but it does not yet expose the list, search and role-lifecycle APIs required for an administration console." />
   };
   if (exact[path]) return exact[path];

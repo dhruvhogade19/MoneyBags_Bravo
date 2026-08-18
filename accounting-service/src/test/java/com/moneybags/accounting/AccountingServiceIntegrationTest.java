@@ -37,6 +37,12 @@ class AccountingServiceIntegrationTest {
                 .andExpect(jsonPath("$.paths['/internal/v1/account-lifecycle-events'].post").exists())
                 .andExpect(jsonPath("$.paths['/internal/v1/trial-balances'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/journals'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/accounting/dashboard'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/account-ledgers/{accountReference}/balance'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/account-ledgers/{accountReference}/entries'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/account-ledgers/{accountType}/{accountReference}/clearance'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/reconciliations'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/accounting/eod-runs'].get").exists())
                 .andReturn();
         Path output = Path.of("target", "generated-openapi", "accounting-service.openapi.json");
         Files.createDirectories(output.getParent());
@@ -73,6 +79,13 @@ class AccountingServiceIntegrationTest {
 
         mockMvc.perform(get("/internal/v1/account-balances/{reference}", destination))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.ledgerBalance").value(125.0));
+
+        mockMvc.perform(get("/api/v1/account-ledgers/{reference}/balance", destination))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.ledgerBalance").value(125.0));
+        mockMvc.perform(get("/api/v1/account-ledgers/{reference}/entries", destination))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].journalNumber").value(journalNumber));
+        mockMvc.perform(get("/api/v1/accounting/dashboard").param("businessDate", LocalDate.now().toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.journalCount").isNumber());
     }
 
     @Test

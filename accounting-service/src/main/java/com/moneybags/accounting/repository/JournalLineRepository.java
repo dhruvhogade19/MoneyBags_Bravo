@@ -24,6 +24,15 @@ public interface JournalLineRepository extends JpaRepository<JournalLine, String
                                          @Param("toDate") LocalDate toDate,
                                          Pageable pageable);
 
+    @Query(value = "select l from JournalLine l join l.journal j where l.glCode=:glCode " +
+            "and (:fromDate is null or j.businessDate>=:fromDate) and (:toDate is null or j.businessDate<=:toDate)",
+            countQuery = "select count(l) from JournalLine l join l.journal j where l.glCode=:glCode " +
+                    "and (:fromDate is null or j.businessDate>=:fromDate) and (:toDate is null or j.businessDate<=:toDate)")
+    Page<JournalLine> findPageForGl(@Param("glCode") String glCode,
+                                    @Param("fromDate") LocalDate fromDate,
+                                    @Param("toDate") LocalDate toDate,
+                                    Pageable pageable);
+
     @Query("select l.glCode, sum(l.debitAmount), sum(l.creditAmount) from JournalLine l join l.journal j " +
             "where j.businessDate<=:businessDate and j.currencyCode=:currency group by l.glCode")
     List<Object[]> trialBalanceTotals(@Param("businessDate") LocalDate businessDate,

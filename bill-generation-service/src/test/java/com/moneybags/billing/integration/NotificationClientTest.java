@@ -14,6 +14,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 
 class NotificationClientTest {
 
@@ -45,6 +46,22 @@ class NotificationClientTest {
 
         client.sendBillGenerated(101L, "BILL-202608-001", "2026-08", "INR",
                 new BigDecimal("8400.0000"), LocalDate.of(2026, 9, 15));
+
+        server.verify();
+    }
+
+    @Test
+    void notificationFailureDoesNotFailAnAlreadyGeneratedBill() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        NotificationClient client = new NotificationClient(
+                builder.baseUrl("http://localhost:8090").build(), false);
+
+        server.expect(once(), requestTo("http://localhost:8090/internal/v1/notifications"))
+                .andRespond(withServerError());
+
+        client.sendBillGenerated(101L, "BILL-202608-002", "2026-08", "INR",
+                new BigDecimal("8400.00"), LocalDate.of(2026, 9, 15));
 
         server.verify();
     }

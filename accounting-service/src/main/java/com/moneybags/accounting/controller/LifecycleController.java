@@ -30,4 +30,11 @@ public class LifecycleController {
             @RequestParam(required = false) @Pattern(regexp = "[A-Z]{3}") String currencyCode) {
         return lifecycle.clearance(accountType, accountReference, currencyCode);
     }
+
+    @GetMapping("/api/v1/account-ledgers/{accountType}/{accountReference}/clearance")
+    AccountClearanceResponse publicClearance(@PathVariable AccountType accountType,
+            @PathVariable String accountReference,
+            @RequestParam(required = false) @Pattern(regexp = "[A-Z]{3}") String currencyCode) {
+        return lifecycle.clearance(accountType, accountReference, currencyCode);
+    }
 }

@@ -83,6 +83,7 @@ export function SelectField({ label, value, required = false, onChange, children
   return <label class="mb-field"><span>{label}{required && <b aria-hidden="true"> *</b>}</span><select value={value} required={required} onChange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}>{children}</select></label>;
 }
 
-export function Receipt({ title, reference, children, done }: { title: string; reference?: string; children?: ComponentChildren; done: () => void }) {
-  return <Panel className="mb-receipt"><div class="mb-receipt-mark">✓</div><h2>{title}</h2>{children}{reference && <p class="mb-reference">Reference: {reference}</p>}<button class="mb-button mb-button-primary" type="button" onClick={done}>Done</button></Panel>;
+export function Receipt({ title, reference, children, done, tone = "success", doneLabel = "Done" }: { title: string; reference?: string; children?: ComponentChildren; done: () => void; tone?: "success" | "pending" | "error"; doneLabel?: string }) {
+  const mark = tone === "success" ? "✓" : tone === "pending" ? "…" : "!";
+  return <Panel className={`mb-receipt mb-receipt-${tone}`}><div class="mb-receipt-mark">{mark}</div><h2>{title}</h2>{children}{reference && <p class="mb-reference">Reference: {reference}</p>}<button class="mb-button mb-button-primary" type="button" onClick={done}>{doneLabel}</button></Panel>;
 }

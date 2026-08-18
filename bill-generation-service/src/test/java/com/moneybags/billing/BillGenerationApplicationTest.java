@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 class BillGenerationApplicationTest {
     @Autowired BillGenerationApplication.BillingService service;
+    @Autowired StatementPdfRenderer pdfRenderer;
 
     @Test
     void generatesAndReplaysAnIdempotentBill() {
@@ -28,7 +29,7 @@ class BillGenerationApplicationTest {
         assertThat(generated.totalAmountDue()).isPositive();
         assertThat(generated.minimumAmountDue()).isLessThanOrEqualTo(generated.totalAmountDue());
         assertThat(generated.lines()).extracting(BillGenerationApplication.BillLineResponse::lineType)
-                .contains("PREVIOUS_BALANCE", "PURCHASE", "PAYMENT", "INTEREST");
+                .contains("PREVIOUS_BALANCE", "PURCHASE", "PAYMENT", "INTEREST", "ANNUAL_FEE");
         assertThat(generated.accountId()).startsWith("CC-");
         assertThat(service.searchForCustomer(101L, null, "2026-08", null, 0, 20).content())
                 .extracting(BillGenerationApplication.BillResponse::billId).contains(generated.billId());
@@ -54,5 +55,45 @@ class BillGenerationApplicationTest {
         assertThat(paid.status()).isEqualTo("PAID");
         assertThat(paid.outstandingAmount()).isZero();
         assertThat(service.closureEligibility(bill.accountId()).eligible()).isTrue();
+    }
+
+    @Test
+    void previewsAndGeneratesAProtectedCustomerStatement() {
+        var request = new BillGenerationApplication.CustomerStatementRequest(
+                "33333333-3333-3333-3333-333333333333",
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), true);
+
+        var preview = service.previewForCustomer(101L, request);
+        assertThat(preview.duplicate()).isFalse();
+        assertThat(preview.lines()).extracting(BillGenerationApplication.BillLineResponse::lineType)
+                .contains("PURCHASE", "PAYMENT", "INTEREST");
+        assertThat(preview.paymentsReceived()).isPositive();
+
+        var generated = service.generateForCustomer("customer-statement-001", 101L, request);
+        var replay = service.generateForCustomer("customer-statement-001", 101L, request);
+        assertThat(replay.billId()).isEqualTo(generated.billId());
+        assertThat(service.previewForCustomer(101L, request).duplicate()).isTrue();
+        assertThat(service.searchForCustomer(101L, generated.accountId(), null, null, 0, 20).content())
+                .extracting(BillGenerationApplication.BillResponse::billId).contains(generated.billId());
+
+        byte[] pdf = pdfRenderer.render(generated);
+        assertThat(new String(pdf, java.nio.charset.StandardCharsets.ISO_8859_1))
+                .startsWith("%PDF-1.4")
+                .contains("/Encrypt 7 0 R")
+                .doesNotContain("MoneyBags billing statement");
+    }
+
+    @Test
+    void excludesStatementsThatWereNotSavedToHistory() {
+        var request = new BillGenerationApplication.CustomerStatementRequest(
+                "55555555-5555-5555-5555-555555555555",
+                LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), false);
+
+        var generated = service.generateForCustomer("customer-statement-002", 101L, request);
+
+        assertThat(generated.savedToHistory()).isFalse();
+        assertThat(service.getForCustomer(generated.billId(), 101L).billId()).isEqualTo(generated.billId());
+        assertThat(service.searchForCustomer(101L, generated.accountId(), null, null, 0, 20).content())
+                .extracting(BillGenerationApplication.BillResponse::billId).doesNotContain(generated.billId());
     }
 }

@@ -3,6 +3,8 @@ package com.moneybags.accounting.controller;
 import com.moneybags.accounting.api.AccountingDtos.*;
 import com.moneybags.accounting.exception.ApiException;
 import com.moneybags.accounting.service.ConfigurationService;
+import com.moneybags.accounting.domain.DomainTypes.GlAccountType;
+import com.moneybags.accounting.domain.DomainTypes.RecordStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.http.*;
@@ -24,9 +26,13 @@ public class ConfigurationController {
     }
 
     @GetMapping("/gl-accounts")
-    GlAccountPage glAccounts(@RequestParam(defaultValue = "0") @Min(0) int page,
+    GlAccountPage glAccounts(@RequestParam(required = false) String search,
+                             @RequestParam(required = false) GlAccountType accountType,
+                             @RequestParam(required = false) RecordStatus status,
+                             @RequestParam(required = false) @Pattern(regexp = "[A-Z]{3}") String currencyCode,
+                             @RequestParam(defaultValue = "0") @Min(0) int page,
                              @RequestParam(defaultValue = "50") @Min(1) @Max(200) int size) {
-        return configuration.listGl(page, size);
+        return configuration.listGl(search, accountType, status, currencyCode, page, size);
     }
 
     @GetMapping("/gl-accounts/{glCode}")
@@ -53,9 +59,13 @@ public class ConfigurationController {
     }
 
     @GetMapping("/accounting-rules")
-    AccountingRulePage rules(@RequestParam(defaultValue = "0") @Min(0) int page,
+    AccountingRulePage rules(@RequestParam(required = false) String search,
+                             @RequestParam(required = false) String eventType,
+                             @RequestParam(required = false) RecordStatus status,
+                             @RequestParam(required = false) @Pattern(regexp = "[A-Z]{3}") String currencyCode,
+                             @RequestParam(defaultValue = "0") @Min(0) int page,
                              @RequestParam(defaultValue = "50") @Min(1) @Max(200) int size) {
-        return configuration.listRules(page, size);
+        return configuration.listRules(search, eventType, status, currencyCode, page, size);
     }
 
     @PostMapping("/subledger-mappings")
@@ -66,9 +76,13 @@ public class ConfigurationController {
     }
 
     @GetMapping("/subledger-mappings")
-    SubledgerMappingPage mappings(@RequestParam(defaultValue = "0") @Min(0) int page,
+    SubledgerMappingPage mappings(@RequestParam(required = false) String search,
+                                  @RequestParam(required = false) String glCode,
+                                  @RequestParam(required = false) RecordStatus status,
+                                  @RequestParam(required = false) @Pattern(regexp = "[A-Z]{3}") String currencyCode,
+                                  @RequestParam(defaultValue = "0") @Min(0) int page,
                                   @RequestParam(defaultValue = "50") @Min(1) @Max(200) int size) {
-        return configuration.listMappings(page, size);
+        return configuration.listMappings(search, glCode, status, currencyCode, page, size);
     }
 
     private long parseVersion(String value) {

@@ -38,6 +38,8 @@ type PendingLogin = {
 
 const PENDING_KEY = "moneybags.pkce";
 const SESSION_KEY = "moneybags.session.v1";
+const LOGOUT_EVENT_KEY = "moneybags.logout.event";
+const AUTH_CHANNEL = "moneybags.auth";
 
 function base64Url(bytes: Uint8Array): string {
   let value = "";
@@ -63,7 +65,7 @@ function decodeClaims(token: string): JwtClaims {
   return JSON.parse(atob(padded)) as JwtClaims;
 }
 
-function scopes(persona: Persona): string {
+function requiredScopes(persona: Persona): string[] {
   const consumer = ["openid", "profile", "product:read", "cif:read", "cif:write", "kyc:read", "kyc:write",
     "account:read", "account:open", "account:write", "account:close", "fd:read", "fd:open", "fd:close",
     "payment:read", "payment:write", "card:read", "card:apply", "billing:read", "notification:read"];
@@ -71,7 +73,21 @@ function scopes(persona: Persona): string {
     "kyc:review", "account:read", "account:admin", "fd:read", "fd:admin", "payment:read", "payment:admin",
     "card:read", "card:admin", "accounting:read", "accounting:admin", "notification:read",
     "notification:admin", "billing:read", "billing:admin"];
-  return (persona === "admin" ? admin : consumer).join(" ");
+  return persona === "admin" ? admin : consumer;
+}
+
+function scopes(persona: Persona): string {
+  return requiredScopes(persona).join(" ");
+}
+
+function grantedScopes(claims: JwtClaims): Set<string> {
+  const claim = claims.scope;
+  return new Set(Array.isArray(claim) ? claim : (claim ?? "").split(" ").filter(Boolean));
+}
+
+function missingRequiredScopes(claims: JwtClaims, persona: Persona): string[] {
+  const granted = grantedScopes(claims);
+  return requiredScopes(persona).filter((scope) => !granted.has(scope));
 }
 
 export class AuthService {
@@ -79,6 +95,19 @@ export class AuthService {
   private listeners = new Set<() => void>();
   private refreshInFlight?: Promise<Session>;
   private refreshTimer?: number;
+  private channel?: BroadcastChannel;
+
+  constructor() {
+    if (typeof BroadcastChannel !== "undefined") {
+      this.channel = new BroadcastChannel(AUTH_CHANNEL);
+      this.channel.addEventListener("message", (event) => {
+        if (event.data?.type === "logout") this.acceptRemoteLogout();
+      });
+    }
+    window.addEventListener("storage", (event) => {
+      if (event.key === LOGOUT_EVENT_KEY && event.newValue) this.acceptRemoteLogout();
+    });
+  }
 
   get session(): Session | undefined { return this.current; }
   get isAuthenticated(): boolean { return Boolean(this.current); }
@@ -101,6 +130,13 @@ export class AuthService {
       return;
     }
     this.restoreSession();
+    // A tab can retain a valid token issued before a newly introduced API
+    // permission existed. Do not restore that partially capable session: it
+    // otherwise appears signed in and fails only when the new feature is used.
+    if (this.current && missingRequiredScopes(this.current.claims, this.current.persona).length) {
+      this.clearSession();
+      return;
+    }
     if (this.current?.expiresAt && this.current.expiresAt <= Date.now() + 30_000) {
       if (!this.current.refreshToken) {
         this.clearSession();
@@ -138,6 +174,10 @@ export class AuthService {
   logout(): void {
     this.clearSession();
     sessionStorage.removeItem(PENDING_KEY);
+    this.channel?.postMessage({ type: "logout" });
+    // Storage events provide a fallback for browsers without BroadcastChannel.
+    localStorage.setItem(LOGOUT_EVENT_KEY, String(Date.now()));
+    localStorage.removeItem(LOGOUT_EVENT_KEY);
     // Clear the shared Identity Service browser cookie as well as this tab's token.
     // This endpoint deliberately does not require an ID-token hint, so logout also
     // works after a token has expired or the Identity Service has restarted.
@@ -234,6 +274,11 @@ export class AuthService {
     // Workspace access is derived from the signed token, never from the button
     // selected before authentication.
     const actualPersona: Persona = claims.roles?.includes("BANK_ADMIN") ? "admin" : "consumer";
+    const missing = missingRequiredScopes(claims, actualPersona);
+    if (missing.length) {
+      this.clearSession();
+      throw new Error(`Identity did not grant the required application permissions: ${missing.join(", ")}`);
+    }
     this.current = {
       accessToken: token.access_token,
       refreshToken: token.refresh_token ?? oldRefresh,
@@ -272,6 +317,13 @@ export class AuthService {
     this.current = undefined;
     sessionStorage.removeItem(SESSION_KEY);
     this.emit();
+  }
+
+  private acceptRemoteLogout(): void {
+    if (!this.current && !sessionStorage.getItem(PENDING_KEY)) return;
+    this.clearSession();
+    sessionStorage.removeItem(PENDING_KEY);
+    window.location.replace("/");
   }
 
   private scheduleRefresh(): void {

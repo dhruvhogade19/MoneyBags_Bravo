@@ -11,6 +11,29 @@ export function formatDate(value?: string): string {
   return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(parsed);
 }
 
+const PAYABLE_BILL_STATUSES = new Set(["GENERATED", "PARTIALLY_PAID", "OVERDUE"]);
+
+export function isBillPayable(status: string | undefined, outstandingAmount: unknown): boolean {
+  const amount = finiteNumber(outstandingAmount);
+  return PAYABLE_BILL_STATUSES.has((status ?? "").toUpperCase()) && amount !== undefined && amount > 0;
+}
+
+export function canonicalCreditCardAccountReference(value: string | number): string {
+  const text = String(value).trim().toUpperCase();
+  const numeric = text.startsWith("CC-") ? text.slice(3) : text;
+  if (!/^\d+$/.test(numeric)) throw new Error("The bill does not contain a valid credit-card account reference.");
+  return `CC-${numeric}`;
+}
+
+export type PaymentOutcome = "success" | "pending" | "error";
+
+export function paymentOutcome(status: string | undefined): PaymentOutcome {
+  const normalized = (status ?? "").toUpperCase();
+  if (normalized === "SETTLED") return "success";
+  if (["FAILED", "REVERSED", "REVERSAL_PENDING", "CANCELLED"].includes(normalized)) return "error";
+  return "pending";
+}
+
 export class IdempotencyKeyStore {
   private fingerprint?: string;
   private key?: string;

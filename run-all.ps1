@@ -135,6 +135,20 @@ $databaseBackedServices = @(
     "deposit-account-service", "credit-card-service", "accounting-service",
     "notification-service", "bill-generation-service"
 )
+
+# These defaults protect slower Oracle/VPN developer environments. They can be
+# shortened for CI or constrained launchers whose parent process cannot observe
+# child listeners until the launch command returns.
+$perServiceStartupSeconds = if ([string]::IsNullOrWhiteSpace($env:MONEYBAGS_SERVICE_STARTUP_WAIT_SECONDS)) {
+    90
+} else {
+    [Math]::Max(2, [int]$env:MONEYBAGS_SERVICE_STARTUP_WAIT_SECONDS)
+}
+$finalStartupSeconds = if ([string]::IsNullOrWhiteSpace($env:MONEYBAGS_STARTUP_WAIT_SECONDS)) {
+    180
+} else {
+    [Math]::Max(10, [int]$env:MONEYBAGS_STARTUP_WAIT_SECONDS)
+}
 foreach ($service in $services) {
     $serviceDir = Join-Path $projectRoot $service.Directory
     $stdout = Join-Path $logDir ($service.Name + ".out.log")
@@ -154,7 +168,7 @@ foreach ($service in $services) {
         # Avoid opening several Liquibase/Hikari sessions at once against the
         # shared developer Oracle listener. Continue as soon as this service
         # listens, exits, or reaches its bounded startup window.
-        $serviceDeadline = (Get-Date).AddSeconds(90)
+        $serviceDeadline = (Get-Date).AddSeconds($perServiceStartupSeconds)
         do {
             Start-Sleep -Seconds 2
             $listener = Get-NetTCPConnection -State Listen -LocalPort $service.Port -ErrorAction SilentlyContinue |
@@ -171,7 +185,7 @@ Write-Host "Waiting for services to open their ports..." -ForegroundColor Cyan
 # Oracle connectivity, Liquibase and Hibernate schema validation can take more
 # than one minute on the shared database. Avoid reporting a healthy service as
 # NOT STARTED while it is still completing startup validation.
-$startupDeadline = (Get-Date).AddSeconds(180)
+$startupDeadline = (Get-Date).AddSeconds($finalStartupSeconds)
 do {
     $waitingFor = @($services | Where-Object {
         $null -eq (Get-NetTCPConnection -State Listen -LocalPort $_.Port -ErrorAction SilentlyContinue |

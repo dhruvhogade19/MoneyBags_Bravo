@@ -239,6 +239,8 @@ public final class AccountingDtos {
                                        BigDecimal totalDebit, BigDecimal totalCredit, boolean balanced,
                                        String generatedBy, OffsetDateTime generatedAt,
                                        List<TrialBalanceLineResponse> lines) {}
+    public record TrialBalancePage(List<TrialBalanceResponse> content, int page, int size,
+                                   long totalElements, int totalPages) {}
 
     public record FinancialReconciliationRequest(
             @NotBlank @Size(max = 80) String eodRunId,
@@ -259,7 +261,14 @@ public final class AccountingDtos {
                                                   long actualJournalCount, BigDecimal expectedTotalDebit,
                                                   BigDecimal actualTotalDebit, ReconciliationStatus status,
                                                   List<ReconciliationItemResponse> items) {}
+    public record FinancialReconciliationPage(List<FinancialReconciliationResponse> content, int page, int size,
+                                              long totalElements, int totalPages) {}
     public record ReconciliationResolutionRequest(
+            @NotNull ReconciliationItemStatus status,
+            @NotBlank @Size(max = 1000) String resolution,
+            @NotBlank @Size(max = 100) String actorId) {}
+    public record ReconciliationRunResolutionRequest(
+            @NotBlank String itemId,
             @NotNull ReconciliationItemStatus status,
             @NotBlank @Size(max = 1000) String resolution,
             @NotBlank @Size(max = 100) String actorId) {}
@@ -272,4 +281,27 @@ public final class AccountingDtos {
     public record AccountingPeriodResponse(LocalDate businessDate, PeriodStatus status, OffsetDateTime openedAt,
                                            OffsetDateTime closedAt, String openedBy, String closedBy,
                                            long version) {}
+
+    public record AccountingDashboardResponse(
+            LocalDate businessDate,
+            long journalCount,
+            BigDecimal totalDebit,
+            BigDecimal totalCredit,
+            long unbalancedJournalCount,
+            long failedJournalCount,
+            PeriodStatus periodStatus,
+            long reconciliationAlertCount,
+            List<JournalResponse> recentJournals) {}
+
+    public record AccountingEodRunResponse(
+            String eodRunId,
+            LocalDate businessDate,
+            String currencyCode,
+            String status,
+            int trialBalanceRuns,
+            ReconciliationStatus reconciliationStatus,
+            PeriodStatus periodStatus,
+            List<String> blockers) {}
+    public record AccountingEodRunPage(List<AccountingEodRunResponse> content, int page, int size,
+                                       long totalElements, int totalPages) {}
 }

@@ -8,12 +8,14 @@ import com.moneybags.creditcard.dto.CreditCardDtos.*;
 import com.moneybags.creditcard.entity.CreditCardAccount;
 import com.moneybags.creditcard.entity.CreditCardApplication;
 import com.moneybags.creditcard.entity.CreditCardHold;
+import com.moneybags.creditcard.entity.CreditCardBillingCharge;
 import com.moneybags.creditcard.exception.ApiException;
 import com.moneybags.creditcard.integration.CreditCardReferenceGateway;
 import com.moneybags.creditcard.integration.AccountingLifecycleGateway;
 import com.moneybags.creditcard.repository.CreditCardAccountRepository;
 import com.moneybags.creditcard.repository.CreditCardApplicationRepository;
 import com.moneybags.creditcard.repository.CreditCardHoldRepository;
+import com.moneybags.creditcard.repository.CreditCardBillingChargeRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,16 +33,19 @@ public class CreditCardService {
     private final CreditCardAccountRepository accounts;
     private final CreditCardAccountService accountService;
     private final CreditCardHoldRepository holds;
+    private final CreditCardBillingChargeRepository billingCharges;
     private final CreditCardReferenceGateway references;
     private final AccountingLifecycleGateway accounting;
 
     public CreditCardService(CreditCardApplicationRepository applications, CreditCardAccountRepository accounts,
                              CreditCardAccountService accountService, CreditCardHoldRepository holds,
+                             CreditCardBillingChargeRepository billingCharges,
                              CreditCardReferenceGateway references, AccountingLifecycleGateway accounting) {
         this.applications = applications;
         this.accounts = accounts;
         this.accountService = accountService;
         this.holds = holds;
+        this.billingCharges = billingCharges;
         this.references = references;
         this.accounting = accounting;
     }
@@ -148,7 +153,40 @@ public class CreditCardService {
     public BillingAccountDetails billingDetails(Long id) {
         var account = findAccount(id);
         return new BillingAccountDetails(account.id, account.cifId, account.productCode,
-                account.purchaseInterestRateSnapshot, account.outstandingAmount, account.status);
+                account.sanctionedLimit, account.availableLimit, account.purchaseInterestRateSnapshot,
+                account.outstandingAmount, account.status, account.openedAt);
+    }
+
+    @Transactional
+    public BillingChargeResponse applyBillingCharges(Long accountId, String idempotencyKey,
+                                                      BillingChargeRequest request) {
+        if (!request.billId().equals(idempotencyKey)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Idempotency-Key must match billId");
+        }
+        var existing = billingCharges.findByBillId(request.billId());
+        if (existing.isPresent()) {
+            var charge = existing.get();
+            if (!charge.accountId.equals(accountId) || charge.amount.compareTo(request.amount()) != 0
+                    || !charge.journalNumber.equals(request.journalNumber())
+                    || !charge.currency.equals(request.currency())) {
+                throw conflict("Bill charges were already applied with different values");
+            }
+            return billingCharge(charge, findAccount(accountId));
+        }
+        var account = lockAccount(accountId);
+        if (account.status != AccountStatus.ACTIVE) throw conflict("Card account is not active");
+        BigDecimal amount = request.amount().setScale(2, java.math.RoundingMode.HALF_UP);
+        account.outstandingAmount = account.outstandingAmount.add(amount);
+        account.availableLimit = account.availableLimit.subtract(amount);
+        var charge = new CreditCardBillingCharge();
+        charge.accountId = accountId;
+        charge.billId = request.billId();
+        charge.journalNumber = request.journalNumber();
+        charge.amount = amount;
+        charge.currency = request.currency();
+        charge.appliedAt = OffsetDateTime.now(ZoneOffset.UTC);
+        billingCharges.save(charge);
+        return billingCharge(charge, account);
     }
 
     @Transactional
@@ -285,5 +323,10 @@ public class CreditCardService {
 
     private HoldResponse hold(CreditCardHold hold) {
         return new HoldResponse(hold.id, hold.accountId, hold.referenceId, hold.amount, hold.status, hold.createdAt);
+    }
+
+    private BillingChargeResponse billingCharge(CreditCardBillingCharge charge, CreditCardAccount account) {
+        return new BillingChargeResponse(charge.billId, account.id, charge.journalNumber, charge.amount,
+                account.outstandingAmount, account.availableLimit, charge.appliedAt);
     }
 }

@@ -68,8 +68,20 @@ public final class CreditCardDtos {
 
     @Schema(description = "Trusted billing view of a credit-card account.")
     public record BillingAccountDetails(Long accountId, Long cifId, String productCode,
+                                       BigDecimal sanctionedLimit, BigDecimal availableLimit,
                                        BigDecimal purchaseInterestRate, BigDecimal outstandingAmount,
-                                       AccountStatus status) {
+                                       AccountStatus status, OffsetDateTime openedAt) {
+    }
+
+    @Schema(description = "Idempotent charges calculated while generating a bill.")
+    public record BillingChargeRequest(@NotBlank String billId, @NotBlank String journalNumber,
+                                       @NotNull @DecimalMin("0.01") BigDecimal amount,
+                                       @NotBlank String currency) {
+    }
+
+    public record BillingChargeResponse(String billId, Long accountId, String journalNumber,
+                                        BigDecimal amount, BigDecimal outstandingAmount,
+                                        BigDecimal availableLimit, OffsetDateTime appliedAt) {
     }
 
     @Schema(description = "End-of-day readiness and any closure blockers.")
