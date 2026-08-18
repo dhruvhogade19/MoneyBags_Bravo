@@ -140,12 +140,6 @@ public class DepositAccountApplicationService {
         }
         account.setBalanceProjection(openingBalance);
         accountRepository.save(account);
-        OffsetDateTime openedAt = OffsetDateTime.now();
-        accountingLifecycleGateway.publishOpening(new AccountingLifecycleGateway.AccountOpenedEvent(
-                "DEPOSIT-OPEN:" + accountId, "DEPOSIT_ACCOUNT_OPENED", "DEPOSIT_ACCOUNT", accountId,
-                request.productId(), request.currency(), openedAt.toLocalDate(), openedAt),
-                "DEPOSIT-OPEN:" + accountId, correlationId);
-
         if (request.nominees() != null) {
             request.nominees().forEach(n -> nomineeRepository.save(new AccountNominee(UUID.randomUUID().toString(),
                     accountId, n.customerReference(), piiProtector.encrypt(n.name()), n.relationshipCode(),
@@ -186,13 +180,41 @@ public class DepositAccountApplicationService {
     }
 
     @Transactional(readOnly = true)
+    public AccountNumberView accountNumber(String accountId) {
+        return new AccountNumberView(loadDetailed(accountId).getAccountNumber());
+    }
+
+    @Transactional(readOnly = true)
     public Page<AccountSummaryView> search(String customerId, AccountStatus status, Pageable pageable) {
         return accountRepository.search(blankToNull(customerId), status, pageable).map(viewMapper::summary);
+    }
+
+    /**
+     * Resolves an account number for a book-transfer recipient without disclosing balance,
+     * holders, branch, or any other customer information.
+     */
+    @Transactional(readOnly = true)
+    public RecipientAccountView lookupRecipient(String accountNumber) {
+        DepositAccount account = accountRepository.findByAccountNumber(accountNumber.trim())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "RECIPIENT_UNAVAILABLE",
+                        "The recipient account is unavailable for transfers"));
+        if (account.getStatus() != AccountStatus.ACTIVE || account.getProductSubtype() == ProductSubtype.FIXED_DEPOSIT) {
+            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "RECIPIENT_UNAVAILABLE",
+                    "The recipient account is unavailable for transfers");
+        }
+        return new RecipientAccountView(account.getId(), maskAccountNumber(account.getAccountNumber()),
+                account.getProductNameSnapshot(), account.getCurrencyCode());
     }
 
     @Transactional(readOnly = true)
     public BalanceView balance(String accountId) {
         return viewMapper.balance(loadDetailed(accountId).getBalance());
+    }
+
+    private String maskAccountNumber(String accountNumber) {
+        int visible = Math.min(4, accountNumber.length());
+        return "X".repeat(Math.max(0, accountNumber.length() - visible))
+                + accountNumber.substring(accountNumber.length() - visible);
     }
 
     @Transactional(readOnly = true)
@@ -340,6 +362,13 @@ public class DepositAccountApplicationService {
         if (to == AccountStatus.FROZEN) account.setPreviousServiceableStatus(from);
         account.setStatus(to);
         if (to == AccountStatus.ACTIVE && account.getOpenedAt() == null) account.setOpenedAt(OffsetDateTime.now());
+        if (from == AccountStatus.PENDING_ACTIVATION && to == AccountStatus.ACTIVE) {
+            OffsetDateTime openedAt = account.getOpenedAt();
+            accountingLifecycleGateway.publishOpening(new AccountingLifecycleGateway.AccountOpenedEvent(
+                    "DEPOSIT-OPEN:" + accountId, "DEPOSIT_ACCOUNT_OPENED", "DEPOSIT_ACCOUNT", accountId,
+                    account.getProductId(), account.getCurrencyCode(), openedAt.toLocalDate(), openedAt),
+                    "DEPOSIT-OPEN:" + accountId, correlationId);
+        }
         if (to == AccountStatus.CLOSED) account.setClosedAt(OffsetDateTime.now());
         touch(account, actor);
         historyRepository.save(new AccountStatusHistory(UUID.randomUUID().toString(), accountId, from, to,

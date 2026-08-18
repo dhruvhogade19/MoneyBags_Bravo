@@ -51,9 +51,12 @@ import org.springframework.security.oauth2.server.authorization.settings.TokenSe
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 import org.springframework.http.MediaType;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -81,7 +84,8 @@ public class AuthorizationServerConfig {
                         new LoginUrlAuthenticationEntryPoint("/login"),
                         new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt
-                        .jwtAuthenticationConverter(resourceServerJwtAuthenticationConverter())));
+                        .jwtAuthenticationConverter(resourceServerJwtAuthenticationConverter())))
+                .addFilterBefore(new IdentitySwitchLoginFilter(), SecurityContextHolderFilter.class);
         return http.build();
     }
 
@@ -91,10 +95,22 @@ public class AuthorizationServerConfig {
         return http.cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/identity/registrations"))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/login", "/styles/**", "/actuator/health/**", "/error",
+                        .requestMatchers("/login", "/session/logout", "/styles/**", "/actuator/health/**", "/error",
                                 "/api/v1/identity/registrations").permitAll()
                         .anyRequest().authenticated())
-                .formLogin(form -> form.loginPage("/login").permitAll())
+                .formLogin(form -> form.loginPage("/login").permitAll()
+                        .successHandler((request, response, authentication) -> {
+                            HttpSession session = request.getSession(false);
+                            String resumeAuthorization = session == null ? null
+                                    : (String) session.getAttribute(IdentitySwitchLoginFilter.RESUME_AUTHORIZATION_ATTRIBUTE);
+                            if (resumeAuthorization != null) {
+                                session.removeAttribute(IdentitySwitchLoginFilter.RESUME_AUTHORIZATION_ATTRIBUTE);
+                                response.sendRedirect(resumeAuthorization);
+                                return;
+                            }
+                            new SavedRequestAwareAuthenticationSuccessHandler()
+                                    .onAuthenticationSuccess(request, response, authentication);
+                        }))
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt
                         .jwtAuthenticationConverter(resourceServerJwtAuthenticationConverter())))
                 .build();

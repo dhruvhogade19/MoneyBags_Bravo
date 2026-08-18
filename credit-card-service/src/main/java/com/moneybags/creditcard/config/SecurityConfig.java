@@ -23,7 +23,9 @@ public class SecurityConfig {
     SecurityFilterChain secured(HttpSecurity http) throws Exception {
         return http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health/**").permitAll()
-                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").hasRole("BANK_ADMIN")
+                // API documentation must remain reachable so Swagger UI can load its OpenAPI definition.
+                // The credit-card business endpoints below remain scope-protected.
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.GET, "/internal/v1/credit-card-accounts/*/billing-details")
                     .hasAuthority("SCOPE_card:billing")
                 .requestMatchers(HttpMethod.POST, "/api/credit-cards/applications").hasAuthority("SCOPE_card:apply")

@@ -33,6 +33,11 @@ public class DepositAuthorization {
                 || (customerId != null && owns(authentication, customerId));
     }
 
+    /** Recipient lookup exposes no balance, holder, or personally identifying data. */
+    public boolean canLookupRecipient(Authentication authentication) {
+        return !securityEnabled || privileged(authentication) || customerId(authentication) != null;
+    }
+
     public boolean canOpen(Authentication authentication, OpenDepositAccountRequest request) {
         if (!securityEnabled || privileged(authentication)) return true;
         String customerId = customerId(authentication);

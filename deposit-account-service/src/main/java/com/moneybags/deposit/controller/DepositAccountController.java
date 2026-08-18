@@ -59,6 +59,12 @@ public class DepositAccountController {
         return ResponseEntity.ok().eTag(etag(result.version())).body(result);
     }
 
+    @GetMapping("/{accountId}/account-number")
+    @PreAuthorize("@depositAuthorization.canAccessAccount(authentication, #accountId)")
+    public AccountNumberView accountNumber(@PathVariable String accountId) {
+        return service.accountNumber(accountId);
+    }
+
     @GetMapping
     @PreAuthorize("@depositAuthorization.canSearch(authentication, #customerId)")
     public Page<AccountSummaryView> search(@RequestParam(required = false) String customerId,
@@ -68,6 +74,12 @@ public class DepositAccountController {
         int safeSize = Math.min(Math.max(size, 1), 100);
         return service.search(customerId, status, PageRequest.of(Math.max(page, 0), safeSize,
                 Sort.by(Sort.Direction.DESC, "createdAt")));
+    }
+
+    @PostMapping("/recipient-lookup")
+    @PreAuthorize("@depositAuthorization.canLookupRecipient(authentication)")
+    public RecipientAccountView lookupRecipient(@Valid @RequestBody RecipientLookupRequest request) {
+        return service.lookupRecipient(request.accountNumber());
     }
 
     @GetMapping("/{accountId}/balance")

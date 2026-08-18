@@ -107,6 +107,8 @@ $services = @(
     @{ Name = "payments-service"; Directory = "payments-service"; Port = 8085 },
     @{ Name = "deposit-account-service"; Directory = "deposit-account-service"; Port = 8086 },
     @{ Name = "credit-card-service"; Directory = "credit-card-service"; Port = 8084 },
+    # The shared Oracle schema contains a legacy Accounting data model.  Until its
+    # dedicated conversion migration is applied, use the self-contained demo profile.
     @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088; Profiles = "local" },
     @{ Name = "notification-service"; Directory = "notification-service"; Port = 8090; Profiles = "mock-mail" },
     @{ Name = "bill-generation-service"; Directory = "bill-generation-service"; Port = 8087 },

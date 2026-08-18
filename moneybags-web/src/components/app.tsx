@@ -38,7 +38,7 @@ const customerNavigation: NavigationItem[] = [
   { label: "Cards & bills", icon: "credit_card", path: "/app/cards" },
   { label: "Payments", icon: "swap_horiz", path: "/app/payments" },
   { label: "Statements", icon: "description", path: "/app/statements" },
-  { label: "Updates", icon: "notifications", path: "/app/notifications" }
+  { label: "Notifications", icon: "notifications", path: "/app/notifications" }
 ];
 
 const operationsNavigation: NavigationItem[] = [

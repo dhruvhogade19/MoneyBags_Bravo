@@ -20,6 +20,7 @@ public interface DepositAccountRepository extends JpaRepository<DepositAccount, 
     boolean existsByIdAndHoldersCustomerIdAndHoldersRoleAndHoldersStatus(
             String id, String customerId, HolderRole role, RecordStatus status);
     boolean existsByAccountNumber(String accountNumber);
+    Optional<DepositAccount> findByAccountNumber(String accountNumber);
 
     long countByCurrencyCodeAndStatus(String currencyCode, AccountStatus status);
 

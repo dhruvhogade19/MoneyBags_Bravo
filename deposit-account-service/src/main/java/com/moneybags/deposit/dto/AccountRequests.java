@@ -69,4 +69,6 @@ public final class AccountRequests {
             @Size(max = 500) String reasonText,
             OffsetDateTime effectiveAt
     ) {}
+
+    public record RecipientLookupRequest(@NotBlank @Size(max = 34) String accountNumber) {}
 }

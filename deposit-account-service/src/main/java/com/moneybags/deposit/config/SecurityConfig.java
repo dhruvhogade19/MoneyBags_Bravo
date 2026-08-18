@@ -44,6 +44,11 @@ public class SecurityConfig {
                     .hasAnyAuthority("SCOPE_fd:close", "SCOPE_fd:admin")
                 .requestMatchers(HttpMethod.POST, "/api/deposit-accounts/fixed-deposits")
                     .hasAnyAuthority("SCOPE_fd:open", "SCOPE_fd:admin")
+                // A customer may verify an active recipient before creating a payment.  This is
+                // deliberately read-only and must be matched before the broader account-opening
+                // POST rule below.
+                .requestMatchers(HttpMethod.POST, "/api/deposit-accounts/recipient-lookup")
+                    .hasAnyAuthority("SCOPE_account:read", "SCOPE_account:admin")
                 .requestMatchers(HttpMethod.POST, "/api/deposit-accounts", "/api/deposit-accounts/eligibility-check")
                     .hasAnyAuthority("SCOPE_account:open", "SCOPE_account:admin", "SCOPE_account:service")
                 .requestMatchers(HttpMethod.POST, "/api/deposit-accounts/*/closure-quotes")

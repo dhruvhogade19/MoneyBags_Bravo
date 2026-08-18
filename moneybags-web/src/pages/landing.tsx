@@ -24,7 +24,7 @@ export function LandingPage({ initialError }: { initialError?: string }) {
         <button type="button" disabled={Boolean(busy)} onClick={() => start("admin")}><Icon name="operations" /><span><strong>{busy === "admin" ? "Redirecting…" : "Bank operations"}</strong><small>KYC, products, payments and accounting</small></span><b>→</b></button>
       </div>
       <div class="mb-signup-prompt"><span>New to MoneyBags?</span><button type="button" onClick={() => navigate("/signup")}>Create an account →</button></div>
-      <p class="mb-login-footnote">Protected by OAuth 2.0 Authorization Code with PKCE. Tokens stay in memory and are never placed in browser storage.</p>
+      <p class="mb-login-footnote">Protected by OAuth 2.0 Authorization Code with PKCE. Your session is restored only in this browser tab and ends when you sign out or close the tab.</p>
     </section>
   </div></main>;
 }

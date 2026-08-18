@@ -28,6 +28,13 @@ public final class AccountResponses {
                                      ProductSubtype productSubtype, String currency, AccountStatus status, BigDecimal availableBalance,
                                      OffsetDateTime balanceAsOf, String servicingBranchId, long version) {}
 
+    /** A deliberately limited account view used only to validate a transfer recipient. */
+    public record RecipientAccountView(String accountId, String maskedAccountNumber, String productName,
+                                       String currency) {}
+
+    /** Returned only to an account holder or a privileged bank operator. */
+    public record AccountNumberView(String accountNumber) {}
+
     public record AccountDetailView(String accountId, String maskedAccountNumber, AccountStatus status,
                                     ProductView product, String currency, String servicingBranchId,
                                     String operatingInstruction, List<HolderView> holders,

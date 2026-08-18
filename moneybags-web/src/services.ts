@@ -1,5 +1,5 @@
 import { api, query } from "./api";
-import type { Account, AccountBalance, AccountDetail, AccountStatusHistory, Bill, CardAccount, CardApplication, Cif, ClosureQuote, ClosureRequest, DepositReadiness, EodResult, EligibilityResult, FixedDeposit, FixedDepositAccrual, FixedDepositQuote, FixedDepositSchedule, Journal, Kyc, KycDocument, Notification, Page, Payment, PaymentEodControl, PaymentStatusHistory, PrematureClosureQuote, Product } from "./contracts";
+import type { Account, AccountBalance, AccountDetail, AccountNumber, AccountStatusHistory, Bill, CardAccount, CardApplication, Cif, ClosureQuote, ClosureRequest, DepositReadiness, EodResult, EligibilityResult, FixedDeposit, FixedDepositAccrual, FixedDepositQuote, FixedDepositSchedule, Journal, Kyc, KycDocument, Notification, Page, Payment, PaymentEodControl, PaymentStatusHistory, PrematureClosureQuote, Product, TransferRecipient } from "./contracts";
 
 export function items<T>(value: T[] | Page<T> | { content?: T[] } | undefined): T[] {
   if (!value) return [];
@@ -37,17 +37,22 @@ export const services = {
   products: {
     active: (signal?: AbortSignal) => api.get<Page<Product> | Product[]>(query("/api/products/active", { page: 0, size: 100 }), signal),
     all: (signal?: AbortSignal) => api.get<Page<Product> | Product[]>(query("/api/products", { page: 0, size: 100 }), signal),
-    one: (code: string, signal?: AbortSignal) => api.get<Product>(`/api/products/${encodeURIComponent(code)}`, signal)
+    one: (code: string, signal?: AbortSignal) => api.get<Product>(`/api/products/${encodeURIComponent(code)}`, signal),
+    create: (body: unknown, idempotencyKey?: string) => api.post<Product>("/api/products", body, idempotencyKey),
+    update: (productCode: string, body: unknown, idempotencyKey?: string) => api.put<Product>(`/api/products/${encodeURIComponent(productCode)}`, body, idempotencyKey),
+    changeStatus: (productCode: string, status: "ACTIVE" | "INACTIVE" | "DISCONTINUED", idempotencyKey?: string) => api.patch<Product>(`/api/products/${encodeURIComponent(productCode)}/status`, { status, changedBy: "bank-admin" }, idempotencyKey)
   },
   accounts: {
     list: (customerId: string | number, signal?: AbortSignal) => api.get<Page<Account>>(query("/api/deposit-accounts", { customerId, page: 0, size: 100 }), signal),
     all: (signal?: AbortSignal) => api.get<Page<Account>>(query("/api/deposit-accounts", { page: 0, size: 100 }), signal),
     search: (customerId?: string, status?: string, signal?: AbortSignal) => api.get<Page<Account>>(query("/api/deposit-accounts", { customerId, status, page: 0, size: 100 }), signal),
     one: (accountId: string, signal?: AbortSignal) => api.get<AccountDetail>(`/api/deposit-accounts/${encodeURIComponent(accountId)}`, signal),
+    accountNumber: (accountId: string) => api.get<AccountNumber>(`/api/deposit-accounts/${encodeURIComponent(accountId)}/account-number`),
     balance: (accountId: string, signal?: AbortSignal) => api.get<AccountBalance>(`/api/deposit-accounts/${encodeURIComponent(accountId)}/balance`, signal),
     history: (accountId: string, signal?: AbortSignal) => api.get<AccountStatusHistory[]>(`/api/deposit-accounts/${encodeURIComponent(accountId)}/status-history`, signal),
     open: (body: unknown, idempotencyKey?: string) => api.post<AccountDetail>("/api/deposit-accounts", body, idempotencyKey),
     eligibility: (body: unknown) => api.post<EligibilityResult>("/api/deposit-accounts/eligibility-check", body),
+    lookupTransferRecipient: (accountNumber: string) => api.post<TransferRecipient>("/api/deposit-accounts/recipient-lookup", { accountNumber }),
     addHolder: (accountId: string, body: unknown, idempotencyKey?: string) => api.post<AccountDetail>(`/api/deposit-accounts/${encodeURIComponent(accountId)}/holders`, body, idempotencyKey),
     removeHolder: (accountId: string, customerId: string, idempotencyKey?: string) => api.delete<void>(`/api/deposit-accounts/${encodeURIComponent(accountId)}/holders/${encodeURIComponent(customerId)}`, idempotencyKey),
     replaceNominees: (accountId: string, body: unknown, idempotencyKey?: string) => api.put<unknown[]>(`/api/deposit-accounts/${encodeURIComponent(accountId)}/nominees`, body, idempotencyKey),
