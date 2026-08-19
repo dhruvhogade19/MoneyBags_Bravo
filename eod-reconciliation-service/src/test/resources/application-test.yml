@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:eod;MODE=Oracle;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=true
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      # H2 reports Oracle NUMBER columns as NUMERIC, while Oracle reports their
+      # precise JDBC types. Production keeps ddl-auto=validate in application.yml.
+      ddl-auto: none
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+eureka:
+  client:
+    enabled: false
+
+moneybags:
+  security:
+    enabled: false
+  eod:
+    initial-business-date: 2026-08-13

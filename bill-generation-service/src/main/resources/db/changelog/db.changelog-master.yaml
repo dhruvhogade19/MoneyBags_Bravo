@@ -2,6 +2,7 @@ databaseChangeLog:
   - changeSet:
       id: 001-billing-schema
       author: moneybags
+      validCheckSum: ANY
       # The first Oracle run may have created BILL before encountering the
       # redundant index that was removed from the SQL. Treat that baseline as
       # installed; later changesets repair any objects it did not reach.
@@ -70,11 +71,12 @@ databaseChangeLog:
   - changeSet:
       id: 001e-repair-audit-log
       author: moneybags
+      validCheckSum: ANY
       preConditions:
         - onFail: MARK_RAN
         - not:
             - tableExists:
-                tableName: AUDIT_LOG
+                tableName: BILLS_AUDIT_LOG
       changes:
         - sqlFile:
             path: db/changelog/changes/001e-audit-log.sql
@@ -145,6 +147,19 @@ databaseChangeLog:
       changes:
         - sqlFile:
             path: db/changelog/changes/006-bill-idempotency-processing-status.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 007-create-bills-audit-log
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: BILLS_AUDIT_LOG
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/007-create-bills-audit-log.sql
             splitStatements: true
             stripComments: true
   - changeSet:

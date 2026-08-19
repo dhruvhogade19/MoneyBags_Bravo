@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "TRIAL_BALANCE_RUN")
+@Table(name = "ACCT_TRIAL_BALANCE_RUN")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class TrialBalanceRun {

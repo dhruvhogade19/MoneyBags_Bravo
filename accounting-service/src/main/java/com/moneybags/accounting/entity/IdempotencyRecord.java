@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "IDEMPOTENCY_RECORD", uniqueConstraints = @UniqueConstraint(columnNames = {"SCOPE", "KEY_HASH"}))
+@Table(name = "ACCT_IDEMPOTENCY_RECORD", uniqueConstraints = @UniqueConstraint(columnNames = {"SCOPE", "KEY_HASH"}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class IdempotencyRecord {

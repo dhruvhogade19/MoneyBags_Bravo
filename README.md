@@ -19,6 +19,7 @@ Spring Boot services for the Moneybags banking platform. Each service owns its O
 | `statements-service` | 8089 | Account-wise recent activity, Deposit/Accounting reconciliation and immutable PDF statements |
 | `notification-service` | 8090 | Internal delivery and customer notification history |
 | `bill-generation-service` | 8087 | Credit-card billing cycles, bills and payment settlement |
+| `eod-reconciliation-service` | 8091 | Asynchronous business-date close orchestration, checkpoints and reconciliation exceptions |
 
 Payments is included in the Maven reactor and coordinates peer services through synchronous REST calls. Deposit uses stubbed CIF/Product Master validation by default; production mode resolves configured peers through Spring `RestClient` and Eureka. Accounting is started by `run-all.ps1`; it is currently built independently rather than included in the root Maven reactor.
 

@@ -1,6 +1,5 @@
 import { api, query } from "./api";
-import type { Account, AccountActivity, AccountBalance, AccountDetail, AccountNumber, AccountStatement, AccountStatusHistory, Bill, CardAccount, CardApplication, Cif, ClosureQuote, ClosureRequest, DepositReadiness, EodResult, EligibilityResult, FixedDeposit, FixedDepositAccrual, FixedDepositQuote, FixedDepositSchedule, Journal, Kyc, KycDocument, Notification, Page, Payment, PaymentEodControl, PaymentStatusHistory, PrematureClosureQuote, Product, TransferRecipient } from "./contracts";
-import type { AccountClearance, AccountingBalance, AccountingDashboard, AccountingEodRun, AccountingPeriod, AccountingRule, GlAccount, LedgerEntry, ReconciliationRun, StatementPreview, SubledgerMapping, TrialBalance } from "./contracts";
+import type { Account, AccountActivity, AccountBalance, AccountClearance, AccountDetail, AccountNumber, AccountStatement, AccountStatusHistory, AccountingBalance, AccountingDashboard, AccountingEodRun, AccountingPeriod, AccountingRule, Bill, CardAccount, CardApplication, Cif, ClosureQuote, ClosureRequest, DepositReadiness, EodBusinessDate, EodResult, EodRun, EligibilityResult, FixedDeposit, FixedDepositAccrual, FixedDepositQuote, FixedDepositSchedule, GlAccount, Journal, Kyc, KycDocument, LedgerEntry, Notification, Page, Payment, PaymentEodControl, PaymentStatusHistory, PrematureClosureQuote, Product, ReconciliationRun, StatementPreview, SubledgerMapping, TransferRecipient, TrialBalance } from "./contracts";
 
 export function items<T>(value: T[] | Page<T> | { content?: T[] } | undefined): T[] {
   if (!value) return [];
@@ -127,6 +126,15 @@ export const services = {
     activity: (accountId: string, from: string, to: string, signal?: AbortSignal) => api.get<AccountActivity>(query(`/api/v1/statements/accounts/${encodeURIComponent(accountId)}/activity`, { from, to }), signal),
     generate: (accountReference: string, periodStart: string, periodEnd: string, idempotencyKey?: string) => api.post<AccountStatement>("/api/v1/statements", { accountReference, periodStart, periodEnd }, idempotencyKey),
     download: (statementId: string) => api.blob(`/api/v1/statements/${encodeURIComponent(statementId)}/download`)
+  },
+  eod: {
+    businessDate: (signal?: AbortSignal) => api.get<EodBusinessDate>("/api/v1/business-date", signal),
+    runs: (businessDate?: string, signal?: AbortSignal) => api.get<EodRun[]>(query("/api/v1/eod/runs", { businessDate }), signal),
+    run: (runId: string, signal?: AbortSignal) => api.get<EodRun>(`/api/v1/eod/runs/${encodeURIComponent(runId)}`, signal),
+    start: (businessDate: string, startedBy: string, idempotencyKey?: string) => api.post<EodRun>("/api/v1/eod/runs", { businessDate, startedBy }, idempotencyKey),
+    resume: (runId: string, requestedBy: string, reason: string, idempotencyKey?: string) => api.post<EodRun>(`/api/v1/eod/runs/${encodeURIComponent(runId)}/resume`, { requestedBy, reason }, idempotencyKey),
+    retry: (runId: string, stepCode: string, requestedBy: string, reason: string, idempotencyKey?: string) => api.post<EodRun>(`/api/v1/eod/runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepCode)}/retry`, { requestedBy, reason }, idempotencyKey),
+    resolve: (exceptionId: string, resolution: string, resolvedBy: string, waived: boolean, idempotencyKey?: string) => api.post<EodRun>(`/api/v1/eod/exceptions/${encodeURIComponent(exceptionId)}/resolve`, { resolution, resolvedBy, waived }, idempotencyKey)
   },
   accounting: {
     dashboard: (businessDate?: string, signal?: AbortSignal) => api.get<AccountingDashboard>(query("/api/v1/accounting/dashboard", { businessDate }), signal),

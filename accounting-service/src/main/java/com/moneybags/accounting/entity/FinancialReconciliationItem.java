@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "FIN_RECON_ITEM")
+@Table(name = "ACCT_FIN_RECON_ITEM")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FinancialReconciliationItem {

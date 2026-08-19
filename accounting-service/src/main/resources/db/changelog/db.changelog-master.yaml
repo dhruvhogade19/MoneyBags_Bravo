@@ -13,6 +13,23 @@ databaseChangeLog:
             splitStatements: true
             stripComments: true
 
+  # Oracle commits DDL statement-by-statement. If an older shared-schema boot
+  # stopped at a generic table-name collision, the Accounting core tables are
+  # already present while the service-owned operational tables are not.
+  - changeSet:
+      id: 001a-repair-partial-accounting-schema
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: ACCT_IDEMPOTENCY_RECORD
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001a-repair-partial-accounting-schema.sql
+            splitStatements: true
+            stripComments: true
+
   - changeSet:
       id: 002-seed-accounting-chart-and-rules
       author: moneybags
