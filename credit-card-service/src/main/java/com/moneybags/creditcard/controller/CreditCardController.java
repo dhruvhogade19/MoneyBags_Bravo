@@ -135,11 +135,11 @@ public class CreditCardController {
         return service.releaseHold(accountId, holdId);
     }
 
-    @Operation(tags = "Internal - Payment Service", summary = "Record a bill payment", description = "Internal Payment Service API; authentication is not currently enforced. Only the portion required to clear current OUTSTANDING_AMOUNT is applied; any excess payment is ignored by Credit Card Service.")
+    @Operation(tags = "Internal - Payment Service", summary = "Record an idempotent bill payment", description = "Payment Service supplies its payment ID. A replay returns the existing result, and an overpayment is rejected.")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Account credit state updated", content = @Content(schema = @Schema(implementation = AccountResponse.class))), @ApiResponse(responseCode = "400", description = "Payment amount must be positive"), @ApiResponse(responseCode = "404", description = ERROR_SCHEMA), @ApiResponse(responseCode = "409", description = ERROR_SCHEMA)})
     @PostMapping("/accounts/{accountId}/payments/billpaid")
     AccountResponse paid(@Parameter(description = "Credit-card account ID.", required = true, example = "5001") @PathVariable("accountId") Long accountId,
-                         @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = "Positive bill-payment amount.", content = @Content(schema = @Schema(implementation = AmountRequest.class))) @Valid @RequestBody AmountRequest r) {
+                         @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, description = "Idempotent card-bill repayment.", content = @Content(schema = @Schema(implementation = BillPaymentRequest.class))) @Valid @RequestBody BillPaymentRequest r) {
         return service.billPaid(accountId, r);
     }
 

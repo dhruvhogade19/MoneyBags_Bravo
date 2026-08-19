@@ -1,0 +1,11 @@
+-- Billing owns this audit table. Do not reuse another service's generic
+-- AUDIT_LOG contract because its mandatory columns and lifecycle differ.
+CREATE TABLE BILL_AUDIT_LOG (
+    AUDIT_ID VARCHAR2(36) NOT NULL,
+    AGGREGATE_ID VARCHAR2(100),
+    ACTION VARCHAR2(80) NOT NULL,
+    OUTCOME VARCHAR2(20) NOT NULL,
+    CORRELATION_ID VARCHAR2(64) NOT NULL,
+    OCCURRED_AT TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT PK_BILL_AUDIT_LOG PRIMARY KEY (AUDIT_ID)
+);

@@ -37,6 +37,10 @@ public final class CreditCardDtos {
     public record AmountRequest(@Schema(description = "Amount received; must be positive. Excess over current outstanding is ignored.", example = "25000.00") @NotNull @DecimalMin("0.01") BigDecimal amount) {
     }
 
+    @Schema(description = "Idempotent bill repayment applied by Payment Service.")
+    public record BillPaymentRequest(@NotBlank String paymentId,
+                                     @NotNull @DecimalMin("0.01") BigDecimal amount) { }
+
     @Schema(description = "Persisted credit-card application and eligibility decision.")
     public record ApplicationResponse(Long applicationId, Long cifId, String productCode,
                                       BigDecimal requestedCreditLimit, BigDecimal approvedCreditLimit,

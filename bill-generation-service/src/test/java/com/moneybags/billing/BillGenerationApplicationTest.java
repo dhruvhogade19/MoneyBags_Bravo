@@ -112,5 +112,9 @@ class BillGenerationApplicationTest {
         assertThat(replay.billId()).isEqualTo(generated.billId());
         assertThat(service.search(null, generated.billingPeriod(), null, 0, 20).content())
                 .extracting(BillGenerationApplication.BillResponse::billId).contains(generated.billId());
+        assertThat(service.searchForCustomer(101L, generated.accountId(), null, null, 0, 20).content())
+                .extracting(BillGenerationApplication.BillResponse::billId).contains(generated.billId());
+        assertThat(service.searchForCustomer(999L, generated.accountId(), null, null, 0, 20).content())
+                .extracting(BillGenerationApplication.BillResponse::billId).doesNotContain(generated.billId());
     }
 }

@@ -36,11 +36,16 @@ async function parseProblem(response: Response, requestCorrelationId: string): P
     : typeof body.validationErrors === "object" && body.validationErrors !== null
       ? body.validationErrors as Record<string, string>
       : undefined;
+  const fallback = response.status === 401
+    ? { title: "Session expired", detail: "Your secure session is no longer valid. Sign in again and retry the operation." }
+    : response.status === 403
+      ? { title: "Access denied", detail: "Your signed-in account is not authorized to perform this operation." }
+      : { title: `Request failed (${response.status})`, detail: "MoneyBags could not complete the request." };
   return {
     status: response.status,
     code: typeof body.code === "string" ? body.code : undefined,
-    title: typeof body.title === "string" ? body.title : `Request failed (${response.status})`,
-    detail: typeof body.detail === "string" ? body.detail : typeof body.message === "string" ? body.message : "MoneyBags could not complete the request.",
+    title: typeof body.title === "string" ? body.title : fallback.title,
+    detail: typeof body.detail === "string" ? body.detail : typeof body.message === "string" ? body.message : fallback.detail,
     correlationId: response.headers.get("X-Correlation-ID") ?? (typeof body.correlationId === "string" ? body.correlationId : requestCorrelationId),
     fieldErrors
   };
