@@ -15,16 +15,20 @@ import org.springframework.web.client.RestClientException;
 public class RestClientStatementSourceGateway implements StatementSourceGateway {
     private final RestClient accounting;
     private final RestClient deposit;
+    private final RestClient creditCard;
 
     public RestClientStatementSourceGateway(RestClient.Builder builder,
             @Value("${moneybags.clients.accounting.base-url}") String accountingUrl,
-            @Value("${moneybags.clients.deposit.base-url}") String depositUrl) {
+            @Value("${moneybags.clients.deposit.base-url}") String depositUrl,
+            @Value("${moneybags.clients.credit-card.base-url}") String creditCardUrl) {
         accounting = builder.clone().baseUrl(accountingUrl).build();
         deposit = builder.clone().baseUrl(depositUrl).build();
+        creditCard = builder.clone().baseUrl(creditCardUrl).build();
     }
 
     @Override
     public AccountContext context(String accountReference) {
+        if (isCreditCard(accountReference)) return cardContext(accountReference);
         AccountContext value = deposit.get()
                 .uri("/api/internal/deposit-accounts/{accountId}/statement-context", accountReference)
                 .retrieve().body(AccountContext.class);
@@ -34,6 +38,7 @@ public class RestClientStatementSourceGateway implements StatementSourceGateway 
 
     @Override
     public StatementSource load(String accountReference, LocalDate start, LocalDate end) {
+        if (isCreditCard(accountReference)) return loadCardActivity(accountReference, start, end);
         List<LedgerEntry> ledger = loadLedger(accountReference, start, end);
         List<DepositActivity> activities = new ArrayList<>();
         DepositPage firstPage = null;
@@ -53,6 +58,32 @@ public class RestClientStatementSourceGateway implements StatementSourceGateway 
         return new StatementSource(ledger, activities, firstPage.openingBalance,
                 firstPage.closingBalance, firstPage.currency);
     }
+
+    private AccountContext cardContext(String accountReference) {
+        CardAccountContext value = creditCard.get().uri(
+                "/internal/v1/credit-card-accounts/{accountId}/statement-context", cardId(accountReference))
+                .retrieve().body(CardAccountContext.class);
+        if (value == null) throw new IllegalStateException("Credit Card returned no statement account context");
+        return new AccountContext(value.accountId, value.maskedAccountReference, value.accountType,
+                value.currency, value.customerIds);
+    }
+
+    private StatementSource loadCardActivity(String accountReference, LocalDate start, LocalDate end) {
+        CardStatementSource value = creditCard.get().uri(uri -> uri
+                .path("/internal/v1/credit-card-accounts/{accountId}/statement-activity")
+                .queryParam("from", start).queryParam("to", end).build(cardId(accountReference)))
+                .retrieve().body(CardStatementSource.class);
+        if (value == null) throw new IllegalStateException("Credit Card returned no statement activity");
+        List<DepositActivity> activities = (value.activities == null ? List.<CardActivity>of() : value.activities)
+                .stream().map(activity -> new DepositActivity(activity.transactionId, activity.paymentId,
+                        activity.direction, activity.amount, activity.currency, null, null,
+                        activity.occurredAt)).toList();
+        return new StatementSource(List.of(), activities, value.openingBalance, value.closingBalance,
+                value.currency);
+    }
+
+    private static boolean isCreditCard(String reference) { return reference != null && reference.matches("CC-\\d+"); }
+    private static Long cardId(String reference) { return Long.valueOf(reference.substring(3)); }
 
     private List<LedgerEntry> loadLedger(String accountReference, LocalDate start, LocalDate end) {
         List<LedgerEntry> ledger = new ArrayList<>();
@@ -82,5 +113,17 @@ public class RestClientStatementSourceGateway implements StatementSourceGateway 
         public java.math.BigDecimal openingBalance;
         public java.math.BigDecimal closingBalance;
         public String currency;
+    }
+    public static class CardAccountContext {
+        public String accountId; public String maskedAccountReference; public String accountType;
+        public String currency; public List<String> customerIds;
+    }
+    public static class CardActivity {
+        public String transactionId; public String paymentId; public String direction; public java.math.BigDecimal amount;
+        public String currency; public java.time.OffsetDateTime occurredAt;
+    }
+    public static class CardStatementSource {
+        public List<CardActivity> activities; public java.math.BigDecimal openingBalance;
+        public java.math.BigDecimal closingBalance; public String currency;
     }
 }

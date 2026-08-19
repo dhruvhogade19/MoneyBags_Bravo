@@ -101,18 +101,18 @@ Write-Host ("Using Java: " + $javaVersion) -ForegroundColor Cyan
 $services = @(
     @{ Name = "discovery-server"; Directory = "discovery-server"; Port = 8761 },
     @{ Name = "identity-access-service"; Directory = "identity-access-service"; Port = 8093; Profiles = "local" },
-    @{ Name = "cif-service"; Directory = "cif-service"; Port = 8081 },
-    @{ Name = "kyc-service"; Directory = "kyc-service"; Port = 8082 },
-    @{ Name = "product-master-service"; Directory = "product-master-service"; Port = 8083 },
-    @{ Name = "payments-service"; Directory = "payments-service"; Port = 8085 },
-    @{ Name = "deposit-account-service"; Directory = "deposit-account-service"; Port = 8086 },
-    @{ Name = "credit-card-service"; Directory = "credit-card-service"; Port = 8084 },
+    @{ Name = "cif-service"; Directory = "cif-service"; Port = 8081; DatabaseBacked = $true },
+    @{ Name = "kyc-service"; Directory = "kyc-service"; Port = 8082; DatabaseBacked = $true },
+    @{ Name = "product-master-service"; Directory = "product-master-service"; Port = 8083; DatabaseBacked = $true },
+    @{ Name = "payments-service"; Directory = "payments-service"; Port = 8085; DatabaseBacked = $true },
+    @{ Name = "deposit-account-service"; Directory = "deposit-account-service"; Port = 8086; DatabaseBacked = $true },
+    @{ Name = "credit-card-service"; Directory = "credit-card-service"; Port = 8084; DatabaseBacked = $true },
     # The shared Oracle schema contains a legacy Accounting data model.  Until its
     # dedicated conversion migration is applied, use the self-contained demo profile.
     @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088; Profiles = "local" },
-    @{ Name = "notification-service"; Directory = "notification-service"; Port = 8090; Profiles = "mock-mail" },
-    @{ Name = "bill-generation-service"; Directory = "bill-generation-service"; Port = 8087 },
-    @{ Name = "statements-service"; Directory = "statements-service"; Port = 8089; Profiles = "local" },
+    @{ Name = "notification-service"; Directory = "notification-service"; Port = 8090; Profiles = "mock-mail"; DatabaseBacked = $true },
+    @{ Name = "bill-generation-service"; Directory = "bill-generation-service"; Port = 8087; DatabaseBacked = $true },
+    @{ Name = "statements-service"; Directory = "statements-service"; Port = 8089; Profiles = "local"; DatabaseBacked = $true },
     @{ Name = "api-gateway"; Directory = "api-gateway"; Port = 8080 },
     @{ Name = "moneybags-web"; Directory = "moneybags-web"; Port = 8000; Command = "npm.cmd"; Arguments = "run serve:stack"; HealthPath = "/" }
 )
@@ -224,30 +224,96 @@ function Wait-MoneybagsPorts {
     return $false
 }
 
+function Test-MoneybagsTransientOracleFailure {
+    param([hashtable]$Service)
+
+    $stdout = Join-Path $logDir ($Service.Name + ".out.log")
+    if (-not (Test-Path -LiteralPath $stdout)) {
+        return $false
+    }
+
+    # These listener/network errors are safe to retry. Configuration, schema,
+    # and application failures are deliberately not retried.
+    $recentOutput = Get-Content -LiteralPath $stdout -Tail 120 -ErrorAction SilentlyContinue
+    return $recentOutput -match 'ORA-(12516|12519|12514|12170|17002|17800)'
+}
+
+function Save-MoneybagsProcessIds {
+    $processes | ConvertTo-Json | Set-Content -LiteralPath $pidFile
+}
+
 $bootstrapServices = @($services | Where-Object {
     $_.Name -in @("discovery-server", "identity-access-service")
 })
 $applicationServices = @($services | Where-Object {
     $_.Name -notin @("discovery-server", "identity-access-service")
 })
+$databaseServices = @($applicationServices | Where-Object { $_.DatabaseBacked })
+$nonDatabaseServices = @($applicationServices | Where-Object { -not $_.DatabaseBacked })
+
+$databaseBatchSize = if ([string]::IsNullOrWhiteSpace($env:MONEYBAGS_DATABASE_BATCH_SIZE)) {
+    2
+} else {
+    [Math]::Max(1, [int]$env:MONEYBAGS_DATABASE_BATCH_SIZE)
+}
+$databaseBatchWaitSeconds = if ([string]::IsNullOrWhiteSpace($env:MONEYBAGS_DATABASE_BATCH_WAIT_SECONDS)) {
+    90
+} else {
+    [Math]::Max(20, [int]$env:MONEYBAGS_DATABASE_BATCH_WAIT_SECONDS)
+}
+$oracleRetryAttempts = if ([string]::IsNullOrWhiteSpace($env:MONEYBAGS_ORACLE_RETRY_ATTEMPTS)) {
+    2
+} else {
+    [Math]::Max(0, [int]$env:MONEYBAGS_ORACLE_RETRY_ATTEMPTS)
+}
 
 foreach ($service in $bootstrapServices) {
     $processes += Start-MoneybagsService -Service $service
 }
+Save-MoneybagsProcessIds
 
 $null = Wait-MoneybagsPorts -ServicesToWaitFor $bootstrapServices `
     -TimeoutSeconds $bootstrapStartupSeconds `
     -Message "Starting Discovery and Identity concurrently..."
 
-foreach ($service in $applicationServices) {
-    $processes += Start-MoneybagsService -Service $service
+for ($offset = 0; $offset -lt $databaseServices.Count; $offset += $databaseBatchSize) {
+    $lastIndex = [Math]::Min($offset + $databaseBatchSize - 1, $databaseServices.Count - 1)
+    $batch = @($databaseServices[$offset..$lastIndex])
+    foreach ($service in $batch) {
+        $processes += Start-MoneybagsService -Service $service
+    }
+    Save-MoneybagsProcessIds
+
+    $batchNumber = [int]($offset / $databaseBatchSize) + 1
+    $null = Wait-MoneybagsPorts -ServicesToWaitFor $batch `
+        -TimeoutSeconds $databaseBatchWaitSeconds `
+        -Message ("Starting database service batch " + $batchNumber + " of " + [Math]::Ceiling($databaseServices.Count / $databaseBatchSize) + "...")
+
+    $retryCandidates = @($batch | Where-Object {
+        -not (Test-MoneybagsPort -Port $_.Port) -and (Test-MoneybagsTransientOracleFailure -Service $_)
+    })
+    for ($attempt = 1; $attempt -le $oracleRetryAttempts -and $retryCandidates.Count -gt 0; $attempt++) {
+        Write-Warning ("Retrying transient Oracle connection failures (attempt " + $attempt + "): " + ($retryCandidates.Name -join ", "))
+        Start-Sleep -Seconds (5 * $attempt)
+        foreach ($service in $retryCandidates) {
+            $processes += Start-MoneybagsService -Service $service
+        }
+        Save-MoneybagsProcessIds
+        $null = Wait-MoneybagsPorts -ServicesToWaitFor $retryCandidates `
+            -TimeoutSeconds $databaseBatchWaitSeconds `
+            -Message "Waiting for Oracle retry batch..."
+        $retryCandidates = @($retryCandidates | Where-Object {
+            -not (Test-MoneybagsPort -Port $_.Port) -and (Test-MoneybagsTransientOracleFailure -Service $_)
+        })
+    }
 }
 
-# Persist launchers before readiness polling so stop-all.ps1 can always clean up
-# a partially started concurrent launch.
-$processes | ConvertTo-Json | Set-Content -LiteralPath $pidFile
+foreach ($service in $nonDatabaseServices) {
+    $processes += Start-MoneybagsService -Service $service
+}
+Save-MoneybagsProcessIds
 
-Write-Host ("Launched " + $applicationServices.Count + " application services concurrently.") -ForegroundColor Cyan
+Write-Host ("Launched " + $databaseServices.Count + " database services in batches of " + $databaseBatchSize + "; launched " + $nonDatabaseServices.Count + " non-database services concurrently.") -ForegroundColor Cyan
 $null = Wait-MoneybagsPorts -ServicesToWaitFor $services `
     -TimeoutSeconds $finalStartupSeconds `
     -Message "Waiting for all service ports..."

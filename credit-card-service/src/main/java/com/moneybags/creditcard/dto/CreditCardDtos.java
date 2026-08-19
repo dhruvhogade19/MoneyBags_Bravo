@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 public final class CreditCardDtos {
@@ -92,4 +93,16 @@ public final class CreditCardDtos {
     public record EodReadinessResponse(boolean readyForEod, long activeAccountCount, long blockedAccountCount,
                                        long pendingApplicationCount, List<String> closureBlockers) {
     }
+
+    /** Trusted read model consumed by Statements Service; it deliberately contains no card PAN. */
+    public record StatementAccountContext(String accountId, String maskedAccountReference,
+                                          String accountType, String currency,
+                                          List<String> customerIds) { }
+
+    public record StatementActivity(String transactionId, String paymentId, String direction,
+                                    BigDecimal amount, String currency, OffsetDateTime occurredAt) { }
+
+    public record CreditCardStatementSource(List<StatementActivity> activities,
+                                            BigDecimal openingBalance, BigDecimal closingBalance,
+                                            String currency) { }
 }

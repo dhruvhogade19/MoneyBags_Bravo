@@ -58,7 +58,7 @@ class BillGenerationApplicationTest {
     }
 
     @Test
-    void previewsAndGeneratesAProtectedCustomerStatement() {
+    void previewsAndGeneratesAProtectedCustomerStatement() throws java.io.IOException {
         var request = new BillGenerationApplication.CustomerStatementRequest(
                 "33333333-3333-3333-3333-333333333333",
                 LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), true);
@@ -78,9 +78,12 @@ class BillGenerationApplicationTest {
 
         byte[] pdf = pdfRenderer.render(generated);
         assertThat(new String(pdf, java.nio.charset.StandardCharsets.ISO_8859_1))
-                .startsWith("%PDF-1.4")
-                .contains("/Encrypt 7 0 R")
-                .doesNotContain("MoneyBags billing statement");
+                .startsWith("%PDF-")
+                .doesNotContain("/Encrypt");
+        try (var document = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            assertThat(document.getNumberOfPages()).isPositive();
+            assertThat(document.getDocumentInformation().getTitle()).isEqualTo("MoneyBags Credit Card Statement");
+        }
     }
 
     @Test

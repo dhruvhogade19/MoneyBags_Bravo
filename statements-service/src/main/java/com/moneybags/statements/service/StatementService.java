@@ -126,6 +126,8 @@ public class StatementService {
         List<StatementLineView> result = new ArrayList<>();
         BigDecimal totalDebits = zero();
         BigDecimal totalCredits = zero();
+        boolean creditCard = "CREDIT_CARD".equals(context.accountType());
+        BigDecimal runningBalance = money(data.openingBalance());
         boolean everyLineMatched = true;
 
         for (DepositActivity value : activities) {
@@ -136,16 +138,19 @@ public class StatementService {
             if (ledger == null) everyLineMatched = false;
             totalDebits = totalDebits.add(debit);
             totalCredits = totalCredits.add(credit);
+            runningBalance = creditCard ? runningBalance.add(debit).subtract(credit)
+                    : money(value.balanceAfter());
             result.add(new StatementLineView(result.size() + 1, value.transactionId(),
                     value.paymentId(), value.createdAt(),
                     ledger == null ? fallbackDescription(value) : ledger.narration(),
-                    debit, credit, money(value.balanceAfter()),
+                    debit, credit, runningBalance,
                     ledger == null ? null : ledger.journalNumber()));
         }
 
         BigDecimal opening = money(data.openingBalance());
         BigDecimal closing = money(data.closingBalance());
-        BigDecimal projected = opening.subtract(totalDebits).add(totalCredits)
+        BigDecimal projected = (creditCard ? opening.add(totalDebits).subtract(totalCredits)
+                : opening.subtract(totalDebits).add(totalCredits))
                 .setScale(4, RoundingMode.HALF_EVEN);
         boolean currencyMatches = context.currency().trim().equals(data.currency().trim())
                 && activities.stream().allMatch(value -> context.currency().trim()

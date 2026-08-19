@@ -81,6 +81,27 @@ class StatementServiceTest {
     }
 
     @Test
+    void returnsCreditCardChargesAsDebitsAndPaymentsAsCredits() {
+        OffsetDateTime purchase = start.atTime(10, 0).atOffset(ZoneOffset.UTC);
+        OffsetDateTime payment = start.plusDays(1).atTime(10, 0).atOffset(ZoneOffset.UTC);
+        when(source.context("CC-1")).thenReturn(new AccountContext("CC-1", "XXXXXXXXXXXX1234",
+                "CREDIT_CARD", "INR", List.of("1001")));
+        when(source.load("CC-1", start, end)).thenReturn(new StatementSource(List.of(), List.of(
+                new DepositActivity("HOLD-1", "PURCHASE-1", "DEBIT", new BigDecimal("200.0000"),
+                        "INR", null, null, purchase),
+                new DepositActivity("PAY-1", "PAYMENT-1", "CREDIT", new BigDecimal("50.0000"),
+                        "INR", null, null, payment)), new BigDecimal("100.0000"),
+                new BigDecimal("250.0000"), "INR"));
+
+        var result = service.activity("CC-1", start, end, "1001", false);
+
+        assertTrue(result.reconciled());
+        assertEquals(new BigDecimal("250.0000"), result.closingBalance());
+        assertEquals(new BigDecimal("300.0000"), result.lines().getFirst().balanceAfter());
+        assertEquals(new BigDecimal("250.0000"), result.lines().get(1).balanceAfter());
+    }
+
+    @Test
     void refusesOfficialPdfWhenAccountingReconciliationIsRequired() {
         OffsetDateTime occurredAt = start.atTime(10, 0).atOffset(ZoneOffset.UTC);
         when(source.load("ACC-1", start, end)).thenReturn(new StatementSource(List.of(),
