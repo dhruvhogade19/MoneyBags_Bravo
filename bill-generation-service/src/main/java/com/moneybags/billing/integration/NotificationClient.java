@@ -9,12 +9,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Map;
@@ -39,34 +37,32 @@ public class NotificationClient {
         this.stub = stub;
     }
 
-    public void sendBillGenerated(long cifId, String billId, String billingPeriod, String currency,
-                                  BigDecimal totalAmount, LocalDate dueDate) {
+    public void sendBillGenerated(long cifId, String billId, LocalDate periodStart, LocalDate periodEnd,
+                                  String currency, BigDecimal totalAmount, LocalDate dueDate) {
         if (stub) {
             return;
         }
 
-        YearMonth period = YearMonth.parse(billingPeriod);
-        String displayPeriod = period.atDay(1).format(BILLING_DATE)
-                + " - " + period.atEndOfMonth().format(BILLING_DATE);
-        Map<String, String> templateVariables = Map.of(
-                "billId", billId,
-                "billingPeriod", displayPeriod,
-                "currency", currency.trim(),
-                "totalAmount", totalAmount.setScale(2, RoundingMode.HALF_UP).toPlainString(),
-                "dueDate", dueDate.toString());
-        NotificationRequest request = new NotificationRequest(
-                cifId, "BILL_GENERATED", billId, templateVariables);
-
         try {
+            String displayPeriod = periodStart.format(BILLING_DATE) + " - " + periodEnd.format(BILLING_DATE);
+            Map<String, String> templateVariables = Map.of(
+                    "billId", billId,
+                    "billingPeriod", displayPeriod,
+                    "currency", currency.trim(),
+                    "totalAmount", totalAmount.setScale(2, RoundingMode.HALF_UP).toPlainString(),
+                    "dueDate", dueDate.toString());
+            NotificationRequest request = new NotificationRequest(
+                    cifId, "BILL_GENERATED", billId, templateVariables);
             restClient.post()
                     .uri("/internal/v1/notifications")
                     .header("Idempotency-Key", "bill-" + billId + "-generated")
                     .body(request)
                     .retrieve()
                     .toBodilessEntity();
-        } catch (RestClientException exception) {
+        } catch (RuntimeException exception) {
             // The bill and its financial postings are authoritative. Email delivery is a
-            // secondary side effect and must not roll back an otherwise valid bill.
+            // secondary side effect and must not roll back an otherwise valid bill. Keep
+            // formatting failures inside this boundary for the same reason.
             log.warn("Bill {} was generated, but its notification could not be delivered", billId, exception);
         }
     }

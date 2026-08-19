@@ -41,7 +41,7 @@ public class RealCreditCardClient implements CreditCardClient {
   public CardAccountResponse payBill(String accountId, String paymentId, BigDecimal amount,
                                      String correlationId) {
     return post("/api/credit-cards/accounts/" + accountId + "/payments/billpaid",
-        new CardBillPaymentRequest(amount), "PAYMENT:" + paymentId + ":BILLPAID",
+        new CardBillPaymentRequest(paymentId, amount), "PAYMENT:" + paymentId + ":BILLPAID",
         correlationId, CardAccountResponse.class);
   }
 

@@ -17,6 +17,7 @@ public class DemoCreditCardClient implements CreditCardClient {
   private final AtomicLong sequence = new AtomicLong(500);
   private final Map<String, CardHoldResponse> holdsByPayment = new ConcurrentHashMap<>();
   private final Map<String, BigDecimal> outstanding = new ConcurrentHashMap<>();
+  private final Map<String, CardBillPayment> billPayments = new ConcurrentHashMap<>();
 
   @Override
   public CardHoldResponse createHold(String accountId, String paymentId, BigDecimal amount,
@@ -60,6 +61,14 @@ public class DemoCreditCardClient implements CreditCardClient {
   @Override
   public CardAccountResponse payBill(String accountId, String paymentId, BigDecimal amount,
                                      String correlationId) {
+    CardBillPayment prior = billPayments.get(paymentId);
+    if (prior != null) {
+      if (!prior.accountId().equals(accountId) || prior.amount().compareTo(amount) != 0) {
+        throw new PeerServiceException("CREDIT-CARD-SERVICE", 409,
+            "PAYMENT_ID_CONFLICT", "Payment ID was already used for a different card repayment");
+      }
+      return prior.response();
+    }
     BigDecimal current = outstanding.computeIfAbsent(accountId,
         ignored -> new BigDecimal("50000.00"));
     if (amount.compareTo(current) > 0) {
@@ -69,10 +78,14 @@ public class DemoCreditCardClient implements CreditCardClient {
     BigDecimal remaining = current.subtract(amount);
     outstanding.put(accountId, remaining);
     BigDecimal sanctioned = new BigDecimal("100000.00");
-    return new CardAccountResponse(accountId, "1001", 101L, "PLATINUM_CARD",
+    CardAccountResponse response = new CardAccountResponse(accountId, "1001", 101L, "PLATINUM_CARD",
         "4000********9012", sanctioned, new BigDecimal("18.0000"),
         sanctioned.subtract(remaining), remaining, "ACTIVE", Instant.now());
+    billPayments.put(paymentId, new CardBillPayment(accountId, amount, response));
+    return response;
   }
+
+  private record CardBillPayment(String accountId, BigDecimal amount, CardAccountResponse response) { }
 
   private CardHoldResponse find(String holdId) {
     return holdsByPayment.values().stream()

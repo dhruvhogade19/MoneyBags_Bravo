@@ -11,6 +11,7 @@ import com.moneybags.creditcard.repository.CreditCardAccountRepository;
 import com.moneybags.creditcard.repository.CreditCardApplicationRepository;
 import com.moneybags.creditcard.repository.CreditCardHoldRepository;
 import com.moneybags.creditcard.repository.CreditCardBillingChargeRepository;
+import com.moneybags.creditcard.repository.CreditCardBillPaymentRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -30,9 +31,10 @@ class CreditCardApplicationDecisionTest {
     private final CreditCardAccountService accountService = mock(CreditCardAccountService.class);
     private final CreditCardHoldRepository holds = mock(CreditCardHoldRepository.class);
     private final CreditCardBillingChargeRepository billingCharges = mock(CreditCardBillingChargeRepository.class);
+    private final CreditCardBillPaymentRepository billPayments = mock(CreditCardBillPaymentRepository.class);
     private final CreditCardReferenceGateway references = mock(CreditCardReferenceGateway.class);
     private final AccountingLifecycleGateway accounting = mock(AccountingLifecycleGateway.class);
-    private final CreditCardService service = new CreditCardService(applications, accounts, accountService, holds, billingCharges, references, accounting);
+    private final CreditCardService service = new CreditCardService(applications, accounts, accountService, holds, billingCharges, billPayments, references, accounting);
 
     @Test
     void eligibleApplicationIsPendingForAdminReview() {

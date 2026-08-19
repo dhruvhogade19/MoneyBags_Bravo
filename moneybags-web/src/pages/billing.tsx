@@ -89,7 +89,7 @@ export function BillingDashboardPage() {
   };
 
   return <>
-    <PageHeader title="Billing dashboard" description="Create, review and pay your MoneyBags credit-card statements." action={<button class="mb-button mb-button-primary" disabled={!cards.some(card => card.status === "ACTIVE")} onClick={() => navigate("/app/bills/generate")}>Generate bill</button>} />
+    <PageHeader title="Billing dashboard" description="View and pay your MoneyBags credit-card statements." />
     {actionError && <ErrorState error={actionError} />}
     <section class="mb-billing-hero" aria-label="Billing summary">
       <article class="mb-billing-balance">
@@ -102,7 +102,7 @@ export function BillingDashboardPage() {
     <Panel title="Billing history">
       {bills.length ? <div class="mb-table-wrap" id="billing-history"><table class="mb-table"><thead><tr><th>Billing period</th><th>Account</th><th>Amount due</th><th>Generated</th><th>Payment status</th><th>Reference</th><th>Actions</th></tr></thead><tbody>
         {bills.map(bill => <tr key={bill.billId}><td>{formatDate(bill.periodStart)} – {formatDate(bill.periodEnd)}</td><td>{mask(bill.accountId)}</td><td><Money value={bill.totalAmountDue} currency={bill.currency} /></td><td>{formatDate(bill.generatedAt)}</td><td><Status value={bill.status} /></td><td>{bill.billId}</td><td><div class="mb-row-actions"><button disabled={pdfBusy === `${bill.billId}-inline`} onClick={() => openPdf(bill, "inline")}>View</button><button disabled={pdfBusy === `${bill.billId}-attachment`} onClick={() => openPdf(bill, "attachment")}>Download</button>{isBillPayable(bill.status,bill.outstandingAmount) && <button onClick={() => navigate(`/app/bills/${bill.billId}/pay`)}>Pay</button>}</div></td></tr>)}
-      </tbody></table></div> : <EmptyState title="No billing statements yet" message="Generate your first statement from an active credit-card account. It will then appear here for viewing and download." />}
+      </tbody></table></div> : <EmptyState title="No billing statements yet" message="Your statement will appear here after the billing cycle is processed. You will be notified when it is ready." />}
     </Panel>
   </>;
 }

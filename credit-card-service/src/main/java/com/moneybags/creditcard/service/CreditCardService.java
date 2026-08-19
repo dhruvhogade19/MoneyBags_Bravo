@@ -9,6 +9,7 @@ import com.moneybags.creditcard.entity.CreditCardAccount;
 import com.moneybags.creditcard.entity.CreditCardApplication;
 import com.moneybags.creditcard.entity.CreditCardHold;
 import com.moneybags.creditcard.entity.CreditCardBillingCharge;
+import com.moneybags.creditcard.entity.CreditCardBillPayment;
 import com.moneybags.creditcard.exception.ApiException;
 import com.moneybags.creditcard.integration.CreditCardReferenceGateway;
 import com.moneybags.creditcard.integration.AccountingLifecycleGateway;
@@ -16,6 +17,7 @@ import com.moneybags.creditcard.repository.CreditCardAccountRepository;
 import com.moneybags.creditcard.repository.CreditCardApplicationRepository;
 import com.moneybags.creditcard.repository.CreditCardHoldRepository;
 import com.moneybags.creditcard.repository.CreditCardBillingChargeRepository;
+import com.moneybags.creditcard.repository.CreditCardBillPaymentRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,18 +36,20 @@ public class CreditCardService {
     private final CreditCardAccountService accountService;
     private final CreditCardHoldRepository holds;
     private final CreditCardBillingChargeRepository billingCharges;
+    private final CreditCardBillPaymentRepository billPayments;
     private final CreditCardReferenceGateway references;
     private final AccountingLifecycleGateway accounting;
 
     public CreditCardService(CreditCardApplicationRepository applications, CreditCardAccountRepository accounts,
                              CreditCardAccountService accountService, CreditCardHoldRepository holds,
-                             CreditCardBillingChargeRepository billingCharges,
+                             CreditCardBillingChargeRepository billingCharges, CreditCardBillPaymentRepository billPayments,
                              CreditCardReferenceGateway references, AccountingLifecycleGateway accounting) {
         this.applications = applications;
         this.accounts = accounts;
         this.accountService = accountService;
         this.holds = holds;
         this.billingCharges = billingCharges;
+        this.billPayments = billPayments;
         this.references = references;
         this.accounting = accounting;
     }
@@ -248,6 +252,28 @@ public class CreditCardService {
         a.outstandingAmount = a.outstandingAmount.subtract(amountApplied);
         a.availableLimit = a.availableLimit.add(amountApplied);
         return account(a);
+    }
+
+    @Transactional
+    public AccountResponse billPaid(Long id, BillPaymentRequest request) {
+        var account = lockAccount(id);
+        var existing = billPayments.findById(request.paymentId());
+        if (existing.isPresent()) {
+            var applied = existing.get();
+            if (!applied.accountId.equals(id) || applied.amount.compareTo(request.amount()) != 0) {
+                throw new ApiException(HttpStatus.CONFLICT,
+                        "Payment identifier was already used for a different card repayment");
+            }
+            return account(account);
+        }
+        if (request.amount().compareTo(account.outstandingAmount) > 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Repayment exceeds the current card outstanding amount");
+        }
+        account.outstandingAmount = account.outstandingAmount.subtract(request.amount());
+        account.availableLimit = account.availableLimit.add(request.amount());
+        billPayments.save(new CreditCardBillPayment(request.paymentId(), id, request.amount()));
+        return account(account);
     }
 
     @Transactional

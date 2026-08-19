@@ -61,7 +61,7 @@ public final class IntegrationDtos {
       Long holdId, Long accountId, String referenceId, BigDecimal amount,
       String status, Instant createdAt) { }
 
-  public record CardBillPaymentRequest(BigDecimal amount) { }
+  public record CardBillPaymentRequest(String paymentId, BigDecimal amount) { }
   public record CardAccountResponse(
       String accountId, String applicationId, Long cifId, String productCode,
       String cardNumber, BigDecimal sanctionedLimit,

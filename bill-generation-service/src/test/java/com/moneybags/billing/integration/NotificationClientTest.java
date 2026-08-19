@@ -44,7 +44,8 @@ class NotificationClientTest {
                         """))
                 .andRespond(withSuccess());
 
-        client.sendBillGenerated(101L, "BILL-202608-001", "2026-08", "INR",
+        client.sendBillGenerated(101L, "BILL-202608-001",
+                LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31), "INR",
                 new BigDecimal("8400.0000"), LocalDate.of(2026, 9, 15));
 
         server.verify();
@@ -58,9 +59,17 @@ class NotificationClientTest {
                 builder.baseUrl("http://localhost:8090").build(), false);
 
         server.expect(once(), requestTo("http://localhost:8090/internal/v1/notifications"))
+                .andExpect(content().json("""
+                        {
+                          "templateVariables": {
+                            "billingPeriod": "01 Aug 2026 - 19 Aug 2026"
+                          }
+                        }
+                        """))
                 .andRespond(withServerError());
 
-        client.sendBillGenerated(101L, "BILL-202608-002", "2026-08", "INR",
+        client.sendBillGenerated(101L, "BILL-202608-002",
+                LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 19), "INR",
                 new BigDecimal("8400.00"), LocalDate.of(2026, 9, 15));
 
         server.verify();

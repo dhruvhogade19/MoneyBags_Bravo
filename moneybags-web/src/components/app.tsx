@@ -13,7 +13,7 @@ import {
   KycPage, MerchantPaymentPage, NotificationsPage, PaymentDetailPage, PaymentsPage,
   ProductsPage, ProfilePage, RepaymentsPage, StatementsPage, TransferPage
 } from "../pages/customer";
-import { BillingDashboardPage, BillingStatementWizard } from "../pages/billing";
+import { BillingDashboardPage } from "../pages/billing";
 import { AdminBillingStatementWizard } from "../pages/admin-billing";
 import {
   DepositAccountClosePage, DepositAccountDetailPage, DepositAccountManagePage,
@@ -74,7 +74,7 @@ function matchRoute(path: string): ComponentChildren {
     "/app/cards": <CardsPage />, "/app/cards/apply": <CardApplyPage />,
     "/app/payments": <PaymentsPage />, "/app/payments/transfer": <TransferPage />,
     "/app/payments/merchant": <MerchantPaymentPage />, "/app/payments/repay": <RepaymentsPage />,
-    "/app/bills": <BillingDashboardPage />, "/app/bills/generate": <BillingStatementWizard />, "/app/statements": <StatementsPage />,
+    "/app/bills": <BillingDashboardPage />, "/app/statements": <StatementsPage />,
     "/app/notifications": <NotificationsPage />,
     "/ops/overview": <OperationsDashboard />, "/ops/kyc": <KycWorkQueue />,
     "/ops/products": <ProductAdministration />,

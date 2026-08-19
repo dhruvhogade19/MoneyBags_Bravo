@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.*;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -24,6 +25,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
@@ -47,6 +53,8 @@ import java.util.*;
 
 @SpringBootApplication
 public class BillGenerationApplication {
+    private static final Duration BILL_IDEMPOTENCY_RETENTION = Duration.ofHours(24);
+
     public static void main(String[] args) {
         SpringApplication.run(BillGenerationApplication.class, args);
     }
@@ -246,7 +254,7 @@ public class BillGenerationApplication {
     }
 
     @Entity(name = "Idempotency")
-    @Table(name = "IDEMPOTENCY_RECORD")
+    @Table(name = "BILL_IDEMPOTENCY_RECORD")
     public static class Idempotency {
         @Id
         @Column(name = "RECORD_ID")
@@ -268,6 +276,8 @@ public class BillGenerationApplication {
         String resourceId;
         @Column(name = "CREATED_AT")
         OffsetDateTime createdAt;
+        @Column(name = "EXPIRES_AT", nullable = false)
+        OffsetDateTime expiresAt;
 
         protected Idempotency() {
         }
@@ -280,11 +290,12 @@ public class BillGenerationApplication {
             processingStatus = "COMPLETED";
             resourceId = resource;
             createdAt = OffsetDateTime.now(ZoneOffset.UTC);
+            expiresAt = createdAt.plus(BILL_IDEMPOTENCY_RETENTION);
         }
     }
 
     @Entity(name = "Audit")
-    @Table(name = "AUDIT_LOG")
+    @Table(name = "BILL_AUDIT_LOG")
     public static class Audit {
         @Id
         @Column(name = "AUDIT_ID")
@@ -598,15 +609,24 @@ public class BillGenerationApplication {
                                                CalculatedStatement calculated) {
             String keyHash = sha(key), requestHash = sha(accountReference + "|" + period + "|" + businessDate + "|" + saveToHistory);
             List<Idempotency> known = em.createQuery("select i from Idempotency i where i.scope=:s and i.keyHash=:k", Idempotency.class).setParameter("s", "BILL_GENERATE").setParameter("k", keyHash).getResultList();
-            if (!known.isEmpty()) {
+            OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+            if (!known.isEmpty() && known.getFirst().expiresAt.isAfter(now)) {
                 if (!known.getFirst().requestHash.equals(requestHash))
                     throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_CONFLICT", "Idempotency key was used with a different request");
                 return get(known.getFirst().resourceId);
             }
+            // The unique key covers the documented 24-hour window only;
+            // removing an expired record does not affect any bill or audit row.
+            known.forEach(em::remove);
             List<Bill> duplicates = duplicateBills(accountReference, period);
             if (!duplicates.isEmpty())
                 throw new ApiException(HttpStatus.CONFLICT, "BILL_ALREADY_EXISTS", "A bill already exists for this account and period");
-            String billId = UUID.randomUUID().toString();
+            // Account + period is already a domain uniqueness boundary. A deterministic
+            // aggregate id lets downstream Accounting/Card idempotency replay safely if
+            // this local transaction is retried after a partial cross-service failure.
+            String billId = UUID.nameUUIDFromBytes(
+                    ("moneybags-bill|" + accountReference + "|" + period)
+                            .getBytes(StandardCharsets.UTF_8)).toString();
             Bill bill = new Bill(billId, accountReference, calculated.card.cifId, calculated.product.code, period,
                     calculated.periodStart, calculated.periodEnd, businessDate, calculated.product.currency,
                     calculated.openingBalance, calculated.totalDue, calculated.minimumDue,
@@ -622,8 +642,9 @@ public class BillGenerationApplication {
                     calculated.product.currency, calculated.lines.stream()
                             .filter(l -> Set.of("INTEREST", "LATE_FEE", "ANNUAL_FEE", "PENALTY", "TAX")
                                     .contains(l.type)).toList());
-            notifications.sendBillGenerated(calculated.card.cifId, billId, period,
-                    calculated.product.currency, calculated.totalDue, bill.paymentDueDate);
+            notifications.sendBillGenerated(calculated.card.cifId, billId,
+                    calculated.periodStart, calculated.periodEnd, calculated.product.currency,
+                    calculated.totalDue, bill.paymentDueDate);
             return toResponse(bill, calculated.lines);
         }
 
@@ -927,6 +948,10 @@ public class BillGenerationApplication {
         @ConditionalOnProperty(name = "moneybags.security.enabled", havingValue = "true")
         SecurityFilterChain secured(HttpSecurity http) throws Exception {
             return http.csrf(c -> c.disable()).authorizeHttpRequests(a -> a
+                    // Preserve the original validation/business status when Spring
+                    // performs its internal error dispatch. This does not expose a
+                    // public endpoint; the initial request is still fully authorized.
+                    .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                     .requestMatchers("/actuator/health/**").permitAll()
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("BANK_ADMIN")
                     .requestMatchers("/internal/**").hasAuthority("SCOPE_billing:service")
@@ -934,10 +959,59 @@ public class BillGenerationApplication {
                     .hasAnyAuthority("SCOPE_billing:read", "SCOPE_billing:admin")
                     .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/bills", "/api/v1/bills/preview")
                     .hasAuthority("SCOPE_billing:read")
-                    .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/bills/admin/**")
-                    .hasAuthority("SCOPE_billing:admin")
+                    // Keep the collection endpoint explicit. With PathPattern matching,
+                    // /admin/** does not authorize POST /admin itself.
+                    .requestMatchers(org.springframework.http.HttpMethod.POST,
+                            "/api/v1/bills/admin", "/api/v1/bills/admin/**")
+                    .hasAnyAuthority("SCOPE_billing:admin", "ROLE_BANK_ADMIN")
                     .anyRequest().denyAll())
-                    .oauth2ResourceServer(o -> o.jwt(j -> { })).build();
+                    .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(jwtAuthenticationConverter())))
+                    .exceptionHandling(errors -> errors
+                            .authenticationEntryPoint((request, response, failure) ->
+                                    writeSecurityProblem(request, response, HttpStatus.UNAUTHORIZED,
+                                            "Authentication required", "A valid MoneyBags session is required."))
+                            .accessDeniedHandler((request, response, failure) -> {
+                                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                                org.slf4j.LoggerFactory.getLogger(Security.class).warn(
+                                        "Billing access denied method={} path={} principal={} authorities={}",
+                                        request.getMethod(), request.getRequestURI(),
+                                        authentication == null ? "anonymous" : authentication.getName(),
+                                        authentication == null ? List.of() : authentication.getAuthorities());
+                                writeSecurityProblem(request, response, HttpStatus.FORBIDDEN,
+                                        "Access denied", "Your signed-in account does not grant this billing operation.");
+                            }))
+                    .build();
+        }
+
+        private static void writeSecurityProblem(HttpServletRequest request, HttpServletResponse response,
+                                                 HttpStatus status, String title, String detail) throws IOException {
+            String correlationId = Optional.ofNullable(request.getHeader("X-Correlation-ID"))
+                    .filter(value -> value.matches("[0-9a-fA-F-]{36}"))
+                    .orElseGet(() -> UUID.randomUUID().toString());
+            response.setStatus(status.value());
+            response.setContentType("application/problem+json");
+            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+            response.setHeader("X-Correlation-ID", correlationId);
+            response.getWriter().write("{\"type\":\"about:blank\",\"title\":\"" + title
+                    + "\",\"status\":" + status.value() + ",\"detail\":\"" + detail
+                    + "\",\"instance\":\"" + request.getRequestURI()
+                    + "\",\"correlationId\":\"" + correlationId + "\"}");
+        }
+
+        /** Maps the signed Identity roles claim alongside the standard OAuth scopes. */
+        static JwtAuthenticationConverter jwtAuthenticationConverter() {
+            JwtGrantedAuthoritiesConverter scopes = new JwtGrantedAuthoritiesConverter();
+            JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+            converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+                var authorities = new ArrayList<>(scopes.convert(jwt));
+                List<String> roles = jwt.getClaimAsStringList("roles");
+                if (roles != null) {
+                    roles.stream().map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                            .forEach(authorities::add);
+                }
+                return authorities;
+            });
+            return converter;
         }
     }
 }

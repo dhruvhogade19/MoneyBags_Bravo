@@ -37,7 +37,7 @@
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"amount\": 30000.00\n}" },
+        "body": { "mode": "raw", "raw": "{\n  \"paymentId\": \"PAY-BILL-001\",\n  \"amount\": 30000.00\n}" },
         "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/payments/billpaid"
       }
     },
@@ -46,16 +46,16 @@
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"amount\": 50000.00\n}" },
+        "body": { "mode": "raw", "raw": "{\n  \"paymentId\": \"PAY-BILL-002\",\n  \"amount\": 50000.00\n}" },
         "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/payments/billpaid"
       }
     },
     {
-      "name": "Bill paid - amount above outstanding is accepted",
+      "name": "Bill paid - amount above outstanding is rejected",
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"amount\": 60000.00\n}" },
+        "body": { "mode": "raw", "raw": "{\n  \"paymentId\": \"PAY-BILL-OVERPAY\",\n  \"amount\": 60000.00\n}" },
         "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/payments/billpaid"
       }
     },
@@ -64,7 +64,7 @@
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"amount\": 0\n}" },
+        "body": { "mode": "raw", "raw": "{\n  \"paymentId\": \"PAY-BILL-ZERO\",\n  \"amount\": 0\n}" },
         "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/payments/billpaid"
       }
     },
@@ -73,7 +73,7 @@
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"amount\": -1.00\n}" },
+        "body": { "mode": "raw", "raw": "{\n  \"paymentId\": \"PAY-BILL-NEGATIVE\",\n  \"amount\": -1.00\n}" },
         "url": "{{baseUrl}}/api/credit-cards/accounts/{{accountId}}/payments/billpaid"
       }
     },

@@ -7,3 +7,5 @@ databaseChangeLog:
       file: db/migration/V3__add_cif_snapshots.sql
   - include:
       file: db/migration/V4__create_credit_card_billing_charge.sql
+  - include:
+      file: db/migration/V5__create_credit_card_bill_payment.sql

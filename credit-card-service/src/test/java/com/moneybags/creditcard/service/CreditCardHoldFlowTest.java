@@ -4,6 +4,7 @@ import com.moneybags.creditcard.domain.CreditCardTypes.AccountStatus;
 import com.moneybags.creditcard.domain.CreditCardTypes.HoldStatus;
 import com.moneybags.creditcard.dto.CreditCardDtos.AmountRequest;
 import com.moneybags.creditcard.dto.CreditCardDtos.BillingChargeRequest;
+import com.moneybags.creditcard.dto.CreditCardDtos.BillPaymentRequest;
 import com.moneybags.creditcard.dto.CreditCardDtos.HoldRequest;
 import com.moneybags.creditcard.entity.CreditCardAccount;
 import com.moneybags.creditcard.entity.CreditCardBillingCharge;
@@ -15,6 +16,7 @@ import com.moneybags.creditcard.repository.CreditCardAccountRepository;
 import com.moneybags.creditcard.repository.CreditCardApplicationRepository;
 import com.moneybags.creditcard.repository.CreditCardHoldRepository;
 import com.moneybags.creditcard.repository.CreditCardBillingChargeRepository;
+import com.moneybags.creditcard.repository.CreditCardBillPaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +38,7 @@ class CreditCardHoldFlowTest {
     @Mock private CreditCardAccountService accountService;
     @Mock private CreditCardHoldRepository holds;
     @Mock private CreditCardBillingChargeRepository billingCharges;
+    @Mock private CreditCardBillPaymentRepository billPayments;
     @Mock private CreditCardReferenceGateway references;
     @Mock private AccountingLifecycleGateway accounting;
 
@@ -44,7 +47,7 @@ class CreditCardHoldFlowTest {
 
     @BeforeEach
     void setUp() {
-        service = new CreditCardService(applications, accounts, accountService, holds, billingCharges, references, accounting);
+        service = new CreditCardService(applications, accounts, accountService, holds, billingCharges, billPayments, references, accounting);
         account = new CreditCardAccount();
         account.id = 10L;
         account.status = AccountStatus.ACTIVE;
@@ -164,6 +167,22 @@ class CreditCardHoldFlowTest {
 
         assertEquals(new BigDecimal("0.00"), account.outstandingAmount);
         assertEquals(new BigDecimal("100000.00"), account.availableLimit);
+    }
+
+    @Test
+    void paymentServiceRepaymentRecordsThePaymentAndRejectsAnOverpayment() {
+        account.outstandingAmount = new BigDecimal("50000.00");
+
+        service.billPaid(10L, new BillPaymentRequest("PAY-REPAY-1", new BigDecimal("30000.00")));
+
+        assertEquals(new BigDecimal("20000.00"), account.outstandingAmount);
+        verify(billPayments).save(argThat(payment -> payment.paymentId.equals("PAY-REPAY-1")
+                && payment.accountId.equals(10L) && payment.amount.compareTo(new BigDecimal("30000.00")) == 0));
+
+        account.outstandingAmount = new BigDecimal("100.00");
+        ApiException exception = assertThrows(ApiException.class, () -> service.billPaid(10L,
+                new BillPaymentRequest("PAY-REPAY-2", new BigDecimal("100.01"))));
+        assertEquals(409, exception.status.value());
     }
 
     @Test

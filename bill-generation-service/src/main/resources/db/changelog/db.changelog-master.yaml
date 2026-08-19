@@ -147,3 +147,43 @@ databaseChangeLog:
             path: db/changelog/changes/006-bill-idempotency-processing-status.sql
             splitStatements: true
             stripComments: true
+  - changeSet:
+      id: 007-bill-idempotency-expiry
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: IDEMPOTENCY_RECORD
+                columnName: EXPIRES_AT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/007-bill-idempotency-expiry.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 008-create-bill-idempotency-record
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: BILL_IDEMPOTENCY_RECORD
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/008-create-bill-idempotency-record.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 009-create-bill-audit-log
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: BILL_AUDIT_LOG
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/009-create-bill-audit-log.sql
+            splitStatements: true
+            stripComments: true
