@@ -96,7 +96,7 @@ Liquibase is the only schema-change mechanism. The master changelog is `src/main
 | `BILL_STATUS_HISTORY` | Lifecycle transitions and reasons |
 | `BILL_PAYMENT_ALLOCATION` | Payment-to-bill allocations; unique by payment ID |
 | `IDEMPOTENCY_RECORD` | Hashed generation idempotency keys and request data |
-| `AUDIT_LOG` | Successful bill-generation and settlement audit events |
+| `BILLS_AUDIT_LOG` | Successful bill-generation and settlement audit events |
 | `BILLING_CYCLE` | Billing-cycle reference data |
 
 Do not let another service query or modify these tables. Integrate through the endpoints above.

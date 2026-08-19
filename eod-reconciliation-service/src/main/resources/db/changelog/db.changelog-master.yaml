@@ -1,0 +1,56 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-eod-business-date
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: EOD_BUSINESS_DATE
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001-create-eod-business-date.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 002-create-eod-run
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: EOD_RUN
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/002-create-eod-run.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 003-create-eod-run-step
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: EOD_RUN_STEP
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/003-create-eod-run-step.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 004-create-eod-exception
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: EOD_EXCEPTION
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/004-create-eod-exception.sql
+            splitStatements: true
+            stripComments: true

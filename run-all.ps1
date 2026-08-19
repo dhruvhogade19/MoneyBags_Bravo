@@ -107,6 +107,7 @@ $services = @(
     @{ Name = "payments-service"; Directory = "payments-service"; Port = 8085; DatabaseBacked = $true },
     @{ Name = "deposit-account-service"; Directory = "deposit-account-service"; Port = 8086; DatabaseBacked = $true },
     @{ Name = "credit-card-service"; Directory = "credit-card-service"; Port = 8084; DatabaseBacked = $true },
+    @{ Name = "eod-reconciliation-service"; Directory = "eod-reconciliation-service"; Port = 8091; DatabaseBacked = $true },
     # The shared Oracle schema contains a legacy Accounting data model.  Until its
     # dedicated conversion migration is applied, use the self-contained demo profile.
     @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088; Profiles = "local" },
@@ -116,6 +117,32 @@ $services = @(
     @{ Name = "api-gateway"; Directory = "api-gateway"; Port = 8080 },
     @{ Name = "moneybags-web"; Directory = "moneybags-web"; Port = 8000; Command = "npm.cmd"; Arguments = "run serve:stack"; HealthPath = "/" }
 )
+
+# These are the modules supported by the full-stack scripts. Keep this assertion
+# separate from the launch loop so an accidental list edit cannot produce a
+# seemingly healthy stack with a gateway route whose service was never launched.
+$requiredServiceNames = @(
+    "discovery-server",
+    "identity-access-service",
+    "cif-service",
+    "kyc-service",
+    "product-master-service",
+    "payments-service",
+    "deposit-account-service",
+    "credit-card-service",
+    "accounting-service",
+    "notification-service",
+    "bill-generation-service",
+    "eod-reconciliation-service",
+    "statements-service",
+    "api-gateway",
+    "moneybags-web"
+)
+$configuredServiceNames = @($services | ForEach-Object { $_.Name })
+$missingServiceNames = @($requiredServiceNames | Where-Object { $_ -notin $configuredServiceNames })
+if ($missingServiceNames.Count -gt 0) {
+    throw ("run-all.ps1 is missing required services: " + ($missingServiceNames -join ", "))
+}
 
 function Test-MoneybagsPort {
     param(

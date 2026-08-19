@@ -27,6 +27,7 @@ import {
 } from "../pages/operations";
 import { DepositCustomerSearch, DepositOperationsDashboard, FixedDepositEodConsole } from "../pages/deposit-operations";
 import { AccountingConfigurationPage, AccountingOverviewPage, AccountingTransactionsPage } from "../pages/accounting";
+import { EodOperationsPage } from "../pages/eod";
 import { isNavigationPathActive } from "../utils";
 import { services } from "../services";
 
@@ -54,6 +55,7 @@ const operationsNavigation: NavigationItem[] = [
   { label: "Cards & billing", icon: "credit_card", path: "/ops/cards" },
   { label: "Generate bill", icon: "description", path: "/ops/bills/generate" },
   { label: "Payments", icon: "payments", path: "/ops/payments" },
+  { label: "EOD control", icon: "fact_check", path: "/ops/eod" },
   { label: "Customers & email", icon: "contact_mail", path: "/ops/customers" },
   { label: "Accounting overview", icon: "dashboard", path: "/ops/accounting/overview" },
   { label: "Journals & ledger", icon: "receipt_long", path: "/ops/accounting/transactions" },
@@ -92,7 +94,7 @@ function matchRoute(path: string): ComponentChildren {
     "/ops/bills/generate": <AdminBillingStatementWizard />,
     "/ops/payments": <PaymentOperations />,
     "/ops/customers": <CustomerNotificationOperations />,
-    "/ops/eod": <AccountingOverviewPage />,
+    "/ops/eod": <EodOperationsPage />,
     "/ops/access": <OperationsPlaceholder title="Access administration" description="Manage users, roles and client access." blocker="Identity supports user creation and lookup by ID, but it does not yet expose the list, search and role-lifecycle APIs required for an administration console." />
   };
   if (exact[path]) return exact[path];

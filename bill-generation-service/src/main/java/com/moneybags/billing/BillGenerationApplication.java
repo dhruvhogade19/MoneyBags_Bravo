@@ -591,7 +591,6 @@ public class BillGenerationApplication {
             CalculatedStatement calculated = calculate(accountReference, request.startDate, request.endDate,
                     request.endDate);
             requireOwnership(calculated, request.cifId);
-            // Operations-generated statements are regulated records and are always retained.
             return persistCalculated(key, accountReference, statementPeriod(request.startDate, request.endDate),
                     request.endDate, true, calculated);
         }
@@ -615,15 +614,10 @@ public class BillGenerationApplication {
                     throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_CONFLICT", "Idempotency key was used with a different request");
                 return get(known.getFirst().resourceId);
             }
-            // The unique key covers the documented 24-hour window only;
-            // removing an expired record does not affect any bill or audit row.
             known.forEach(em::remove);
             List<Bill> duplicates = duplicateBills(accountReference, period);
             if (!duplicates.isEmpty())
                 throw new ApiException(HttpStatus.CONFLICT, "BILL_ALREADY_EXISTS", "A bill already exists for this account and period");
-            // Account + period is already a domain uniqueness boundary. A deterministic
-            // aggregate id lets downstream Accounting/Card idempotency replay safely if
-            // this local transaction is retried after a partial cross-service failure.
             String billId = UUID.nameUUIDFromBytes(
                     ("moneybags-bill|" + accountReference + "|" + period)
                             .getBytes(StandardCharsets.UTF_8)).toString();
@@ -942,9 +936,6 @@ public class BillGenerationApplication {
         @ConditionalOnProperty(name = "moneybags.security.enabled", havingValue = "true")
         SecurityFilterChain secured(HttpSecurity http) throws Exception {
             return http.csrf(c -> c.disable()).authorizeHttpRequests(a -> a
-                    // Preserve the original validation/business status when Spring
-                    // performs its internal error dispatch. This does not expose a
-                    // public endpoint; the initial request is still fully authorized.
                     .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                     .requestMatchers("/actuator/health/**").permitAll()
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("BANK_ADMIN")
@@ -953,46 +944,14 @@ public class BillGenerationApplication {
                     .hasAnyAuthority("SCOPE_billing:read", "SCOPE_billing:admin")
                     .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/bills", "/api/v1/bills/preview")
                     .hasAuthority("SCOPE_billing:read")
-                    // Keep the collection endpoint explicit. With PathPattern matching,
-                    // /admin/** does not authorize POST /admin itself.
                     .requestMatchers(org.springframework.http.HttpMethod.POST,
                             "/api/v1/bills/admin", "/api/v1/bills/admin/**")
                     .hasAnyAuthority("SCOPE_billing:admin", "ROLE_BANK_ADMIN")
                     .anyRequest().denyAll())
                     .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(jwtAuthenticationConverter())))
-                    .exceptionHandling(errors -> errors
-                            .authenticationEntryPoint((request, response, failure) ->
-                                    writeSecurityProblem(request, response, HttpStatus.UNAUTHORIZED,
-                                            "Authentication required", "A valid MoneyBags session is required."))
-                            .accessDeniedHandler((request, response, failure) -> {
-                                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-                                org.slf4j.LoggerFactory.getLogger(Security.class).warn(
-                                        "Billing access denied method={} path={} principal={} authorities={}",
-                                        request.getMethod(), request.getRequestURI(),
-                                        authentication == null ? "anonymous" : authentication.getName(),
-                                        authentication == null ? List.of() : authentication.getAuthorities());
-                                writeSecurityProblem(request, response, HttpStatus.FORBIDDEN,
-                                        "Access denied", "Your signed-in account does not grant this billing operation.");
-                            }))
                     .build();
         }
 
-        private static void writeSecurityProblem(HttpServletRequest request, HttpServletResponse response,
-                                                 HttpStatus status, String title, String detail) throws IOException {
-            String correlationId = Optional.ofNullable(request.getHeader("X-Correlation-ID"))
-                    .filter(value -> value.matches("[0-9a-fA-F-]{36}"))
-                    .orElseGet(() -> UUID.randomUUID().toString());
-            response.setStatus(status.value());
-            response.setContentType("application/problem+json");
-            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            response.setHeader("X-Correlation-ID", correlationId);
-            response.getWriter().write("{\"type\":\"about:blank\",\"title\":\"" + title
-                    + "\",\"status\":" + status.value() + ",\"detail\":\"" + detail
-                    + "\",\"instance\":\"" + request.getRequestURI()
-                    + "\",\"correlationId\":\"" + correlationId + "\"}");
-        }
-
-        /** Maps the signed Identity roles claim alongside the standard OAuth scopes. */
         static JwtAuthenticationConverter jwtAuthenticationConverter() {
             JwtGrantedAuthoritiesConverter scopes = new JwtGrantedAuthoritiesConverter();
             JwtAuthenticationConverter converter = new JwtAuthenticationConverter();

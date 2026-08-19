@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "TRIAL_BALANCE_LINE")
+@Table(name = "ACCT_TRIAL_BALANCE_LINE")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class TrialBalanceLine {
