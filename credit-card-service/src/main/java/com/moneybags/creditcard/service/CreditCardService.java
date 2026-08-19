@@ -161,6 +161,40 @@ public class CreditCardService {
                 account.outstandingAmount, account.status, account.openedAt);
     }
 
+    @Transactional(readOnly = true)
+    public StatementAccountContext statementContext(Long id) {
+        var account = findAccount(id);
+        return new StatementAccountContext("CC-" + account.id, maskCardNumber(account.cardNumber),
+                "CREDIT_CARD", "INR", List.of(account.cifId.toString()));
+    }
+
+    @Transactional(readOnly = true)
+    public CreditCardStatementSource statementActivity(Long id, LocalDate from, LocalDate to) {
+        var account = findAccount(id);
+        List<StatementActivity> all = new ArrayList<>();
+        holds.findByAccountId(id).stream().filter(hold -> hold.status == HoldStatus.CAPTURED)
+                .forEach(hold -> all.add(new StatementActivity("HOLD-" + hold.id, hold.referenceId,
+                        "DEBIT", hold.amount, "INR", hold.createdAt)));
+        billingCharges.findByAccountId(id).forEach(charge -> all.add(new StatementActivity(
+                "BILL-" + charge.billId, charge.billId, "DEBIT", charge.amount,
+                charge.currency, charge.appliedAt)));
+        billPayments.findByAccountId(id).forEach(payment -> all.add(new StatementActivity(
+                "PAY-" + payment.paymentId, payment.paymentId, "CREDIT", payment.amount,
+                "INR", payment.appliedAt)));
+
+        BigDecimal changesAfterPeriod = all.stream().filter(activity -> activity.occurredAt()
+                        .toLocalDate().isAfter(to))
+                .map(this::outstandingChange).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal closing = account.outstandingAmount.subtract(changesAfterPeriod);
+        List<StatementActivity> selected = all.stream().filter(activity -> !activity.occurredAt()
+                        .toLocalDate().isBefore(from) && !activity.occurredAt().toLocalDate().isAfter(to))
+                .sorted(java.util.Comparator.comparing(StatementActivity::occurredAt)
+                        .thenComparing(StatementActivity::transactionId)).toList();
+        BigDecimal periodChanges = selected.stream().map(this::outstandingChange)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new CreditCardStatementSource(selected, closing.subtract(periodChanges), closing, "INR");
+    }
+
     @Transactional
     public BillingChargeResponse applyBillingCharges(Long accountId, String idempotencyKey,
                                                       BillingChargeRequest request) {
@@ -354,5 +388,14 @@ public class CreditCardService {
     private BillingChargeResponse billingCharge(CreditCardBillingCharge charge, CreditCardAccount account) {
         return new BillingChargeResponse(charge.billId, account.id, charge.journalNumber, charge.amount,
                 account.outstandingAmount, account.availableLimit, charge.appliedAt);
+    }
+
+    private BigDecimal outstandingChange(StatementActivity activity) {
+        return "DEBIT".equals(activity.direction()) ? activity.amount() : activity.amount().negate();
+    }
+
+    private String maskCardNumber(String cardNumber) {
+        if (cardNumber == null || cardNumber.length() < 4) return "XXXXXXXXXXXX";
+        return "XXXXXXXXXXXX" + cardNumber.substring(cardNumber.length() - 4);
     }
 }

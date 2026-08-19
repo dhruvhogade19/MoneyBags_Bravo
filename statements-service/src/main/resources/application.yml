@@ -47,6 +47,8 @@ moneybags:
       base-url: ${ACCOUNTING_URL:http://accounting-service}
     deposit:
       base-url: ${DEPOSIT_ACCOUNT_URL:http://deposit-account-service}
+    credit-card:
+      base-url: ${CREDIT_CARD_URL:http://credit-card-service}
 
 springdoc:
   swagger-ui:

@@ -338,7 +338,7 @@ public class BillGenerationApplication {
                                BigDecimal paidAmount, BigDecimal outstandingAmount, LocalDate paymentDueDate,
                                String currency, List<BillLineResponse> lines, String productCode,
                                LocalDate periodStart, LocalDate periodEnd, OffsetDateTime generatedAt,
-                               boolean savedToHistory, String pdfPassword) {
+                               boolean savedToHistory) {
     }
 
     public record CustomerStatementRequest(@NotBlank String accountId, @NotNull LocalDate startDate,
@@ -783,7 +783,7 @@ public class BillGenerationApplication {
             return new BillResponse(b.id, b.accountId, b.billingPeriod, b.status, b.previousBalance, b.totalDue,
                     b.minimumDue, b.paidAmount, outstanding, b.paymentDueDate, b.currency,
                     lines.stream().map(l -> new BillLineResponse(l.type, l.reference, l.description, l.amount, l.occurredAt)).toList(),
-                    b.productCode, start, end, b.generatedAt, b.savedToHistory, pdfPassword(b.accountId, start));
+                    b.productCode, start, end, b.generatedAt, b.savedToHistory);
         }
 
         private BillSummaryResponse summary(Bill b) {
@@ -863,12 +863,6 @@ public class BillGenerationApplication {
         private static LocalDate periodEnd(String period, LocalDate fallback) {
             try { return YearMonth.parse(period).atEndOfMonth(); }
             catch (Exception ignored) { return fallback; }
-        }
-
-        private static String pdfPassword(String accountId, LocalDate start) {
-            String digits = accountId.replaceAll("\\D", "");
-            String suffix = digits.length() >= 4 ? digits.substring(digits.length() - 4) : String.format("%04d", Math.abs(accountId.hashCode()) % 10000);
-            return "MB" + suffix + String.format("%04d%02d", start.getYear(), start.getMonthValue());
         }
 
         private static String canonicalCardAccountReference(String accountId) {
