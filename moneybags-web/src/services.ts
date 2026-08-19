@@ -115,6 +115,8 @@ export const services = {
     one: (billId: string, signal?: AbortSignal) => api.get<Bill>(`/api/v1/bills/${encodeURIComponent(billId)}`, signal),
     preview: (body: unknown, idempotencyKey?: string) => api.post<StatementPreview>("/api/v1/bills/preview", body, idempotencyKey),
     generate: (body: unknown, idempotencyKey?: string) => api.post<Bill>("/api/v1/bills", body, idempotencyKey),
+    adminPreview: (body: unknown, idempotencyKey?: string) => api.post<StatementPreview>("/api/v1/bills/admin/preview", body, idempotencyKey),
+    adminGenerate: (body: unknown, idempotencyKey?: string) => api.post<Bill>("/api/v1/bills/admin", body, idempotencyKey),
     pdf: (billId: string, disposition: "inline" | "attachment" = "inline", signal?: AbortSignal) => api.blob(query(`/api/v1/bills/${encodeURIComponent(billId)}/pdf`, { disposition }), signal)
   },
   notifications: {

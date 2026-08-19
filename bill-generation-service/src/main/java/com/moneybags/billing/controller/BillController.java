@@ -1,6 +1,7 @@
 package com.moneybags.billing.controller;
 
 import com.moneybags.billing.BillGenerationApplication.ApiException;
+import com.moneybags.billing.BillGenerationApplication.AdminStatementRequest;
 import com.moneybags.billing.BillGenerationApplication.BillPage;
 import com.moneybags.billing.BillGenerationApplication.BillResponse;
 import com.moneybags.billing.BillGenerationApplication.BillSummaryResponse;
@@ -74,6 +75,17 @@ public class BillController {
                                      @Valid @RequestBody CustomerStatementRequest request) {
         Long customerId = requireCustomerId(jwt, gatewayCustomerId);
         return service.generateForCustomer(key, customerId, request);
+    }
+
+    @PostMapping("/api/v1/bills/admin/preview")
+    StatementPreview previewForAdmin(@Valid @RequestBody AdminStatementRequest request) {
+        return service.previewForAdmin(request);
+    }
+
+    @PostMapping("/api/v1/bills/admin")
+    BillResponse generateForAdmin(@RequestHeader("Idempotency-Key") @NotBlank String key,
+                                  @Valid @RequestBody AdminStatementRequest request) {
+        return service.generateForAdmin(key, request);
     }
 
     @GetMapping("/api/v1/bills/{billId}")

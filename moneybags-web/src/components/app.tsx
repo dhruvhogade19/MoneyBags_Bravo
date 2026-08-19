@@ -14,6 +14,7 @@ import {
   ProductsPage, ProfilePage, RepaymentsPage, StatementsPage, TransferPage
 } from "../pages/customer";
 import { BillingDashboardPage, BillingStatementWizard } from "../pages/billing";
+import { AdminBillingStatementWizard } from "../pages/admin-billing";
 import {
   DepositAccountClosePage, DepositAccountDetailPage, DepositAccountManagePage,
   DepositAccountOpenPage, DepositAccountsPage, DepositRequestsPage,
@@ -51,6 +52,7 @@ const operationsNavigation: NavigationItem[] = [
   { label: "Account / FD search", icon: "search", path: "/ops/deposits/search" },
   { label: "FD EOD console", icon: "fact_check", path: "/ops/deposits/eod" },
   { label: "Cards & billing", icon: "credit_card", path: "/ops/cards" },
+  { label: "Generate bill", icon: "description", path: "/ops/bills/generate" },
   { label: "Payments", icon: "payments", path: "/ops/payments" },
   { label: "Customers & email", icon: "contact_mail", path: "/ops/customers" },
   { label: "Accounting overview", icon: "dashboard", path: "/ops/accounting/overview" },
@@ -87,6 +89,7 @@ function matchRoute(path: string): ComponentChildren {
     "/ops/deposits/search": <DepositCustomerSearch />,
     "/ops/deposits/eod": <FixedDepositEodConsole />,
     "/ops/cards": <CardBillingOperations />,
+    "/ops/bills/generate": <AdminBillingStatementWizard />,
     "/ops/payments": <PaymentOperations />,
     "/ops/customers": <CustomerNotificationOperations />,
     "/ops/eod": <AccountingOverviewPage />,

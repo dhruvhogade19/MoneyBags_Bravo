@@ -96,4 +96,21 @@ class BillGenerationApplicationTest {
         assertThat(service.searchForCustomer(101L, generated.accountId(), null, null, 0, 20).content())
                 .extracting(BillGenerationApplication.BillResponse::billId).doesNotContain(generated.billId());
     }
+
+    @Test
+    void adminGenerationValidatesCardOwnershipAndAlwaysRetainsTheStatement() {
+        var request = new BillGenerationApplication.AdminStatementRequest(
+                101L, "66666666-6666-6666-6666-666666666666",
+                LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31));
+
+        var preview = service.previewForAdmin(request);
+        var generated = service.generateForAdmin("admin-statement-001", request);
+        var replay = service.generateForAdmin("admin-statement-001", request);
+
+        assertThat(preview.accountId()).startsWith("CC-");
+        assertThat(generated.savedToHistory()).isTrue();
+        assertThat(replay.billId()).isEqualTo(generated.billId());
+        assertThat(service.search(null, generated.billingPeriod(), null, 0, 20).content())
+                .extracting(BillGenerationApplication.BillResponse::billId).contains(generated.billId());
+    }
 }

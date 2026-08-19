@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
@@ -333,6 +334,10 @@ public class BillGenerationApplication {
                                            @NotNull LocalDate endDate, boolean saveToHistory) {
     }
 
+    public record AdminStatementRequest(@NotNull @Positive Long cifId, @NotBlank String accountId,
+                                        @NotNull LocalDate startDate, @NotNull LocalDate endDate) {
+    }
+
     public record StatementPreview(String accountId, String productCode, LocalDate periodStart,
                                    LocalDate periodEnd, BigDecimal openingBalance, BigDecimal paymentsReceived,
                                    BigDecimal newPurchases, BigDecimal fees, BigDecimal taxes,
@@ -554,6 +559,30 @@ public class BillGenerationApplication {
             requireOwnership(calculated, cifId);
             return persistCalculated(key, accountReference, statementPeriod(request.startDate, request.endDate),
                     request.endDate, request.saveToHistory, calculated);
+        }
+
+        @Transactional(readOnly = true)
+        public StatementPreview previewForAdmin(AdminStatementRequest request) {
+            validateStatementPeriod(request.startDate, request.endDate);
+            String accountReference = canonicalCardAccountReference(request.accountId);
+            String period = statementPeriod(request.startDate, request.endDate);
+            List<Bill> duplicates = duplicateBills(accountReference, period);
+            CalculatedStatement calculated = calculate(accountReference, request.startDate, request.endDate,
+                    request.endDate);
+            requireOwnership(calculated, request.cifId);
+            return toPreview(calculated, !duplicates.isEmpty(), duplicates.isEmpty() ? null : duplicates.getFirst().id);
+        }
+
+        @Transactional
+        public BillResponse generateForAdmin(String key, AdminStatementRequest request) {
+            validateStatementPeriod(request.startDate, request.endDate);
+            String accountReference = canonicalCardAccountReference(request.accountId);
+            CalculatedStatement calculated = calculate(accountReference, request.startDate, request.endDate,
+                    request.endDate);
+            requireOwnership(calculated, request.cifId);
+            // Operations-generated statements are regulated records and are always retained.
+            return persistCalculated(key, accountReference, statementPeriod(request.startDate, request.endDate),
+                    request.endDate, true, calculated);
         }
 
         private BillResponse generateCalculated(String key, String accountReference, String period,
@@ -905,6 +934,8 @@ public class BillGenerationApplication {
                     .hasAnyAuthority("SCOPE_billing:read", "SCOPE_billing:admin")
                     .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/bills", "/api/v1/bills/preview")
                     .hasAuthority("SCOPE_billing:read")
+                    .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/bills/admin/**")
+                    .hasAuthority("SCOPE_billing:admin")
                     .anyRequest().denyAll())
                     .oauth2ResourceServer(o -> o.jwt(j -> { })).build();
         }
