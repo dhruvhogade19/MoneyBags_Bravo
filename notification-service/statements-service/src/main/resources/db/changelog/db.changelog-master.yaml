@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-statement-schema
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: ACCOUNT_STATEMENT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001-create-statement-schema.sql
+            splitStatements: true
+            stripComments: true

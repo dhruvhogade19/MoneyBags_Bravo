@@ -54,7 +54,8 @@ if (Test-Path -LiteralPath $pidFile) {
 
 Start-Sleep -Seconds 2
 $remaining = $servicePorts | Where-Object {
-    $null -ne (Get-NetTCPConnection -State Listen -LocalPort $_.Port -ErrorAction SilentlyContinue)
+    $portPattern = ":" + $_.Port + "\s+.*LISTENING\s+(\d+)\s*$"
+    $null -ne (netstat -ano -p tcp | Where-Object { $_ -match $portPattern } | Select-Object -First 1)
 }
 if ($remaining) {
     Write-Warning ("Some ports are still occupied: " + (($remaining.Port) -join ", "))

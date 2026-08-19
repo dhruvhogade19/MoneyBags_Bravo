@@ -31,7 +31,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/v1/products/**",
                                 "/api/benchmarks/**").hasAuthority("SCOPE_product:read")
                         .requestMatchers("/api/products/**", "/api/v1/products/**",
-                                "/api/benchmarks/**").hasAuthority("SCOPE_product:admin")
+                                "/api/benchmarks/**")
+                        // A bank administrator is the business authority for catalogue changes.  Keep the
+                        // product:admin scope for service/client tokens, but do not reject a valid admin
+                        // session merely because it was issued before that scope was added to the client.
+                        .hasAnyAuthority("SCOPE_product:admin", "ROLE_BANK_ADMIN")
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter())))
                 .build();

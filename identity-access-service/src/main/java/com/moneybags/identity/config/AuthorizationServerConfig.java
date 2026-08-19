@@ -69,7 +69,8 @@ public class AuthorizationServerConfig {
             "openid", "profile", "product:read", "cif:read", "cif:write", "kyc:read", "kyc:write",
             "account:read", "account:open", "account:write",
             "account:close", "fd:read", "fd:open", "fd:close", "payment:read", "payment:write",
-            "card:read", "card:apply", "billing:read", "notification:read");
+            "card:read", "card:apply", "billing:read", "notification:read",
+            "statements:read", "statements:generate");
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -175,7 +176,8 @@ public class AuthorizationServerConfig {
                         "kyc:read", "kyc:review", "account:read",
                         "account:admin", "fd:read", "fd:admin", "payment:read", "payment:admin", "card:read",
                         "card:admin", "accounting:read", "accounting:admin", "notification:read",
-                        "notification:admin", "billing:read", "billing:admin"));
+                        "notification:admin", "billing:read", "billing:admin",
+                        "statements:read", "statements:admin"));
 
         List<RegisteredClient> clients = new java.util.ArrayList<>();
         clients.add(consumer);
@@ -193,6 +195,8 @@ public class AuthorizationServerConfig {
                 "kyc:service", "identity:service"));
         clients.add(serviceClient("bill-generation-service", serviceSecret, encoder, serviceTokens,
                 "product:validate", "card:billing", "accounting:service", "notification:service"));
+        clients.add(serviceClient("statements-service", serviceSecret, encoder, serviceTokens,
+                "account:service", "accounting:service"));
         return new InMemoryRegisteredClientRepository(clients);
     }
 

@@ -5,25 +5,27 @@ const role = (process.argv[2] || "consumer").toLowerCase();
 const definitions = {
   admin: {
     clientId: "moneybags-admin",
-    redirectUri: "http://127.0.0.1:8001/login/oauth2/code/moneybags-admin",
+    redirectUri: process.env.ADMIN_OIDC_REDIRECT_URI || "http://localhost:8000/",
     username: process.env.LOCAL_ADMIN_USERNAME || "admin@moneybags.local",
     password: process.env.LOCAL_ADMIN_PASSWORD || "ChangeThisAdminPassword!",
     scopes: [
       "openid", "profile", "product:read", "product:admin", "cif:read", "cif:admin",
       "kyc:read", "kyc:review", "account:read", "account:admin", "fd:read", "fd:admin",
       "payment:read", "payment:admin", "card:read", "card:admin", "accounting:read",
-      "accounting:admin", "notification:read", "notification:admin"
+      "accounting:admin", "notification:read", "notification:admin", "billing:read",
+      "billing:admin", "statements:read", "statements:admin"
     ]
   },
   consumer: {
     clientId: "moneybags-consumer",
-    redirectUri: "http://127.0.0.1:8000/login/oauth2/code/moneybags-consumer",
+    redirectUri: process.env.CONSUMER_OIDC_REDIRECT_URI || "http://localhost:8000/",
     username: process.env.LOCAL_CONSUMER_USERNAME || "consumer@moneybags.local",
     password: process.env.LOCAL_CONSUMER_PASSWORD || "ChangeThisConsumerPassword!",
     scopes: [
       "openid", "profile", "product:read", "cif:read", "cif:write", "kyc:read", "kyc:write",
       "account:read", "account:open", "account:write", "account:close", "fd:read", "fd:open",
-      "fd:close", "payment:read", "payment:write", "card:read", "card:apply", "notification:read"
+      "fd:close", "payment:read", "payment:write", "card:read", "card:apply", "notification:read",
+      "billing:read", "statements:read"
     ]
   }
 };

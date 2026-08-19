@@ -1,0 +1,4 @@
+moneybags:
+  security:
+    m2m:
+      client-secret: ${M2M_CLIENT_SECRET:local-service-secret-change-me}

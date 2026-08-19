@@ -35,7 +35,10 @@ moneybags:
     stub-upstream-clients: ${STUB_UPSTREAM_CLIENTS:true}
     cif-base-url: ${CIF_URL:http://localhost:8081}
     product-base-url: ${PRODUCT_URL:http://localhost:8083}
-    accounting-base-url: ${ACCOUNTING_URL:http://localhost:8088}
+    # Keep this service's direct HTTP URL separate from ACCOUNTING_URL. Other
+    # modules use ACCOUNTING_URL as a Eureka service-id URL (http://accounting-service),
+    # while this RestClient is intentionally a direct, non-load-balanced client.
+    accounting-base-url: ${CREDIT_CARD_ACCOUNTING_URL:http://localhost:8088}
     notification-base-url: ${NOTIFICATION_URL:http://localhost:8090}
 springdoc.swagger-ui.path: /swagger-ui.html
 management.endpoints.web.exposure.include: health,info,metrics,prometheus

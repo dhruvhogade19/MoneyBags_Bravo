@@ -66,6 +66,7 @@
         <module>cif-service</module>
         <module>accounting-service</module>
         <module>bill-generation-service</module>
+        <module>statements-service</module>
     </modules>
 
 </project>

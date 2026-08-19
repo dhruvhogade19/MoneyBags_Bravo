@@ -6,6 +6,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 
@@ -15,11 +17,15 @@ import java.time.OffsetDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SubledgerAccount {
     @Id @Column(name = "SUBLEDGER_ACCOUNT_ID", length = 36) private String id;
-    @Enumerated(EnumType.STRING) @Column(name = "ACCOUNT_TYPE", length = 30, nullable = false) private AccountType accountType;
+    @Enumerated(EnumType.STRING) @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "ACCOUNT_TYPE", length = 30, nullable = false)
+    private AccountType accountType;
     @Column(name = "ACCOUNT_REFERENCE", length = 100, nullable = false) private String accountReference;
     @Column(name = "PRODUCT_CODE", length = 40) private String productCode;
     @Column(name = "CURRENCY_CODE", length = 3, columnDefinition = "CHAR(3)", nullable = false) private String currencyCode;
-    @Enumerated(EnumType.STRING) @Column(name = "LIFECYCLE_STATE", length = 20, nullable = false) private LifecycleState lifecycleState;
+    @Enumerated(EnumType.STRING) @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "LIFECYCLE_STATE", length = 20, nullable = false)
+    private LifecycleState lifecycleState;
     @Column(name = "SOURCE_SERVICE", length = 80, nullable = false) private String sourceService;
     @Column(name = "OPENED_AT", nullable = false) private OffsetDateTime openedAt;
     @Column(name = "CLOSED_AT") private OffsetDateTime closedAt;
