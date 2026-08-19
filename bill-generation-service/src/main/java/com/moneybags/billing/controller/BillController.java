@@ -10,9 +10,15 @@ import com.moneybags.billing.BillGenerationApplication.CloseResponse;
 import com.moneybags.billing.BillGenerationApplication.ClosureEligibilityResponse;
 import com.moneybags.billing.BillGenerationApplication.GenerateRequest;
 import com.moneybags.billing.BillGenerationApplication.PaymentSettlementRequest;
+import com.moneybags.billing.BillGenerationApplication.CustomerStatementRequest;
+import com.moneybags.billing.BillGenerationApplication.StatementPreview;
+import com.moneybags.billing.StatementPdfRenderer;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,9 +37,11 @@ import java.util.List;
 @RequestMapping
 public class BillController {
     private final BillingService service;
+    private final StatementPdfRenderer pdfRenderer;
 
-    public BillController(BillingService service) {
+    public BillController(BillingService service, StatementPdfRenderer pdfRenderer) {
         this.service = service;
+        this.pdfRenderer = pdfRenderer;
     }
 
     @GetMapping("/")
@@ -51,12 +59,43 @@ public class BillController {
         return service.generate(key, request);
     }
 
+    @PostMapping("/api/v1/bills/preview")
+    StatementPreview preview(@RequestHeader(name = "X-Customer-ID", required = false) String gatewayCustomerId,
+                             @AuthenticationPrincipal Jwt jwt,
+                             @Valid @RequestBody CustomerStatementRequest request) {
+        Long customerId = requireCustomerId(jwt, gatewayCustomerId);
+        return service.previewForCustomer(customerId, request);
+    }
+
+    @PostMapping("/api/v1/bills")
+    BillResponse generateForCustomer(@RequestHeader("Idempotency-Key") @NotBlank String key,
+                                     @RequestHeader(name = "X-Customer-ID", required = false) String gatewayCustomerId,
+                                     @AuthenticationPrincipal Jwt jwt,
+                                     @Valid @RequestBody CustomerStatementRequest request) {
+        Long customerId = requireCustomerId(jwt, gatewayCustomerId);
+        return service.generateForCustomer(key, customerId, request);
+    }
+
     @GetMapping("/api/v1/bills/{billId}")
     BillResponse get(@PathVariable String billId,
                      @RequestHeader(name = "X-Customer-ID", required = false) String gatewayCustomerId,
                      @AuthenticationPrincipal Jwt jwt) {
         Long customerId = customerId(jwt, gatewayCustomerId);
         return customerId == null ? service.get(billId) : service.getForCustomer(billId, customerId);
+    }
+
+    @GetMapping(value = "/api/v1/bills/{billId}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    ResponseEntity<byte[]> pdf(@PathVariable String billId,
+                               @RequestParam(defaultValue = "inline") String disposition,
+                               @RequestHeader(name = "X-Customer-ID", required = false) String gatewayCustomerId,
+                               @AuthenticationPrincipal Jwt jwt) {
+        Long customerId = customerId(jwt, gatewayCustomerId);
+        BillResponse bill = customerId == null ? service.get(billId) : service.getForCustomer(billId, customerId);
+        String mode = "attachment".equalsIgnoreCase(disposition) ? "attachment" : "inline";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, mode + "; filename=MoneyBags-" + bill.billId() + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdfRenderer.render(bill));
     }
 
     @GetMapping("/api/v1/bills")
@@ -138,5 +177,12 @@ public class BillController {
         } catch (NumberFormatException exception) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_CUSTOMER_CONTEXT", "X-Customer-ID must be numeric");
         }
+    }
+
+    private static Long requireCustomerId(Jwt jwt, String gatewayCustomerId) {
+        Long value = customerId(jwt, gatewayCustomerId);
+        if (value == null)
+            throw new ApiException(HttpStatus.FORBIDDEN, "CUSTOMER_CONTEXT_REQUIRED", "A customer session is required to generate a statement");
+        return value;
     }
 }

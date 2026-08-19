@@ -5,8 +5,11 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.ObjectProvider;
 import com.moneybags.billing.config.ClientCredentialsTokenProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -18,6 +21,7 @@ import java.util.Map;
 
 @Component
 public class NotificationClient {
+    private static final Logger log = LoggerFactory.getLogger(NotificationClient.class);
     private static final DateTimeFormatter BILLING_DATE = DateTimeFormatter.ofPattern("dd MMM uuuu", Locale.ENGLISH);
 
     private final RestClient restClient;
@@ -53,12 +57,18 @@ public class NotificationClient {
         NotificationRequest request = new NotificationRequest(
                 cifId, "BILL_GENERATED", billId, templateVariables);
 
-        restClient.post()
-                .uri("/internal/v1/notifications")
-                .header("Idempotency-Key", "bill-" + billId + "-generated")
-                .body(request)
-                .retrieve()
-                .toBodilessEntity();
+        try {
+            restClient.post()
+                    .uri("/internal/v1/notifications")
+                    .header("Idempotency-Key", "bill-" + billId + "-generated")
+                    .body(request)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException exception) {
+            // The bill and its financial postings are authoritative. Email delivery is a
+            // secondary side effect and must not roll back an otherwise valid bill.
+            log.warn("Bill {} was generated, but its notification could not be delivered", billId, exception);
+        }
     }
 
     record NotificationRequest(long cifId, String notificationType, String sourceReference,

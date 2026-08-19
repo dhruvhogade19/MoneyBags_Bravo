@@ -7,6 +7,9 @@ import com.moneybags.accounting.exception.ApiException;
 import com.moneybags.accounting.repository.*;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -74,6 +77,16 @@ public class EodService {
                 "TRIAL_BALANCE_NOT_FOUND", "Trial balance run not found")));
     }
 
+    @Transactional(readOnly = true)
+    public TrialBalancePage listTrialBalances(LocalDate businessDate, int page, int size) {
+        Page<TrialBalanceRun> values = businessDate == null
+                ? trialRuns.findAll(PageRequest.of(page, size, Sort.by("generatedAt").descending()))
+                : trialRuns.findByBusinessDate(businessDate,
+                    PageRequest.of(page, size, Sort.by("generatedAt").descending()));
+        return new TrialBalancePage(values.map(value -> getTrialBalance(value.getId())).getContent(), page, size,
+                values.getTotalElements(), values.getTotalPages());
+    }
+
     public FinancialReconciliationResponse reconcile(FinancialReconciliationRequest request, String key) {
         return idempotency.execute("FIN_RECON:" + request.eodRunId() + ":" + request.currencyCode(), key, request,
                 FinancialReconciliationResponse.class, () -> reconcileInternal(request));
@@ -109,6 +122,22 @@ public class EodService {
     public FinancialReconciliationResponse getReconciliation(String runId) {
         return reconciliation(reconRuns.findDetailedById(runId).orElseThrow(() -> new ApiException(
                 HttpStatus.NOT_FOUND, "RECONCILIATION_NOT_FOUND", "Financial reconciliation run not found")));
+    }
+
+    @Transactional(readOnly = true)
+    public FinancialReconciliationPage listReconciliations(LocalDate businessDate, int page, int size) {
+        Page<FinancialReconciliationRun> values = businessDate == null
+                ? reconRuns.findAll(PageRequest.of(page, size, Sort.by("createdAt").descending()))
+                : reconRuns.findByBusinessDate(businessDate,
+                    PageRequest.of(page, size, Sort.by("createdAt").descending()));
+        return new FinancialReconciliationPage(values.map(value -> getReconciliation(value.getId())).getContent(),
+                page, size, values.getTotalElements(), values.getTotalPages());
+    }
+
+    public FinancialReconciliationResponse resolve(String runId, ReconciliationRunResolutionRequest request,
+                                                    String key) {
+        return resolve(runId, request.itemId(), new ReconciliationResolutionRequest(request.status(),
+                request.resolution(), request.actorId()), key);
     }
 
     public FinancialReconciliationResponse resolve(String runId, String itemId,
@@ -178,6 +207,34 @@ public class EodService {
     public AccountingPeriodResponse getPeriod(LocalDate date) {
         return period(periods.findByBusinessDate(date).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
                 "ACCOUNTING_PERIOD_NOT_FOUND", "Accounting period not found")));
+    }
+
+    @Transactional(readOnly = true)
+    public AccountingEodRunPage listEodRuns(int page, int size) {
+        Page<FinancialReconciliationRun> values = reconRuns.findAll(
+                PageRequest.of(page, size, Sort.by("createdAt").descending()));
+        return new AccountingEodRunPage(values.map(this::eodRun).getContent(), page, size,
+                values.getTotalElements(), values.getTotalPages());
+    }
+
+    @Transactional(readOnly = true)
+    public AccountingEodRunResponse getEodRun(String runId) {
+        return eodRun(reconRuns.findTopByEodRunIdOrderByCreatedAtDesc(runId).orElseThrow(() -> new ApiException(
+                HttpStatus.NOT_FOUND, "EOD_RUN_NOT_FOUND", "Accounting EOD run not found")));
+    }
+
+    private AccountingEodRunResponse eodRun(FinancialReconciliationRun run) {
+        List<TrialBalanceRun> trials = trialRuns.findByBusinessDate(run.getBusinessDate());
+        PeriodStatus periodStatus = periods.findByBusinessDate(run.getBusinessDate())
+                .map(AccountingPeriod::getStatus).orElse(null);
+        List<String> blockers = new ArrayList<>();
+        if (trials.isEmpty()) blockers.add("Trial balance has not been generated");
+        if (trials.stream().anyMatch(value -> !value.isBalanced())) blockers.add("Trial balance is unbalanced");
+        if (run.getStatus() == ReconciliationStatus.EXCEPTION) blockers.add("Reconciliation exceptions are open");
+        String status = periodStatus == PeriodStatus.CLOSED ? "COMPLETED"
+                : blockers.isEmpty() ? "READY_TO_CLOSE" : "BLOCKED";
+        return new AccountingEodRunResponse(run.getEodRunId(), run.getBusinessDate(), run.getCurrencyCode(),
+                status, trials.size(), run.getStatus(), periodStatus, blockers);
     }
 
     private TrialBalanceResponse trial(TrialBalanceRun value) {

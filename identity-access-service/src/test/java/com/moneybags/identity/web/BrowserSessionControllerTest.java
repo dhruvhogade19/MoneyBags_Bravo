@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpHeaders;
 
 class BrowserSessionControllerTest {
 
@@ -26,6 +27,8 @@ class BrowserSessionControllerTest {
         controller.logout(request, response);
 
         verify(session).invalidate();
+        verify(response).setHeader(HttpHeaders.CACHE_CONTROL, "no-store, no-cache, must-revalidate, max-age=0");
+        verify(response).setHeader(HttpHeaders.PRAGMA, "no-cache");
         ArgumentCaptor<Cookie> cookie = ArgumentCaptor.forClass(Cookie.class);
         verify(response).addCookie(cookie.capture());
         assertThat(cookie.getValue().getName()).isEqualTo("JSESSIONID");

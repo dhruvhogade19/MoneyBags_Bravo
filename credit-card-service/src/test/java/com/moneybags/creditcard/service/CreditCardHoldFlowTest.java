@@ -3,8 +3,10 @@ package com.moneybags.creditcard.service;
 import com.moneybags.creditcard.domain.CreditCardTypes.AccountStatus;
 import com.moneybags.creditcard.domain.CreditCardTypes.HoldStatus;
 import com.moneybags.creditcard.dto.CreditCardDtos.AmountRequest;
+import com.moneybags.creditcard.dto.CreditCardDtos.BillingChargeRequest;
 import com.moneybags.creditcard.dto.CreditCardDtos.HoldRequest;
 import com.moneybags.creditcard.entity.CreditCardAccount;
+import com.moneybags.creditcard.entity.CreditCardBillingCharge;
 import com.moneybags.creditcard.entity.CreditCardHold;
 import com.moneybags.creditcard.exception.ApiException;
 import com.moneybags.creditcard.integration.CreditCardReferenceGateway;
@@ -12,6 +14,7 @@ import com.moneybags.creditcard.integration.AccountingLifecycleGateway;
 import com.moneybags.creditcard.repository.CreditCardAccountRepository;
 import com.moneybags.creditcard.repository.CreditCardApplicationRepository;
 import com.moneybags.creditcard.repository.CreditCardHoldRepository;
+import com.moneybags.creditcard.repository.CreditCardBillingChargeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +35,7 @@ class CreditCardHoldFlowTest {
     @Mock private CreditCardAccountRepository accounts;
     @Mock private CreditCardAccountService accountService;
     @Mock private CreditCardHoldRepository holds;
+    @Mock private CreditCardBillingChargeRepository billingCharges;
     @Mock private CreditCardReferenceGateway references;
     @Mock private AccountingLifecycleGateway accounting;
 
@@ -40,7 +44,7 @@ class CreditCardHoldFlowTest {
 
     @BeforeEach
     void setUp() {
-        service = new CreditCardService(applications, accounts, accountService, holds, references, accounting);
+        service = new CreditCardService(applications, accounts, accountService, holds, billingCharges, references, accounting);
         account = new CreditCardAccount();
         account.id = 10L;
         account.status = AccountStatus.ACTIVE;
@@ -168,6 +172,40 @@ class CreditCardHoldFlowTest {
             ApiException exception = assertThrows(ApiException.class, () -> service.billPaid(10L, new AmountRequest(amount)));
             assertEquals(400, exception.status.value());
         }
+    }
+
+    @Test
+    void billingChargesAdjustOutstandingAndAvailableLimitExactlyOnce() {
+        account.outstandingAmount = new BigDecimal("20000.00");
+        account.availableLimit = new BigDecimal("80000.00");
+        when(billingCharges.findByBillId("bill-august")).thenReturn(Optional.empty());
+        when(billingCharges.save(any(CreditCardBillingCharge.class))).thenAnswer(invocation -> {
+            CreditCardBillingCharge charge = invocation.getArgument(0);
+            charge.id = 77L;
+            return charge;
+        });
+
+        BillingChargeRequest request = new BillingChargeRequest(
+                "bill-august", "JRN-BILL-001", new BigDecimal("590.00"), "INR");
+        var applied = service.applyBillingCharges(10L, "bill-august", request);
+
+        assertEquals(new BigDecimal("20590.00"), applied.outstandingAmount());
+        assertEquals(new BigDecimal("79410.00"), applied.availableLimit());
+        assertEquals(new BigDecimal("20590.00"), account.outstandingAmount);
+
+        ArgumentCaptor<CreditCardBillingCharge> chargeCaptor =
+                ArgumentCaptor.forClass(CreditCardBillingCharge.class);
+        verify(billingCharges).save(chargeCaptor.capture());
+        when(billingCharges.findByBillId("bill-august"))
+                .thenReturn(Optional.of(chargeCaptor.getValue()));
+        when(accounts.findById(10L)).thenReturn(Optional.of(account));
+
+        var replay = service.applyBillingCharges(10L, "bill-august", request);
+
+        assertEquals(new BigDecimal("20590.00"), replay.outstandingAmount());
+        assertEquals(new BigDecimal("79410.00"), account.availableLimit);
+        verify(billingCharges, times(1)).save(any(CreditCardBillingCharge.class));
+        verify(accounts, times(1)).lockById(10L);
     }
 
     @Test

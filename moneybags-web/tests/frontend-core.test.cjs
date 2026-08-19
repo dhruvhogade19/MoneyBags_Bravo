@@ -5,7 +5,10 @@ const {
   finiteNumber,
   formatDate,
   IdempotencyKeyStore,
-  isNavigationPathActive
+  isNavigationPathActive,
+  isBillPayable,
+  canonicalCreditCardAccountReference,
+  paymentOutcome
 } = require("../test-output/utils.js");
 
 test("money formatting accepts finite values and rejects malformed values", () => {
@@ -13,6 +16,23 @@ test("money formatting accepts finite values and rejects malformed values", () =
   assert.equal(finiteNumber(0), 0);
   assert.equal(finiteNumber("not-money"), undefined);
   assert.equal(finiteNumber(Infinity), undefined);
+});
+
+test("bill repayments are offered only for payable bill states", () => {
+  assert.equal(isBillPayable("GENERATED", 100), true);
+  assert.equal(isBillPayable("PARTIALLY_PAID", "25.50"), true);
+  assert.equal(isBillPayable("OVERDUE", 1), true);
+  assert.equal(isBillPayable("PAID", 100), false);
+  assert.equal(isBillPayable("GENERATED", 0), false);
+});
+
+test("repayment references and terminal states are normalized", () => {
+  assert.equal(canonicalCreditCardAccountReference(101), "CC-101");
+  assert.equal(canonicalCreditCardAccountReference("cc-101"), "CC-101");
+  assert.throws(() => canonicalCreditCardAccountReference("CARD-101"));
+  assert.equal(paymentOutcome("SETTLED"), "success");
+  assert.equal(paymentOutcome("PENDING_BILLING"), "pending");
+  assert.equal(paymentOutcome("FAILED"), "error");
 });
 
 test("date formatting never exposes an invalid date", () => {

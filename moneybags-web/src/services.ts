@@ -1,5 +1,5 @@
 import { api, query } from "./api";
-import type { Account, AccountBalance, AccountDetail, AccountNumber, AccountStatusHistory, Bill, CardAccount, CardApplication, Cif, ClosureQuote, ClosureRequest, DepositReadiness, EodResult, EligibilityResult, FixedDeposit, FixedDepositAccrual, FixedDepositQuote, FixedDepositSchedule, Journal, Kyc, KycDocument, Notification, Page, Payment, PaymentEodControl, PaymentStatusHistory, PrematureClosureQuote, Product, TransferRecipient } from "./contracts";
+import type { Account, AccountBalance, AccountClearance, AccountDetail, AccountNumber, AccountStatusHistory, AccountingBalance, AccountingDashboard, AccountingEodRun, AccountingPeriod, AccountingRule, Bill, CardAccount, CardApplication, Cif, ClosureQuote, ClosureRequest, DepositReadiness, EodResult, EligibilityResult, FixedDeposit, FixedDepositAccrual, FixedDepositQuote, FixedDepositSchedule, GlAccount, Journal, Kyc, KycDocument, LedgerEntry, Notification, Page, Payment, PaymentEodControl, PaymentStatusHistory, PrematureClosureQuote, Product, ReconciliationRun, StatementPreview, SubledgerMapping, TransferRecipient, TrialBalance } from "./contracts";
 
 export function items<T>(value: T[] | Page<T> | { content?: T[] } | undefined): T[] {
   if (!value) return [];
@@ -19,6 +19,7 @@ export const services = {
     byCif: (cifId: string | number, signal?: AbortSignal) => api.get<Kyc[]>(query("/api/v1/kycs", { cifId }), signal),
     create: (body: unknown, idempotencyKey?: string) => api.post<Kyc>("/api/v1/kycs", body, idempotencyKey),
     documents: (kycId: number, signal?: AbortSignal) => api.get<KycDocument[]>(`/api/v1/kycs/${kycId}/documents`, signal),
+    documentBlob: (kycId: number, documentId: number, signal?: AbortSignal) => api.blob(`/api/v1/kycs/${kycId}/documents/${documentId}`, signal),
     upload: (kycId: number, documentType: string, file: File, idempotencyKey?: string) => {
       const form = new FormData();
       form.append("documentTypes", documentType);
@@ -111,15 +112,34 @@ export const services = {
   },
   bills: {
     list: (accountId?: string, signal?: AbortSignal) => api.get<Page<Bill>>(query("/api/v1/bills", { accountId, page: 0, size: 100 }), signal),
-    one: (billId: string, signal?: AbortSignal) => api.get<Bill>(`/api/v1/bills/${encodeURIComponent(billId)}`, signal)
+    one: (billId: string, signal?: AbortSignal) => api.get<Bill>(`/api/v1/bills/${encodeURIComponent(billId)}`, signal),
+    preview: (body: unknown, idempotencyKey?: string) => api.post<StatementPreview>("/api/v1/bills/preview", body, idempotencyKey),
+    generate: (body: unknown, idempotencyKey?: string) => api.post<Bill>("/api/v1/bills", body, idempotencyKey),
+    pdf: (billId: string, disposition: "inline" | "attachment" = "inline", signal?: AbortSignal) => api.blob(query(`/api/v1/bills/${encodeURIComponent(billId)}/pdf`, { disposition }), signal)
   },
   notifications: {
     list: (cifId: string | number, signal?: AbortSignal) => api.get<Page<Notification>>(query("/api/notifications", { cifId, page: 0, size: 100 }), signal)
   },
   accounting: {
-    journals: (signal?: AbortSignal) => api.get<Page<Journal>>(query("/api/v1/journals", { page: 0, size: 100 }), signal),
-    glAccounts: (signal?: AbortSignal) => api.get<Page<Record<string, unknown>>>(query("/api/v1/gl-accounts", { page: 0, size: 100 }), signal),
-    rules: (signal?: AbortSignal) => api.get<Page<Record<string, unknown>>>(query("/api/v1/accounting-rules", { page: 0, size: 100 }), signal),
-    mappings: (signal?: AbortSignal) => api.get<Page<Record<string, unknown>>>(query("/api/v1/subledger-mappings", { page: 0, size: 100 }), signal)
+    dashboard: (businessDate?: string, signal?: AbortSignal) => api.get<AccountingDashboard>(query("/api/v1/accounting/dashboard", { businessDate }), signal),
+    journals: (params: { journalNumber?: string; businessDate?: string; sourceService?: string; eventType?: string; externalReference?: string; status?: string; page?: number; size?: number } = {}, signal?: AbortSignal) => api.get<Page<Journal>>(query("/api/v1/journals", { ...params, page: params.page ?? 0, size: params.size ?? 20 }), signal),
+    journal: (journalNumber: string, signal?: AbortSignal) => api.get<Journal>(`/api/v1/journals/${encodeURIComponent(journalNumber)}`, signal),
+    balance: (accountReference: string, signal?: AbortSignal) => api.get<AccountingBalance>(`/api/v1/account-ledgers/${encodeURIComponent(accountReference)}/balance`, signal),
+    ledger: (accountReference: string, params: { from?: string; to?: string; page?: number; size?: number } = {}, signal?: AbortSignal) => api.get<Page<LedgerEntry>>(query(`/api/v1/account-ledgers/${encodeURIComponent(accountReference)}/entries`, { ...params, page: params.page ?? 0, size: params.size ?? 50 }), signal),
+    clearance: (accountType: string, accountReference: string, signal?: AbortSignal) => api.get<AccountClearance>(`/api/v1/account-ledgers/${encodeURIComponent(accountType)}/${encodeURIComponent(accountReference)}/clearance`, signal),
+    trialBalances: (businessDate?: string, signal?: AbortSignal) => api.get<Page<TrialBalance>>(query("/api/v1/trial-balances", { businessDate, page: 0, size: 50 }), signal),
+    reconciliations: (businessDate?: string, signal?: AbortSignal) => api.get<Page<ReconciliationRun>>(query("/api/v1/reconciliations", { businessDate, page: 0, size: 50 }), signal),
+    resolveReconciliation: (runId: string, body: unknown, idempotencyKey?: string) => api.post<ReconciliationRun>(`/api/v1/reconciliations/${encodeURIComponent(runId)}/resolution`, body, idempotencyKey),
+    period: (businessDate: string, signal?: AbortSignal) => api.get<AccountingPeriod>(`/api/v1/accounting-periods/${encodeURIComponent(businessDate)}`, signal),
+    eodRuns: (signal?: AbortSignal) => api.get<Page<AccountingEodRun>>(query("/api/v1/accounting/eod-runs", { page: 0, size: 50 }), signal),
+    glAccounts: (params: { search?: string; accountType?: string; status?: string; currencyCode?: string; page?: number; size?: number } = {}, signal?: AbortSignal) => api.get<Page<GlAccount>>(query("/api/v1/gl-accounts", { ...params, page: params.page ?? 0, size: params.size ?? 50 }), signal),
+    glAccount: (glCode: string, signal?: AbortSignal) => api.get<GlAccount>(`/api/v1/gl-accounts/${encodeURIComponent(glCode)}`, signal),
+    glPostings: (glCode: string, params: { from?: string; to?: string; page?: number; size?: number } = {}, signal?: AbortSignal) => api.get<Page<LedgerEntry>>(query(`/api/v1/gl-accounts/${encodeURIComponent(glCode)}/postings`, { ...params, page: params.page ?? 0, size: params.size ?? 20 }), signal),
+    createGl: (body: unknown, actor: string, idempotencyKey?: string) => api.request<GlAccount>("/api/v1/gl-accounts", { method: "POST", body, idempotent: true, idempotencyKey, headers: { "X-Actor-Id": actor } }),
+    changeGlStatus: (glCode: string, status: string, version: number, actor: string, idempotencyKey?: string) => api.request<GlAccount>(`/api/v1/gl-accounts/${encodeURIComponent(glCode)}/status`, { method: "PATCH", body: { status }, idempotent: true, idempotencyKey, headers: { "X-Actor-Id": actor, "If-Match": `\"${version}\"` } }),
+    rules: (params: { search?: string; eventType?: string; status?: string; currencyCode?: string; page?: number; size?: number } = {}, signal?: AbortSignal) => api.get<Page<AccountingRule>>(query("/api/v1/accounting-rules", { ...params, page: params.page ?? 0, size: params.size ?? 50 }), signal),
+    createRule: (body: unknown, actor: string, idempotencyKey?: string) => api.request<AccountingRule>("/api/v1/accounting-rules", { method: "POST", body, idempotent: true, idempotencyKey, headers: { "X-Actor-Id": actor } }),
+    mappings: (params: { search?: string; glCode?: string; status?: string; currencyCode?: string; page?: number; size?: number } = {}, signal?: AbortSignal) => api.get<Page<SubledgerMapping>>(query("/api/v1/subledger-mappings", { ...params, page: params.page ?? 0, size: params.size ?? 50 }), signal),
+    createMapping: (body: unknown, actor: string, idempotencyKey?: string) => api.request<SubledgerMapping>("/api/v1/subledger-mappings", { method: "POST", body, idempotent: true, idempotencyKey, headers: { "X-Actor-Id": actor } })
   }
 };

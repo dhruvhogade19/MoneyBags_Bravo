@@ -6,6 +6,10 @@ import com.moneybags.accounting.entity.JournalLine;
 import com.moneybags.accounting.exception.ApiException;
 import com.moneybags.accounting.repository.JournalLineRepository;
 import com.moneybags.accounting.repository.JournalRepository;
+import com.moneybags.accounting.repository.AccountingPeriodRepository;
+import com.moneybags.accounting.repository.FinancialReconciliationRunRepository;
+import com.moneybags.accounting.domain.DomainTypes.ReconciliationStatus;
+import com.moneybags.accounting.domain.DomainTypes.JournalStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -14,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 
 @Service
 public class QueryService {
@@ -21,10 +26,14 @@ public class QueryService {
     private final JournalLineRepository lines;
     private final JournalMapper mapper;
     private final LedgerBalanceService balances;
+    private final AccountingPeriodRepository periods;
+    private final FinancialReconciliationRunRepository reconciliations;
 
     public QueryService(JournalRepository journals, JournalLineRepository lines, JournalMapper mapper,
-                        LedgerBalanceService balances) {
+                        LedgerBalanceService balances, AccountingPeriodRepository periods,
+                        FinancialReconciliationRunRepository reconciliations) {
         this.journals = journals; this.lines = lines; this.mapper = mapper; this.balances = balances;
+        this.periods = periods; this.reconciliations = reconciliations;
     }
 
     @Transactional(readOnly = true)
@@ -34,10 +43,11 @@ public class QueryService {
     }
 
     @Transactional(readOnly = true)
-    public JournalPage search(LocalDate businessDate, String sourceService, String eventType,
-                              String externalReference, int page, int size) {
-        Page<Journal> result = journals.search(businessDate, blankToNull(sourceService), blankToNull(eventType),
-                blankToNull(externalReference), PageRequest.of(page, size, Sort.by("postedAt").descending()));
+    public JournalPage search(String journalNumber, LocalDate businessDate, String sourceService, String eventType,
+                              String externalReference, JournalStatus status, int page, int size) {
+        Page<Journal> result = journals.search(blankToNull(journalNumber), businessDate, blankToNull(sourceService),
+                blankToNull(eventType), blankToNull(externalReference), status,
+                PageRequest.of(page, size, Sort.by("postedAt").descending()));
         return new JournalPage(result.map(value -> mapper.toResponse(value, false)).getContent(), page, size,
                 result.getTotalElements(), result.getTotalPages());
     }
@@ -53,6 +63,32 @@ public class QueryService {
                 PageRequest.of(page, size, Sort.by("journal.postedAt").ascending().and(Sort.by("lineNumber"))));
         return new LedgerEntryPage(result.map(this::entry).getContent(), page, size, result.getTotalElements(),
                 result.getTotalPages());
+    }
+
+    @Transactional(readOnly = true)
+    public LedgerEntryPage glPostings(String glCode, LocalDate from, LocalDate to, int page, int size) {
+        if (from != null && to != null && to.isBefore(from)) throw new ApiException(HttpStatus.BAD_REQUEST,
+                "INVALID_DATE_RANGE", "to must not be before from");
+        Page<JournalLine> result = lines.findPageForGl(glCode, from, to,
+                PageRequest.of(page, size, Sort.by("journal.postedAt").descending().and(Sort.by("lineNumber"))));
+        return new LedgerEntryPage(result.map(this::entry).getContent(), page, size, result.getTotalElements(),
+                result.getTotalPages());
+    }
+
+    @Transactional(readOnly = true)
+    public AccountingDashboardResponse dashboard(LocalDate businessDate) {
+        LocalDate date = businessDate == null ? LocalDate.now() : businessDate;
+        var totalRows = journals.totalsForDate(date);
+        Object[] totals = totalRows.isEmpty() ? new Object[0] : totalRows.getFirst();
+        BigDecimal debit = totals.length == 0 || totals[0] == null ? BigDecimal.ZERO : (BigDecimal) totals[0];
+        BigDecimal credit = totals.length < 2 || totals[1] == null ? BigDecimal.ZERO : (BigDecimal) totals[1];
+        Page<Journal> recent = journals.search(null, date, null, null, null, null,
+                PageRequest.of(0, 8, Sort.by("postedAt").descending()));
+        return new AccountingDashboardResponse(date, journals.countByBusinessDate(date), debit, credit,
+                journals.countUnbalanced(date), 0,
+                periods.findByBusinessDate(date).map(value -> value.getStatus()).orElse(null),
+                reconciliations.countByBusinessDateAndStatus(date, ReconciliationStatus.EXCEPTION),
+                recent.map(value -> mapper.toResponse(value, false)).getContent());
     }
 
     private LedgerEntryResponse entry(JournalLine line) {
