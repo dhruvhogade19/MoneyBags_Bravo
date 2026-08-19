@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:statements;MODE=Oracle;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=true
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      # H2 Oracle mode reports Oracle DATE columns as JDBC TIMESTAMP. Production keeps
+      # ddl-auto=validate against the real Oracle dialect; this profile verifies Liquibase boot.
+      ddl-auto: none
+  liquibase:
+    enabled: true
+
+eureka:
+  client:
+    enabled: false
+
+moneybags:
+  security:
+    enabled: false
+  statements:
+    stub-upstream-clients: true

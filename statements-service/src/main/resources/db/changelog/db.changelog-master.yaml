@@ -1,0 +1,31 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-statement-schema
+      author: moneybags
+      # Accept the checksum already recorded by the first Oracle deployment.
+      # New source references remain isolated in the forward-only 002 changeset.
+      validCheckSum: "9:448b3b89d970dd572628bf4e175ef4f0"
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: ACCOUNT_STATEMENT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/001-create-statement-schema.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 002-add-statement-source-references
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: ACCOUNT_STATEMENT_LINE
+                columnName: TRANSACTION_ID
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/002-add-statement-source-references.sql
+            splitStatements: true
+            stripComments: true
