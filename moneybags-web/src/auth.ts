@@ -68,11 +68,12 @@ function decodeClaims(token: string): JwtClaims {
 function requiredScopes(persona: Persona): string[] {
   const consumer = ["openid", "profile", "product:read", "cif:read", "cif:write", "kyc:read", "kyc:write",
     "account:read", "account:open", "account:write", "account:close", "fd:read", "fd:open", "fd:close",
-    "payment:read", "payment:write", "card:read", "card:apply", "billing:read", "notification:read"];
+    "payment:read", "payment:write", "card:read", "card:apply", "billing:read", "notification:read",
+    "statements:read", "statements:generate"];
   const admin = ["openid", "profile", "product:read", "product:admin", "cif:read", "cif:admin", "kyc:read",
     "kyc:review", "account:read", "account:admin", "fd:read", "fd:admin", "payment:read", "payment:admin",
     "card:read", "card:admin", "accounting:read", "accounting:admin", "notification:read",
-    "notification:admin", "billing:read", "billing:admin"];
+    "notification:admin", "billing:read", "billing:admin", "statements:read", "statements:admin"];
   return persona === "admin" ? admin : consumer;
 }
 

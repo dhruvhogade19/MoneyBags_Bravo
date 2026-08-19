@@ -16,6 +16,7 @@ Spring Boot services for the Moneybags banking platform. Each service owns its O
 | `deposit-account-service` | 8086 | CASA and fixed-deposit lifecycle, payment reservations, balance projections and notification outbox |
 | `credit-card-service` | 8084 | Card application, account and authorization lifecycle |
 | `accounting-service` | 8088 | Accounting journals, posting rules and financial ledger operations |
+| `statements-service` | 8089 | Account-wise recent activity, Deposit/Accounting reconciliation and immutable PDF statements |
 | `notification-service` | 8090 | Internal delivery and customer notification history |
 | `bill-generation-service` | 8087 | Credit-card billing cycles, bills and payment settlement |
 
@@ -82,7 +83,8 @@ Or start them from IntelliJ in this order:
 3. `DepositAccountServiceApplication`
 4. `PaymentsServiceApplication`
 5. `AccountingServiceApplication`
-6. `ApiGatewayApplication`
+6. `StatementsServiceApplication`
+7. `ApiGatewayApplication`
 
 Useful URLs:
 
@@ -92,6 +94,7 @@ Useful URLs:
 - Payments Swagger UI: `http://localhost:8085/swagger-ui/index.html`
 - Service Swagger UI: `http://localhost:8086/swagger-ui.html`
 - Accounting Swagger UI: `http://localhost:8088/swagger-ui.html`
+- Statements Swagger UI: `http://localhost:8089/swagger-ui.html`
 - Health: `http://localhost:8086/actuator/health`
 
 Stop launcher-created processes with `./stop-all.ps1`.
@@ -179,6 +182,9 @@ Store that key in the deployment secret manager; rotating it requires a governed
 | `POST /api/internal/deposit-payment-operations/card-repayments/{paymentId}/capture` | Capture a reserved card-repayment debit |
 | `POST /api/internal/deposit-payment-operations/{paymentId}/release` | Release an active reservation |
 | `GET /api/internal/deposit-payment-operations/{paymentId}` | Read payment-operation status and transaction IDs |
+| `GET /api/v1/statements/accounts/{accountId}/activity?from=&to=` | View recent account-wise posted transactions and balances |
+| `POST /api/v1/statements` | Generate an immutable statement PDF for a balance-consistent account period |
+| `GET /api/v1/statements/{statementId}/download` | Download an authorized generated statement PDF |
 
 Supported lifecycle commands: `activate`, `block`, `unblock`, `freeze`, `release-freeze`, `mark-dormant`, `reactivate`, `request-close`, and `confirm-close`.
 
@@ -211,7 +217,7 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/deposit-accounts"
 ## Important design choices
 
 - Savings and Current accounts can be opened directly. Fixed deposits are booked through the dedicated FD API and funded from an eligible active Deposit account.
-- CASA accounts open with a zero balance. Cash deposits, external inbound credits, fees, reversals, statements and reconciliation integrations remain outside the current scope.
+- CASA accounts open with a zero balance. Cash deposits, external inbound credits, fees and reversals remain outside the current scope. Statements reconcile posted Deposit activity against Accounting ledger entries before an official PDF can be generated.
 - This service owns account identity, holders, lifecycle, limits, payment reservations, book-transfer settlement, card-repayment capture and the balance projection.
 - Payment mutations use pessimistic balance locks and immutable transaction records; book-transfer debit and credit commit in one Oracle transaction.
 - Account aggregate changes, audit evidence and idempotency results share the same Oracle transaction.

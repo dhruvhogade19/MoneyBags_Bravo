@@ -1,5 +1,6 @@
 import { api, query } from "./api";
-import type { Account, AccountBalance, AccountClearance, AccountDetail, AccountNumber, AccountStatusHistory, AccountingBalance, AccountingDashboard, AccountingEodRun, AccountingPeriod, AccountingRule, Bill, CardAccount, CardApplication, Cif, ClosureQuote, ClosureRequest, DepositReadiness, EodResult, EligibilityResult, FixedDeposit, FixedDepositAccrual, FixedDepositQuote, FixedDepositSchedule, GlAccount, Journal, Kyc, KycDocument, LedgerEntry, Notification, Page, Payment, PaymentEodControl, PaymentStatusHistory, PrematureClosureQuote, Product, ReconciliationRun, StatementPreview, SubledgerMapping, TransferRecipient, TrialBalance } from "./contracts";
+import type { Account, AccountActivity, AccountBalance, AccountDetail, AccountNumber, AccountStatement, AccountStatusHistory, Bill, CardAccount, CardApplication, Cif, ClosureQuote, ClosureRequest, DepositReadiness, EodResult, EligibilityResult, FixedDeposit, FixedDepositAccrual, FixedDepositQuote, FixedDepositSchedule, Journal, Kyc, KycDocument, Notification, Page, Payment, PaymentEodControl, PaymentStatusHistory, PrematureClosureQuote, Product, TransferRecipient } from "./contracts";
+import type { AccountClearance, AccountingBalance, AccountingDashboard, AccountingEodRun, AccountingPeriod, AccountingRule, GlAccount, LedgerEntry, ReconciliationRun, StatementPreview, SubledgerMapping, TrialBalance } from "./contracts";
 
 export function items<T>(value: T[] | Page<T> | { content?: T[] } | undefined): T[] {
   if (!value) return [];
@@ -121,6 +122,11 @@ export const services = {
   },
   notifications: {
     list: (cifId: string | number, signal?: AbortSignal) => api.get<Page<Notification>>(query("/api/notifications", { cifId, page: 0, size: 100 }), signal)
+  },
+  statements: {
+    activity: (accountId: string, from: string, to: string, signal?: AbortSignal) => api.get<AccountActivity>(query(`/api/v1/statements/accounts/${encodeURIComponent(accountId)}/activity`, { from, to }), signal),
+    generate: (accountReference: string, periodStart: string, periodEnd: string, idempotencyKey?: string) => api.post<AccountStatement>("/api/v1/statements", { accountReference, periodStart, periodEnd }, idempotencyKey),
+    download: (statementId: string) => api.blob(`/api/v1/statements/${encodeURIComponent(statementId)}/download`)
   },
   accounting: {
     dashboard: (businessDate?: string, signal?: AbortSignal) => api.get<AccountingDashboard>(query("/api/v1/accounting/dashboard", { businessDate }), signal),

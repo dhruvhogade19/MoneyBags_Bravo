@@ -49,7 +49,7 @@ The preflight covers safe money/date handling, stable command idempotency, OIDC 
 - All P0 cases pass.
 - No open P1 defect permits cross-customer access, cross-role access, duplicate money movement, fabricated financial data, token leakage or an incorrect success message.
 - Every list/detail page renders one of: data, a meaningful empty state, loading, or an actionable error state. Blank panels and empty table shells are failures.
-- Statement, operations payment search, Reconciliation/EOD and full Access Administration pass only when they show the documented unavailable/backend-contract state; fabricated results are failures.
+- Operations payment search, Reconciliation/EOD and full Access Administration pass only when they show the documented unavailable/backend-contract state; fabricated results are failures. Statements must show only authorized Deposit activity and may generate a PDF only when Accounting reconciliation succeeds.
 - Mutations are verified in both the UI and the authoritative owning service.
 
 ## 5. Authentication and session cases
@@ -164,14 +164,17 @@ The preflight covers safe money/date handling, stable command idempotency, OIDC 
 | PAY-010 | P0 | Card payment/repayment | Inspect all downstream references. | Credit Card, Payments, Billing and Accounting consistently use canonical `CC-101`; bare `101` is used only when calling a service endpoint that requires numeric ID. |
 | PAY-011 | P0 | Any consumer | Attempt transfer from an account owned by `C-OTHER`. | Authorization/business ownership check rejects it; no balance or journal changes. |
 
-## 12. Notifications and unavailable customer modules
+## 12. Notifications and statements
 
 | ID | Pri | Fixture | Scenario and steps | Expected result |
 |---|---|---|---|---|
 | NOTIF-001 | P1 | `C-ACTIVE` | Open Updates after a completed operation. | Notification subject, body, type, time and delivery status match Notification Service. |
 | NOTIF-002 | P1 | `C-EMPTY` | Open Updates. | **No updates** appears. |
 | NOTIF-003 | P0 | Consumer | Request notifications for `C-OTHER`. | Access is denied and foreign message content is not exposed. |
-| STAT-001 | P1 | Consumer | Open Statements. | Page explicitly says Statement Service is unavailable; no statement totals/downloads are fabricated. |
+| STAT-001 | P0 | Consumer with deposit accounts | Open Statements, select an account, and choose a recent period. | Only that consumer's account activity is shown with opening, debit, credit and closing totals; rows are newest first. |
+| STAT-002 | P0 | Consumer with reconciled activity | Generate a PDF for the selected period. | The service returns an immutable statement and the browser downloads its PDF. Repeating the same account/period reuses the stored statement. |
+| STAT-003 | P0 | Consumer with internally inconsistent Deposit activity | Open Statements and try to generate a PDF. | Activity remains visible with a balance-consistency warning, while PDF generation is disabled or rejected with `STATEMENT_NOT_RECONCILED`. Missing Accounting matches alone do not block generation while strict reconciliation is disabled. |
+| STAT-004 | P0 | Consumer A | Attempt to query Consumer B's account ID directly. | The service returns not found and exposes neither account ownership nor transactions. |
 
 ## 13. Bank-operations cases
 

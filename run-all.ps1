@@ -112,15 +112,52 @@ $services = @(
     @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088; Profiles = "local" },
     @{ Name = "notification-service"; Directory = "notification-service"; Port = 8090; Profiles = "mock-mail" },
     @{ Name = "bill-generation-service"; Directory = "bill-generation-service"; Port = 8087 },
+    @{ Name = "statements-service"; Directory = "statements-service"; Port = 8089; Profiles = "local" },
     @{ Name = "api-gateway"; Directory = "api-gateway"; Port = 8080 },
     @{ Name = "moneybags-web"; Directory = "moneybags-web"; Port = 8000; Command = "npm.cmd"; Arguments = "run serve:stack"; HealthPath = "/" }
 )
 
+function Test-MoneybagsPort {
+    param(
+        [int]$Port,
+        [int]$TimeoutMilliseconds = 250
+    )
+
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $connection = $client.ConnectAsync("127.0.0.1", $Port)
+        if (-not $connection.Wait($TimeoutMilliseconds)) {
+            return $false
+        }
+        return $client.Connected
+    } catch {
+        return $false
+    } finally {
+        $client.Dispose()
+    }
+}
+
+function Get-MoneybagsPortOwnerIds {
+    param([int]$Port)
+
+    $ownerIds = @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty OwningProcess -Unique)
+    if ($ownerIds.Count -gt 0) {
+        return $ownerIds
+    }
+
+    # CIM listener queries can return no rows in non-elevated shells. netstat
+    # is a reliable fallback for diagnostics and cleanup metadata.
+    $portPattern = ":" + $Port + "\s+.*LISTENING\s+(\d+)\s*$"
+    return @(netstat -ano -p tcp | ForEach-Object {
+        if ($_ -match $portPattern) { [int]$Matches[1] }
+    } | Select-Object -Unique)
+}
+
 $occupied = foreach ($service in $services) {
-    $listener = Get-NetTCPConnection -State Listen -LocalPort $service.Port -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if ($null -ne $listener) {
-        [pscustomobject]@{ Service = $service.Name; Port = $service.Port; PID = $listener.OwningProcess }
+    if (Test-MoneybagsPort -Port $service.Port) {
+        $ownerId = @(Get-MoneybagsPortOwnerIds -Port $service.Port | Select-Object -First 1)
+        [pscustomobject]@{ Service = $service.Name; Port = $service.Port; PID = $ownerId }
     }
 }
 if ($occupied) {
@@ -130,26 +167,24 @@ if ($occupied) {
 }
 
 $processes = @()
-$databaseBackedServices = @(
-    "cif-service", "kyc-service", "product-master-service", "payments-service",
-    "deposit-account-service", "credit-card-service", "accounting-service",
-    "notification-service", "bill-generation-service"
-)
-
-# These defaults protect slower Oracle/VPN developer environments. They can be
-# shortened for CI or constrained launchers whose parent process cannot observe
-# child listeners until the launch command returns.
-$perServiceStartupSeconds = if ([string]::IsNullOrWhiteSpace($env:MONEYBAGS_SERVICE_STARTUP_WAIT_SECONDS)) {
-    90
+# Discovery and Identity are the only bootstrap dependencies. Start them
+# together, wait once for their ports, then launch the complete application
+# tier concurrently. This avoids serializing Maven, Liquibase and Hikari startup
+# for every database-backed service.
+$bootstrapStartupSeconds = if ([string]::IsNullOrWhiteSpace($env:MONEYBAGS_BOOTSTRAP_WAIT_SECONDS)) {
+    60
 } else {
-    [Math]::Max(2, [int]$env:MONEYBAGS_SERVICE_STARTUP_WAIT_SECONDS)
+    [Math]::Max(5, [int]$env:MONEYBAGS_BOOTSTRAP_WAIT_SECONDS)
 }
 $finalStartupSeconds = if ([string]::IsNullOrWhiteSpace($env:MONEYBAGS_STARTUP_WAIT_SECONDS)) {
     180
 } else {
     [Math]::Max(10, [int]$env:MONEYBAGS_STARTUP_WAIT_SECONDS)
 }
-foreach ($service in $services) {
+
+function Start-MoneybagsService {
+    param([hashtable]$Service)
+
     $serviceDir = Join-Path $projectRoot $service.Directory
     $stdout = Join-Path $logDir ($service.Name + ".out.log")
     $stderr = Join-Path $logDir ($service.Name + ".err.log")
@@ -163,49 +198,78 @@ foreach ($service in $services) {
     }
     $process = Start-Process -FilePath $filePath -ArgumentList $arguments -WorkingDirectory $serviceDir `
         -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
-    $processes += [pscustomobject]@{ Name = $service.Name; Id = $process.Id; Port = $service.Port }
-    if ($databaseBackedServices -contains $service.Name) {
-        # Avoid opening several Liquibase/Hikari sessions at once against the
-        # shared developer Oracle listener. Continue as soon as this service
-        # listens, exits, or reaches its bounded startup window.
-        $serviceDeadline = (Get-Date).AddSeconds($perServiceStartupSeconds)
-        do {
-            Start-Sleep -Seconds 2
-            $listener = Get-NetTCPConnection -State Listen -LocalPort $service.Port -ErrorAction SilentlyContinue |
-                Select-Object -First 1
-            $stillRunning = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
-        } while ($null -eq $listener -and $null -ne $stillRunning -and (Get-Date) -lt $serviceDeadline)
-    } else {
-        Start-Sleep -Seconds 2
-    }
+    return [pscustomobject]@{ Name = $service.Name; Id = $process.Id; Port = $service.Port }
 }
 
+function Wait-MoneybagsPorts {
+    param(
+        [array]$ServicesToWaitFor,
+        [int]$TimeoutSeconds,
+        [string]$Message
+    )
+
+    Write-Host $Message -ForegroundColor Cyan
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $waitingFor = @($ServicesToWaitFor | Where-Object {
+            -not (Test-MoneybagsPort -Port $_.Port)
+        })
+        if ($waitingFor.Count -eq 0) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    Write-Warning ("Startup wait expired for: " + ($waitingFor.Name -join ", "))
+    return $false
+}
+
+$bootstrapServices = @($services | Where-Object {
+    $_.Name -in @("discovery-server", "identity-access-service")
+})
+$applicationServices = @($services | Where-Object {
+    $_.Name -notin @("discovery-server", "identity-access-service")
+})
+
+foreach ($service in $bootstrapServices) {
+    $processes += Start-MoneybagsService -Service $service
+}
+
+$null = Wait-MoneybagsPorts -ServicesToWaitFor $bootstrapServices `
+    -TimeoutSeconds $bootstrapStartupSeconds `
+    -Message "Starting Discovery and Identity concurrently..."
+
+foreach ($service in $applicationServices) {
+    $processes += Start-MoneybagsService -Service $service
+}
+
+# Persist launchers before readiness polling so stop-all.ps1 can always clean up
+# a partially started concurrent launch.
 $processes | ConvertTo-Json | Set-Content -LiteralPath $pidFile
-Write-Host "Waiting for services to open their ports..." -ForegroundColor Cyan
-# Oracle connectivity, Liquibase and Hibernate schema validation can take more
-# than one minute on the shared database. Avoid reporting a healthy service as
-# NOT STARTED while it is still completing startup validation.
-$startupDeadline = (Get-Date).AddSeconds($finalStartupSeconds)
-do {
-    $waitingFor = @($services | Where-Object {
-        $null -eq (Get-NetTCPConnection -State Listen -LocalPort $_.Port -ErrorAction SilentlyContinue |
-            Select-Object -First 1)
-    })
-    if ($waitingFor.Count -eq 0) {
-        break
-    }
-    Start-Sleep -Seconds 2
-} while ((Get-Date) -lt $startupDeadline)
+
+Write-Host ("Launched " + $applicationServices.Count + " application services concurrently.") -ForegroundColor Cyan
+$null = Wait-MoneybagsPorts -ServicesToWaitFor $services `
+    -TimeoutSeconds $finalStartupSeconds `
+    -Message "Waiting for all service ports..."
+
+$healthTimeoutSeconds = if ([string]::IsNullOrWhiteSpace($env:MONEYBAGS_HEALTH_TIMEOUT_SECONDS)) {
+    5
+} else {
+    [Math]::Max(1, [int]$env:MONEYBAGS_HEALTH_TIMEOUT_SECONDS)
+}
 
 $status = foreach ($service in $services) {
-    $listener = Get-NetTCPConnection -State Listen -LocalPort $service.Port -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    $listening = $null -ne $listener
+    $listening = Test-MoneybagsPort -Port $service.Port
+    $ownerId = if ($listening) {
+        @(Get-MoneybagsPortOwnerIds -Port $service.Port | Select-Object -First 1)
+    } else {
+        $null
+    }
     $healthStatus = $null
     if ($listening) {
         try {
             $healthPath = if ($service.ContainsKey("HealthPath")) { $service.HealthPath } else { "/actuator/health" }
-            $healthResponse = Invoke-WebRequest -UseBasicParsing -Uri ("http://localhost:" + $service.Port + $healthPath) -TimeoutSec 20
+            $healthResponse = Invoke-WebRequest -UseBasicParsing -Uri ("http://localhost:" + $service.Port + $healthPath) -TimeoutSec $healthTimeoutSeconds
             $healthStatus = [int]$healthResponse.StatusCode
         } catch {
             if ($null -ne $_.Exception.Response) {
@@ -225,7 +289,7 @@ $status = foreach ($service in $services) {
     [pscustomobject]@{
         Service = $service.Name
         Port = $service.Port
-        PID = if ($listening) { $listener.OwningProcess } else { $null }
+        PID = $ownerId
         Status = $displayStatus
         Log = Join-Path $logDir ($service.Name + ".out.log")
     }

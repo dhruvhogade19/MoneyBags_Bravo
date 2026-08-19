@@ -2,7 +2,8 @@ import { h } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { auth } from "../auth";
 import { ApiError } from "../api";
-import type { Account, Bill, CardAccount, CardApplication, Cif, EligibilityResult, FixedDeposit, KycDocument, Notification, Payment, Product, TransferRecipient } from "../contracts";
+import type { Account, AccountActivity, Bill, CardAccount, CardApplication, Cif, EligibilityResult, FixedDeposit, Notification, Payment, Product, TransferRecipient } from "../contracts";
+import type { KycDocument } from "../contracts";
 import { EmptyState, ErrorState, Field, Icon, Loading, Money, PageHeader, Panel, Receipt, SelectField, Status, useIdempotencyKeyStore, useRemote } from "../components/common";
 import { navigate } from "../router";
 import { items, services } from "../services";
@@ -21,6 +22,12 @@ const REQUIRED_KYC_DOCUMENTS = [
   { type: "ADDRESS_PROOF", label: "Address proof" },
   { type: "SALARY_PROOF", label: "Salary proof" }
 ] as const;
+function isoDate(daysAgo = 0): string {
+  const value = new Date();
+  value.setHours(12, 0, 0, 0);
+  value.setDate(value.getDate() - daysAgo);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
 
 async function activateCustomerProfile(): Promise<Cif> {
   const cif = await services.cif.repairIdentityLink();
@@ -103,6 +110,7 @@ function CifForm({ onCreated, existing, onCancel }: { onCreated: (value: Cif) =>
     employmentType: existing.employmentType
   } : { employmentType: "SALARIED" });
   const [error, setError] = useState<unknown>(); const [busy, setBusy] = useState(false);
+  const [submittedToBank, setSubmittedToBank] = useState(false);
   const commands = useIdempotencyKeyStore();
   const set = (key: string) => (value: string) => setValues((old) => ({ ...old, [key]: value }));
   const employmentType = values.employmentType || "SALARIED";
@@ -127,9 +135,11 @@ function CifForm({ onCreated, existing, onCancel }: { onCreated: (value: Cif) =>
         ? await services.cif.update(existing.cifId, body)
         : await services.cif.create(body, commands.keyFor(body));
       commands.reset();
-      if (!existing) await activateCustomerProfile();
+      if (!existing) {
+        setSubmittedToBank(true);
+        return;
+      }
       onCreated(created);
-      if (!existing) navigate("/app/overview", true);
     } catch (reason) {
       if (!existing && reason instanceof ApiError && reason.problem.status === 409) {
         try {
@@ -166,9 +176,17 @@ function CifForm({ onCreated, existing, onCancel }: { onCreated: (value: Cif) =>
         </div>
         <label class="mb-field"><span>Employment type *</span><select required value={employmentType} onChange={(e) => changeEmployment((e.currentTarget as HTMLSelectElement).value)}><option value="SALARIED">Salaried</option><option value="BUSINESS">Business</option><option value="STUDENT">Student</option></select></label>
         <label class="mb-field"><span>Address *</span><textarea required value={values.address} onInput={(e) => set("address")((e.currentTarget as HTMLTextAreaElement).value)}></textarea></label>
-        <div class="mb-row-actions"><button class="mb-button mb-button-primary" disabled={busy}>{busy ? "Saving profile…" : existing ? "Save and resubmit KYC" : "Create profile"}</button>{onCancel&&<button type="button" class="mb-button mb-button-secondary" onClick={onCancel}>Cancel</button>}</div>
+        <div class="mb-row-actions"><button class="mb-button mb-button-primary" disabled={busy || submittedToBank}>{busy ? "Saving profile…" : existing ? "Save and resubmit KYC" : "Create profile"}</button>{onCancel&&<button type="button" class="mb-button mb-button-secondary" onClick={onCancel}>Cancel</button>}</div>
       </form>
     </Panel>
+    {submittedToBank && <div class="mb-dialog-scrim">
+      <section class="mb-submission-dialog" role="dialog" aria-modal="true" aria-labelledby="submission-dialog-title" aria-describedby="submission-dialog-message">
+        <span class="mb-submission-dialog-mark" aria-hidden="true">✓</span>
+        <h2 id="submission-dialog-title">Submitted successfully</h2>
+        <p id="submission-dialog-message">Your form has been submitted to the bank. Please sign in again to upload your KYC documents.</p>
+        <button class="mb-button mb-button-primary" onClick={() => auth.logout()}>Sign in again</button>
+      </section>
+    </div>}
   </>;
 }
 
@@ -421,7 +439,42 @@ export function BillPayPage({billId}:{billId:string}){
 
 export function NotificationsPage(){const id=customerId();const remote=useRemote((signal)=>id?services.notifications.list(id,signal):Promise.resolve({content:[],page:0,size:0,totalElements:0}),[id]);if(remote.loading)return <Loading label="Loading notifications"/>;if(remote.error)return <ErrorState error={remote.error} retry={remote.retry}/>;const notices=items(remote.data);return <><PageHeader title="Notifications" description="Important activity from across MoneyBags."/><Panel>{notices.map((notice:Notification)=><article class="mb-notification" key={notice.notificationId}><span class="mb-notification-mark"><Icon name="notifications"/></span><div><div><strong>{notice.emailSubject}</strong><Status value={notice.status}/></div><p>{notice.emailBody}</p><small>{date(notice.createdAt)} · {notice.notificationType.replaceAll("_"," ")}</small></div></article>)}{!notices.length&&<EmptyState title="No notifications" message="Account and payment notifications will appear here."/>}</Panel></>}
 
-export function StatementsPage(){return <><PageHeader title="Statements" description="Download account and card activity by period."/><Panel><div class="mb-warning-banner">Statement Service is not present in this repository yet. This page is ready for its public API and remains unavailable until that service is implemented.</div><EmptyState title="Statements are not available yet" message="Authoritative statements cannot be assembled safely in the browser from Payments data alone."/></Panel></>}
+export function StatementsPage(){
+  const id=customerId();
+  const accountsRemote=useRemote(signal=>id?services.accounts.list(id,signal):Promise.resolve({content:[],page:0,size:0,totalElements:0}),[id]);
+  const requestedAccount=new URLSearchParams(location.search).get("accountId")??"";
+  const[accountId,setAccountId]=useState(requestedAccount);
+  const[from,setFrom]=useState(isoDate(29));
+  const[to,setTo]=useState(isoDate());
+  const[downloadError,setDownloadError]=useState<unknown>();
+  const[downloading,setDownloading]=useState(false);
+  const commands=useIdempotencyKeyStore();
+  const activityRemote=useRemote<AccountActivity|undefined>(signal=>accountId?services.statements.activity(accountId,from,to,signal):Promise.resolve(undefined),[accountId,from,to]);
+  const accounts=items<Account>(accountsRemote.data).filter(account=>account.status!=="CLOSED");
+  useEffect(()=>{
+    if(accountId||!accounts.length)return;
+    const requested=accounts.find(account=>account.accountId===requestedAccount);
+    setAccountId((requested??accounts[0]).accountId);
+  },[accountsRemote.data,accountId,requestedAccount]);
+  const preset=(days:number)=>{setFrom(isoDate(days-1));setTo(isoDate());};
+  const download=async()=>{
+    if(!accountId)return;
+    setDownloading(true);setDownloadError(undefined);
+    try{
+      const body={accountReference:accountId,periodStart:from,periodEnd:to};
+      const statement=await services.statements.generate(accountId,from,to,commands.keyFor(body));
+      const blob=await services.statements.download(statement.statementId);
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");link.href=url;link.download=`statement-${statement.maskedAccountReference}-${from}-${to}.pdf`;link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);commands.reset();
+    }catch(reason){setDownloadError(reason);}finally{setDownloading(false);}
+  };
+  if(accountsRemote.loading)return <Loading label="Loading your accounts"/>;
+  if(accountsRemote.error)return <ErrorState error={accountsRemote.error} retry={accountsRemote.retry}/>;
+  if(!accounts.length)return <><PageHeader title="Statements" description="Review posted account activity by period."/><Panel><EmptyState title="No accounts available" message="Open a deposit account before viewing transactions."/></Panel></>;
+  const activity=activityRemote.data;
+  return <><PageHeader title="Statements" description="Review posted transactions account by account and download a PDF." action={<button class="mb-button mb-button-primary" disabled={downloading||!activity?.reconciled} onClick={download}>{downloading?"Preparing PDF…":"Download PDF"}</button>}/><Panel><div class="mb-form-grid"><SelectField label="Account" value={accountId} onChange={setAccountId}>{accounts.map(account=><option value={account.accountId}>{account.maskedAccountNumber} · {account.productName}</option>)}</SelectField><Field label="From" name="statementFrom" type="date" value={from} max={to} required onInput={setFrom}/><Field label="To" name="statementTo" type="date" value={to} min={from} max={isoDate()} required onInput={setTo}/></div><div class="mb-row-actions"><button type="button" onClick={()=>preset(7)}>Last 7 days</button><button type="button" onClick={()=>preset(30)}>Last 30 days</button><button type="button" onClick={()=>preset(90)}>Last 90 days</button></div></Panel>{downloadError&&<ErrorState error={downloadError}/>} {activityRemote.loading?<Loading label="Loading account transactions"/>:activityRemote.error?<ErrorState error={activityRemote.error} retry={activityRemote.retry}/>:activity&&<><div class="mb-summary-row"><article><span>Opening balance</span><strong><Money value={activity.openingBalance} currency={activity.currency}/></strong><small>{activity.periodStart}</small></article><article><span>Total debits</span><strong><Money value={activity.totalDebits} currency={activity.currency}/></strong><small>{activity.lines.filter(line=>Number(line.debit)>0).length} debit entries</small></article><article><span>Total credits</span><strong><Money value={activity.totalCredits} currency={activity.currency}/></strong><small>{activity.lines.filter(line=>Number(line.credit)>0).length} credit entries</small></article><article><span>Closing balance</span><strong><Money value={activity.closingBalance} currency={activity.currency}/></strong><small>{activity.periodEnd}</small></article></div>{!activity.reconciled&&<div class="mb-warning-banner">Deposit transaction balances do not match the selected period totals. PDF download remains disabled for this period.</div>}<Panel title={`Transactions · ${activity.maskedAccountReference}`}>{activity.lines.length?<div class="mb-table-wrap"><table class="mb-table"><thead><tr><th>Date</th><th>Description</th><th>Reference</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>{[...activity.lines].reverse().map(line=><tr key={line.transactionId??`${line.paymentId}-${line.sequence}`}><td>{date(line.occurredAt)}</td><td><strong>{line.description}</strong><small>{line.journalNumber??"Deposit posted"}</small></td><td>{line.paymentId??line.transactionId??"—"}</td><td>{Number(line.debit)>0?<Money value={line.debit} currency={activity.currency}/>:"—"}</td><td>{Number(line.credit)>0?<Money value={line.credit} currency={activity.currency}/>:"—"}</td><td><Money value={line.balanceAfter} currency={activity.currency}/></td></tr>)}</tbody></table></div>:<EmptyState title="No posted transactions" message="There are no debit or credit movements for this account in the selected period."/>}</Panel></>}</>;
+}
 
 export function AccountDetailPage({accountId}:{accountId:string}){const remote=useRemote((signal)=>services.accounts.one(accountId,signal),[accountId]);if(remote.loading)return <Loading label="Loading account"/>;if(remote.error)return <ErrorState error={remote.error} retry={remote.retry}/>;return <><PageHeader title="Account details" description={accountId}/><Panel><JsonDetails value={remote.data}/></Panel></>}
 

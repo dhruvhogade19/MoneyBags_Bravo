@@ -29,8 +29,12 @@ public class RestClientCreditCardReferenceGateway implements CreditCardReference
                 "requestedCreditLimit", limit,
                 "age", c.age(),
                 "monthlyIncome", c.salary(),
-                "employmentType", c.employmentType(),
+                "customerType", customerType(c.employmentType()),
                 "kycCompleted", "APPROVED".equalsIgnoreCase(c.kycStatus()));
         return product.post().uri("/internal/v1/products/{code}/validate-credit-card-application", code).contentType(MediaType.APPLICATION_JSON).body(body).retrieve().body(ProductValidation.class);
+    }
+
+    private String customerType(String employmentType) {
+        return "BUSINESS".equalsIgnoreCase(employmentType) ? "BUSINESS" : "INDIVIDUAL";
     }
 }

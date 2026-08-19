@@ -4,14 +4,23 @@ This module is the customer banking and bank-operations web application for the 
 
 ## Run the complete application
 
-From the repository root in PowerShell:
+Start the backend services from the repository root in PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\run-all.ps1
 ```
 
-The script starts Eureka, Identity, all implemented business services, the Gateway, and this frontend. Open `http://localhost:8000` after the status table reports `moneybags-web` as `UP`.
+`run-all.ps1` starts Eureka, Identity, all implemented business services, and the Gateway. It does not start the frontend.
+
+Start the frontend separately in another PowerShell window:
+
+```powershell
+cd .\moneybags-web
+npm run serve
+```
+
+Then open `http://localhost:8000`.
 
 Stop everything with:
 
@@ -56,6 +65,6 @@ Runtime endpoints and OAuth client IDs are in `src/runtime-config.js`. The local
 
 ## Implemented experience
 
-Customer pages cover profile/CIF onboarding, KYC and document upload, products, deposit accounts, fixed deposits, credit-card applications/accounts, payments, card bills, and notifications. Operations pages cover the KYC work queue, products, journals, GL accounts, accounting rules, and subledger mappings.
+Customer pages cover profile/CIF onboarding, KYC and document upload, products, deposit accounts, fixed deposits, credit-card applications/accounts, payments, card bills, account-wise recent activity, generated statement PDFs, and notifications. Operations pages cover the KYC work queue, products, journals, GL accounts, accounting rules, and subledger mappings.
 
-Statement, Reconciliation, and EOD pages intentionally show an unavailable state because those standalone services are not present in this repository. The UI does not fabricate authoritative financial data for those functions.
+Statements use Deposit Account as the authoritative transaction and balance source. Accounting enrichment remains available, but it does not block PDF generation unless strict reconciliation is enabled in Statements Service. Reconciliation and EOD pages still show an unavailable state because those standalone services are not present in this repository.
