@@ -22,7 +22,13 @@ public final class FixedDepositResponses {
     public record ProjectedScheduleResponse(String fixedDepositId, LocalDate valueDate, LocalDate maturityDate,
         BigDecimal principal, BigDecimal annualInterestRate, BigDecimal projectedInterest,
         BigDecimal projectedMaturityAmount, InterestPayoutFrequency payoutFrequency) {}
+    /**
+     * {@code processed}/{@code totalAmount} retain the original Deposit-effect contract.  The Accounting
+     * fields deliberately describe only journals owned by this EOD correlation, so reconciliation never
+     * attributes a journal created by an older run to the current run.
+     */
     public record EodResult(String eodRunId, LocalDate businessDate, String commandReference,
-        int processed, int skipped, BigDecimal totalAmount, List<String> failures) {}
+        int processed, int skipped, BigDecimal totalAmount, List<String> failures,
+        long postedJournalCount, BigDecimal postedDebitTotal) {}
     public record ReadinessResponse(boolean ready, long pendingFunding, long pendingPayouts, List<String> blockers) {}
 }

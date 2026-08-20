@@ -45,16 +45,26 @@ moneybags:
     enabled: ${SECURITY_ENABLED:true}
     m2m:
       token-uri: ${M2M_TOKEN_URI:http://localhost:8093/oauth2/token}
-      # Reuse the registered local Payments service client for the Accounting
-      # and Billing service scopes. Human-admin JWTs are forwarded only to the
-      # existing admin operations endpoints in Payments, Deposits, and Cards.
-      client-id: ${EOD_M2M_CLIENT_ID:payments-service}
+      # Internal persisted EOD contracts use this dedicated service client.
+      # Human-admin JWTs are forwarded only to public admin operations endpoints.
+      client-id: ${EOD_M2M_CLIENT_ID:eod-reconciliation-service}
       client-secret: ${M2M_CLIENT_SECRET:}
-      scope: ${EOD_M2M_SCOPE:accounting:service billing:service}
+      scope: ${EOD_M2M_SCOPE:account:service accounting:service billing:service payment:service statements:service notification:service card:eod}
   eod:
     initial-business-date: ${EOD_INITIAL_BUSINESS_DATE:2026-08-13}
     currency: ${EOD_CURRENCY:INR}
     notification-cif-id: ${EOD_NOTIFICATION_CIF_ID:101}
+    execution-lease-seconds: ${EOD_EXECUTION_LEASE_SECONDS:120}
+    recovery:
+      initial-delay-ms: ${EOD_RECOVERY_INITIAL_DELAY_MS:60000}
+      fixed-delay-ms: ${EOD_RECOVERY_FIXED_DELAY_MS:30000}
+    retry:
+      backoff-enabled: ${EOD_RETRY_BACKOFF_ENABLED:true}
+    demo:
+      enabled: ${EOD_DEMO_MODE:false}
+      # `*` is an explicit local-demo escape hatch and is ignored unless the `demo` profile is active.
+      skipped-steps: ${EOD_DEMO_SKIPPED_STEPS:}
+      auto-resume-run-id: ${EOD_DEMO_AUTO_RESUME_RUN_ID:}
   clients:
     payments:
       base-url: ${PAYMENTS_URL:http://localhost:8085}

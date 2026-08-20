@@ -12,7 +12,7 @@ public interface FinancialReconciliationItemRepository extends JpaRepository<Fin
     long countByBlockingTrueAndStatus(ReconciliationItemStatus status);
 
     @Query("select count(i) from FinancialReconciliationItem i where i.blocking=true and i.status=:status " +
-            "and i.run.businessDate=:businessDate")
+            "and i.run.businessDate=:businessDate and i.run.active=true")
     long countBlockingForDate(@Param("businessDate") LocalDate businessDate,
                               @Param("status") ReconciliationItemStatus status);
 }

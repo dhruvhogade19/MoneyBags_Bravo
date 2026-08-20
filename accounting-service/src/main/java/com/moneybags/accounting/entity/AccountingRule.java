@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "ACCOUNTING_RULE")
+@Table(name = "ACCT_ACCOUNTING_RULE")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AccountingRule {

@@ -69,21 +69,24 @@ public class InternalPaymentController {
   public EodControlResponse cutoff(
       @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
       @Valid @RequestBody EodCutoffRequest request) {
-    return eod.cutoff(request.businessDate());
+    return eod.cutoff(request.businessDate(), request.currencyCode(), request.commandReference());
   }
 
   @PostMapping("/internal/v1/payments/eod/drain")
   @Operation(summary = "Report whether all in-flight payments have drained")
   public EodControlResponse drain(
-      @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey) {
-    return eod.drain();
+      @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
+      @Valid @RequestBody EodCutoffRequest request) {
+    return eod.drain(request.businessDate(), request.currencyCode(), request.commandReference());
   }
 
   @PostMapping("/internal/v1/payments/eod/reopen")
   @Operation(summary = "Reopen payment intake after EOD (also useful for local Swagger testing)")
   public EodControlResponse reopen(
-      @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey) {
-    return eod.reopen();
+      @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
+      @Valid @RequestBody EodReopenRequest request) {
+    return eod.reopen(request.businessDate(), request.nextBusinessDate(),
+        request.currencyCode(), request.commandReference());
   }
 
   @PostMapping("/internal/v1/payments/{paymentId}/reversal")

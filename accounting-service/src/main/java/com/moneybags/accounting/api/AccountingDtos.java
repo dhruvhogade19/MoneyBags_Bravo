@@ -232,7 +232,16 @@ public final class AccountingDtos {
     public record TrialBalanceRequest(
             @NotNull LocalDate businessDate,
             @JsonAlias("currency") @NotBlank @Pattern(regexp = "[A-Z]{3}") String currencyCode,
-            @NotBlank @Size(max = 100) String generatedBy) {}
+            @NotBlank @Size(max = 100) String generatedBy,
+            @Positive Integer executionEpoch) {
+        public TrialBalanceRequest {
+            executionEpoch = executionEpoch == null ? 1 : executionEpoch;
+        }
+
+        public TrialBalanceRequest(LocalDate businessDate, String currencyCode, String generatedBy) {
+            this(businessDate, currencyCode, generatedBy, 1);
+        }
+    }
     public record TrialBalanceLineResponse(String glCode, BigDecimal debitTotal, BigDecimal creditTotal,
                                            BigDecimal closingBalance) {}
     public record TrialBalanceResponse(String runId, LocalDate businessDate, String currencyCode,
@@ -248,9 +257,31 @@ public final class AccountingDtos {
             @Size(max = 100) String commandReference,
             @NotNull LocalDate businessDate,
             @Size(max = 80) String reconciledService,
+            @Size(max = 64) String journalCorrelationId,
             @JsonAlias("currency") @NotBlank @Pattern(regexp = "[A-Z]{3}") String currencyCode,
             @Min(0) long expectedJournalCount,
-            @NotNull @DecimalMin(value = "0.0000", inclusive = true) BigDecimal expectedTotalDebit) {}
+            @NotNull @DecimalMin(value = "0.0000", inclusive = true) BigDecimal expectedTotalDebit,
+            @Positive Integer executionEpoch) {
+        public FinancialReconciliationRequest {
+            executionEpoch = executionEpoch == null ? 1 : executionEpoch;
+        }
+
+        public FinancialReconciliationRequest(String eodRunId, String stepCode, String commandReference,
+                                              LocalDate businessDate, String reconciledService,
+                                              String journalCorrelationId, String currencyCode,
+                                              long expectedJournalCount, BigDecimal expectedTotalDebit) {
+            this(eodRunId, stepCode, commandReference, businessDate, reconciledService, journalCorrelationId,
+                    currencyCode, expectedJournalCount, expectedTotalDebit, 1);
+        }
+
+        public FinancialReconciliationRequest(String eodRunId, String stepCode, String commandReference,
+                                              LocalDate businessDate, String reconciledService,
+                                              String currencyCode, long expectedJournalCount,
+                                              BigDecimal expectedTotalDebit) {
+            this(eodRunId, stepCode, commandReference, businessDate, reconciledService, null, currencyCode,
+                    expectedJournalCount, expectedTotalDebit, 1);
+        }
+    }
 
     public record ReconciliationItemResponse(String itemId, String reference, BigDecimal expectedAmount,
                                              BigDecimal actualAmount, BigDecimal difference, boolean blocking,

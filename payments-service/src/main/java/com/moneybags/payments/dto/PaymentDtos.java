@@ -135,14 +135,83 @@ public final class PaymentDtos {
 
   public record EodCutoffRequest(
       @NotNull LocalDate businessDate,
-      @NotBlank @Size(max = 100) String commandReference) { }
+      @NotBlank @Size(max = 100) String commandReference,
+      @Pattern(regexp = "[A-Z]{3}") String currencyCode) {
+    public EodCutoffRequest(LocalDate businessDate, String commandReference) {
+      this(businessDate, commandReference, null);
+    }
+  }
+
+  /**
+   * Internal EOD finalizer command. A recovery cleanup reopens on {@code businessDate}; a
+   * successfully rolled period reopens on the immediately following date.
+   */
+  public record EodReopenRequest(
+      @NotNull LocalDate businessDate,
+      @NotNull LocalDate nextBusinessDate,
+      @NotBlank @Size(max = 100) String commandReference,
+      @Pattern(regexp = "[A-Z]{3}") String currencyCode) { }
 
   public record EodControlResponse(
-      LocalDate businessDate, String status, boolean newPaymentIntake, long pendingPayments) { }
+      LocalDate businessDate, String status, boolean newPaymentIntake, long pendingPayments,
+      String currencyCode, long postedJournalCount, BigDecimal postedDebitTotal,
+      String commandReference) { }
 
   public record ReversalRequest(
       @NotBlank @Size(max = 250) @Schema(example = "Retrying compensation after peer recovery")
       String reason) { }
+
+  public record FixedDepositAccountingRecoveryRequest(
+      @NotBlank @Pattern(regexp = "[0-9a-f]{64}") String expectedSourceFingerprint,
+      @NotBlank @Size(max = 100) String expectedLegacyJournalNumber,
+      @NotBlank @Pattern(regexp = "REPLAY_AUTHORITATIVE_FD_FUNDING") String confirmation,
+      @NotBlank @Size(max = 500) String reason) { }
+
+  public record FixedDepositAccountingRecoveryCandidate(
+      String paymentId,
+      String fixedDepositId,
+      String sourceAccountId,
+      String fixedDepositAccountId,
+      BigDecimal amount,
+      String currencyCode,
+      LocalDate businessDate,
+      Instant originalOccurredAt,
+      String legacyJournalNumber,
+      String accountingReference,
+      boolean locallyEligible,
+      List<String> blockers,
+      String sourceFingerprint,
+      String recoveryStatus,
+      String recoveryOutcome) { }
+
+  public record FixedDepositAccountingRecoveryPreview(
+      FixedDepositAccountingRecoveryCandidate candidate,
+      String proposedAction,
+      boolean sourceAccountRegistered,
+      boolean fixedDepositAccountRegistered,
+      String existingAccountingJournalNumber,
+      List<String> blockers,
+      String requiredConfirmation) { }
+
+  public record FixedDepositAccountingRecoveryResponse(
+      String recoveryId,
+      String paymentId,
+      String status,
+      String outcome,
+      String sourceFingerprint,
+      String accountingReference,
+      String legacyJournalNumber,
+      String recoveryJournalNumber,
+      int attemptCount,
+      String requestedBy,
+      String reason,
+      String correlationId,
+      Instant createdAt,
+      Instant lastAttemptAt,
+      Instant completedAt,
+      String errorCode,
+      String errorMessage,
+      boolean idempotentReplay) { }
 
   public record InternalPaymentFilter(
       PaymentStatus status, LocalDate businessDate,

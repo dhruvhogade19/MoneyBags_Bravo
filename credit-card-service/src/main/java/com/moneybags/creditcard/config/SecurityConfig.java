@@ -28,6 +28,8 @@ public class SecurityConfig {
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.GET, "/internal/v1/credit-card-accounts/*/billing-details")
                     .hasAuthority("SCOPE_card:billing")
+                .requestMatchers(HttpMethod.GET, "/internal/v1/credit-card-accounts/eod/readiness")
+                    .hasAuthority("SCOPE_card:eod")
                 .requestMatchers(HttpMethod.GET, "/internal/v1/credit-card-accounts/*/statement-context",
                         "/internal/v1/credit-card-accounts/*/statement-activity")
                     .hasAnyAuthority("SCOPE_card:billing", "SCOPE_account:service")

@@ -15,6 +15,8 @@ import java.time.OffsetDateTime;
 @Getter @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FixedDepositPayout {
+    public static final String ACCOUNTING_LEGACY_ACCEPTED = "LEGACY_ACCEPTED";
+    public static final String ACCOUNTING_REVIEW_REQUIRED = "REVIEW_REQUIRED";
     @Id @Column(name = "PAYOUT_ID", length = 36) private String id;
     @Column(name = "FD_ID", length = 36, nullable = false) private String fixedDepositId;
     @Column(name = "PAYOUT_TYPE", length = 20, nullable = false) private String payoutType;
@@ -25,6 +27,8 @@ public class FixedDepositPayout {
     @Enumerated(EnumType.STRING) @Column(name = "STATUS", length = 20, nullable = false) private FixedDepositPayoutStatus status;
     @Column(name = "SOURCE_REFERENCE", length = 100, nullable = false, unique = true) private String sourceReference;
     @Column(name = "FAILURE_CODE", length = 80) private String failureCode;
+    @Column(name = "ACCOUNTING_JOURNAL_NUMBER", length = 100) private String accountingJournalNumber;
+    @Column(name = "ACCOUNTING_POSTING_STATUS", length = 20) private String accountingPostingStatus;
     @Column(name = "CREATED_AT", nullable = false, updatable = false) private OffsetDateTime createdAt;
     @Column(name = "COMPLETED_AT") private OffsetDateTime completedAt;
 
@@ -38,5 +42,31 @@ public class FixedDepositPayout {
         this.id=id; this.fixedDepositId=fdId; this.payoutType=payoutType; this.principal=principal;
         this.interest=interest; this.netAmount=principal.add(interest); this.destinationAccountId=destinationAccountId;
         this.status=FixedDepositPayoutStatus.PENDING; this.sourceReference=sourceReference; this.createdAt=OffsetDateTime.now();
+    }
+
+    public void recordAccountingPosting(String journalNumber, String postingStatus) {
+        this.accountingJournalNumber = journalNumber;
+        this.accountingPostingStatus = postingStatus;
+    }
+
+    public void recordLegacyAccountingAcceptance() {
+        this.accountingJournalNumber = null;
+        this.accountingPostingStatus = ACCOUNTING_LEGACY_ACCEPTED;
+    }
+
+    public void recordAccountingReviewRequired() {
+        this.accountingPostingStatus = ACCOUNTING_REVIEW_REQUIRED;
+    }
+
+    public boolean hasNoAccountingDisposition() {
+        return (accountingJournalNumber == null || accountingJournalNumber.isBlank())
+                && (accountingPostingStatus == null || accountingPostingStatus.isBlank());
+    }
+
+    public boolean needsAccountingPosting() {
+        if (ACCOUNTING_LEGACY_ACCEPTED.equalsIgnoreCase(accountingPostingStatus)
+                || ACCOUNTING_REVIEW_REQUIRED.equalsIgnoreCase(accountingPostingStatus)) return false;
+        return accountingJournalNumber == null || accountingJournalNumber.isBlank()
+                || !"POSTED".equalsIgnoreCase(accountingPostingStatus);
     }
 }

@@ -1,10 +1,11 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:accounting;MODE=Oracle;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=true
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
+    url: ${ACCOUNTING_TEST_DB_URL:jdbc:h2:mem:accounting;MODE=Oracle;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=true}
+    username: ${ACCOUNTING_TEST_DB_USERNAME:sa}
+    password: ${ACCOUNTING_TEST_DB_PASSWORD:}
+    driver-class-name: ${ACCOUNTING_TEST_DB_DRIVER:org.h2.Driver}
   jpa:
+    database-platform: ${ACCOUNTING_TEST_HIBERNATE_DIALECT:org.hibernate.dialect.H2Dialect}
     hibernate:
       ddl-auto: none
     open-in-view: false

@@ -762,10 +762,35 @@ public class BillGenerationApplication {
             return new BillPage(all.subList(from, to).stream().map(b -> get(b.id)).toList(), page, size, all.size());
         }
 
-        @Transactional(readOnly = true)
-        public CloseResponse close(CloseRequest request) {
+        @Transactional
+        public synchronized CloseResponse close(String key, CloseRequest request) {
+            String keyHash = sha(key);
+            String requestHash = sha(write(request));
+            List<Idempotency> known = em.createQuery(
+                            "select i from Idempotency i where i.scope=:s and i.keyHash=:k", Idempotency.class)
+                    .setParameter("s", "BILL_EOD_CLOSE")
+                    .setParameter("k", keyHash)
+                    .getResultList();
+            OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+            if (!known.isEmpty() && known.getFirst().expiresAt.isAfter(now)) {
+                if (!known.getFirst().requestHash.equals(requestHash)) {
+                    throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_CONFLICT",
+                            "Idempotency key was used with a different EOD close request");
+                }
+                return closeResponse(request);
+            }
+            known.forEach(em::remove);
             List<Bill> overdue = em.createQuery("select b from Bill b where b.paymentDueDate < :d and b.status in ('GENERATED', 'PARTIALLY_PAID')", Bill.class).setParameter("d", request.businessDate).getResultList();
             overdue.forEach(b -> { String before = b.status; b.status = "OVERDUE"; em.persist(new BillHistory(b.id, before, "OVERDUE", "PAYMENT_DUE_DATE_PASSED")); });
+            String closeResourceId = UUID.nameUUIDFromBytes(
+                    ("BILL_EOD_CLOSE|" + request.eodRunId + "|" + request.businessDate)
+                            .getBytes(StandardCharsets.UTF_8)).toString();
+            em.persist(new Idempotency("BILL_EOD_CLOSE", keyHash, requestHash, closeResourceId));
+            em.flush();
+            return closeResponse(request);
+        }
+
+        private CloseResponse closeResponse(CloseRequest request) {
             Long count = em.createQuery("select count(b) from Bill b where b.businessDate=:d", Long.class).setParameter("d", request.businessDate).getSingleResult();
             return new CloseResponse(count.intValue(), 0, List.of());
         }

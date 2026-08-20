@@ -1,6 +1,7 @@
 package com.moneybags.eod;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -8,15 +9,23 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.*;
 
 @Component
 class RealPeerOperations implements PeerOperations {
+    private static final Set<String> EUREKA_SERVICE_IDS = Set.of(
+            "payments-service", "credit-card-service", "deposit-account-service",
+            "bill-generation-service", "accounting-service", "statements-service",
+            "notification-service");
+
     private final Map<String, RestClient> clients;
     private final ClientCredentialsTokenProvider tokens;
     private final long notificationCifId;
 
     RealPeerOperations(ClientCredentialsTokenProvider tokens,
+            @Qualifier("eodDirectRestClientBuilder") RestClient.Builder directClientBuilder,
+            @Qualifier("eodLoadBalancedRestClientBuilder") RestClient.Builder loadBalancedClientBuilder,
             @Value("${moneybags.clients.payments.base-url:http://localhost:8085}") String paymentsUrl,
             @Value("${moneybags.clients.credit-card.base-url:http://localhost:8084}") String creditCardUrl,
             @Value("${moneybags.clients.deposit-account.base-url:http://localhost:8086}") String depositUrl,
@@ -27,91 +36,139 @@ class RealPeerOperations implements PeerOperations {
             @Value("${moneybags.eod.notification-cif-id:101}") long notificationCifId) {
         this.tokens = tokens; this.notificationCifId = notificationCifId;
         this.clients = Map.of(
-                "payments-service", client(paymentsUrl), "credit-card-service", client(creditCardUrl),
-                "deposit-account-service", client(depositUrl), "bill-generation-service", client(billingUrl),
-                "accounting-service", client(accountingUrl), "statements-service", client(statementsUrl),
-                "notification-service", client(notificationUrl));
+                "payments-service", client(paymentsUrl, directClientBuilder, loadBalancedClientBuilder),
+                "credit-card-service", client(creditCardUrl, directClientBuilder, loadBalancedClientBuilder),
+                "deposit-account-service", client(depositUrl, directClientBuilder, loadBalancedClientBuilder),
+                "bill-generation-service", client(billingUrl, directClientBuilder, loadBalancedClientBuilder),
+                "accounting-service", client(accountingUrl, directClientBuilder, loadBalancedClientBuilder),
+                "statements-service", client(statementsUrl, directClientBuilder, loadBalancedClientBuilder),
+                "notification-service", client(notificationUrl, directClientBuilder, loadBalancedClientBuilder));
     }
 
     @Override
     public Map<String, Object> execute(StepDefinition step, EodContext context,
                                        Map<String, Map<String, Object>> outputs) {
+        StepDefinition operation = internalContract(step);
         try {
+            String paymentBarrierReference = paymentBarrierReference(context, outputs);
+            LocalDate paymentReopenDate = paymentReopenDate(context, outputs);
             Map<String, Object> result = switch (step.code()) {
-                case "PAYMENTS_CUTOFF" -> post(step, context, Map.of(
-                        "businessDate", context.businessDate(), "commandReference", reference(context, step)));
-                case "PAYMENTS_DRAIN", "PAYMENTS_REOPEN" -> post(step, context, null);
-                case "CREDIT_CARD_READINESS", "DEPOSIT_READINESS" -> get(step, context);
-                case "DEPOSIT_ACCRUALS" -> post(step, context, Map.of(
+                case "PAYMENTS_CUTOFF" -> post(operation, context, Map.of(
+                        "businessDate", context.businessDate(), "currencyCode", context.currency(),
+                        "commandReference", paymentBarrierReference));
+                case "PAYMENTS_DRAIN" -> post(operation, context, paymentCommand(
+                        context, paymentBarrierReference));
+                case "PAYMENTS_REOPEN" -> post(operation, context, paymentReopenCommand(
+                        context, paymentBarrierReference, paymentReopenDate));
+                case "CREDIT_CARD_READINESS", "DEPOSIT_READINESS", "FIXED_DEPOSIT_READINESS" ->
+                        get(operation, context);
+                case "DEPOSIT_ACCRUALS" -> post(operation, context, Map.of(
                         "eodRunId", context.runId(), "commandReference", reference(context, step),
                         "businessDate", context.businessDate(), "currency", context.currency()));
-                case "FIXED_DEPOSIT_ACCRUALS", "FIXED_DEPOSIT_MATURITIES" -> post(step, context, Map.of(
+                case "FIXED_DEPOSIT_ACCRUALS", "FIXED_DEPOSIT_MATURITIES" -> post(operation, context, Map.of(
                         "eodRunId", context.runId(), "businessDate", context.businessDate(),
                         "commandReference", reference(context, step)));
-                case "BILLS_CLOSE" -> post(step, context, Map.of(
+                case "BILLS_CLOSE" -> post(operation, context, Map.of(
                         "eodRunId", context.runId(), "businessDate", context.businessDate(),
                         "commandReference", reference(context, step)));
-                case "TRIAL_BALANCE" -> post(step, context, Map.of(
+                case "TRIAL_BALANCE" -> post(operation, context, Map.of(
                         "businessDate", context.businessDate(), "currencyCode", context.currency(),
-                        "generatedBy", context.actorId()));
-                case "PAYMENTS_RECONCILIATION" -> paymentReconciliation(step, context, outputs);
-                case "FIXED_DEPOSIT_RECONCILIATION" -> fixedDepositReconciliation(step, context, outputs);
-                case "STATEMENTS_GENERATE" -> post(step, context, Map.of(
+                        "generatedBy", context.actorId(), "executionEpoch", context.executionEpoch()));
+                case "PAYMENTS_RECONCILIATION" -> paymentReconciliation(operation, context, outputs);
+                case "FIXED_DEPOSIT_RECONCILIATION" -> fixedDepositReconciliation(operation, context, outputs);
+                case "STATEMENTS_GENERATE" -> post(operation, context, Map.of(
                         "eodRunId", context.runId(), "businessDate", context.businessDate(),
                         "commandReference", reference(context, step)));
-                case "NOTIFICATIONS_SEND" -> post(step, context, Map.of(
+                case "NOTIFICATIONS_SEND" -> post(operation, context, Map.of(
                         "cifId", notificationCifId, "notificationType", "STATEMENT_READY",
                         "sourceReference", context.runId(), "templateVariables", Map.of(
                                 "statementId", statementReference(outputs, context),
                                 "statementPeriod", context.businessDate().toString())));
-                case "ACCOUNTING_PERIOD_OPEN_CURRENT", "ACCOUNTING_PERIOD_CLOSE" -> period(step, context, context.businessDate());
-                case "ACCOUNTING_PERIOD_OPEN_NEXT" -> period(step, context, context.businessDate().plusDays(1));
+                case "ACCOUNTING_PERIOD_OPEN_CURRENT" -> period(operation, context, context.businessDate());
+                case "ACCOUNTING_PERIOD_CLOSE" -> closeAccountingPeriod(operation, context, outputs,
+                        paymentBarrierReference);
+                case "ACCOUNTING_PERIOD_OPEN_NEXT" -> period(operation, context, context.businessDate().plusDays(1));
                 default -> throw new PeerOperationException("UNKNOWN_STEP", "Unsupported EOD step: " + step.code(), Map.of());
             };
-            validate(step, result);
+            validate(operation, context, result, paymentBarrierReference, paymentReopenDate);
             return result;
         } catch (PeerOperationException exception) {
             throw exception;
         } catch (RestClientResponseException exception) {
             throw new PeerOperationException("UPSTREAM_HTTP_" + exception.getStatusCode().value(),
-                    step.providerService() + " rejected " + step.path() + ": " + exception.getResponseBodyAsString(),
-                    Map.of("status", exception.getStatusCode().value(), "service", step.providerService(),
-                            "path", step.path()));
+                    operation.providerService() + " rejected " + operation.path() + ": " + exception.getResponseBodyAsString(),
+                    Map.of("status", exception.getStatusCode().value(), "service", operation.providerService(),
+                            "path", operation.path()));
         } catch (RuntimeException exception) {
             throw new PeerOperationException("UPSTREAM_UNAVAILABLE",
-                    step.providerService() + " call failed: " + Objects.toString(exception.getMessage(), exception.getClass().getSimpleName()),
-                    Map.of("service", step.providerService(), "path", step.path()));
+                    operation.providerService() + " call failed: " + Objects.toString(exception.getMessage(), exception.getClass().getSimpleName()),
+                    Map.of("service", operation.providerService(), "path", operation.path()));
         }
     }
 
     private Map<String, Object> paymentReconciliation(StepDefinition step, EodContext context,
                                                        Map<String, Map<String, Object>> outputs) {
         Map<String, Object> drain = required(outputs, "PAYMENTS_DRAIN");
+        String actualCurrency = requiredText(drain, "currencyCode");
+        if (!context.currency().equalsIgnoreCase(actualCurrency)) {
+            throw new PeerOperationException("STEP_OUTPUT_CURRENCY_MISMATCH",
+                    "Payments drain currency does not match the EOD currency",
+                    Map.of("expectedCurrency", context.currency(), "actualCurrency", actualCurrency));
+        }
         return post(step, context, Map.of(
                 "eodRunId", context.runId(), "stepCode", step.code(),
                 "commandReference", reference(context, step), "businessDate", context.businessDate(),
                 "reconciledService", "PAYMENTS-SERVICE", "currencyCode", context.currency(),
-                "expectedJournalCount", longValue(drain, "postedJournalCount"),
-                "expectedTotalDebit", decimalValue(drain, "postedDebitTotal")));
+                "expectedJournalCount", requiredLong(drain, "postedJournalCount"),
+                "expectedTotalDebit", requiredDecimal(drain, "postedDebitTotal"),
+                "executionEpoch", context.executionEpoch()));
     }
 
     private Map<String, Object> fixedDepositReconciliation(StepDefinition step, EodContext context,
                                                             Map<String, Map<String, Object>> outputs) {
         Map<String, Object> accruals = required(outputs, "FIXED_DEPOSIT_ACCRUALS");
         Map<String, Object> maturities = required(outputs, "FIXED_DEPOSIT_MATURITIES");
-        long count = longValue(accruals, "processed") + longValue(maturities, "processed");
-        BigDecimal total = decimalValue(accruals, "totalAmount").add(decimalValue(maturities, "totalAmount"));
+        long count = preferredLong(accruals, "postedJournalCount", "processed")
+                + preferredLong(maturities, "postedJournalCount", "processed");
+        BigDecimal total = preferredDecimal(accruals, "postedDebitTotal", "totalAmount")
+                .add(preferredDecimal(maturities, "postedDebitTotal", "totalAmount"));
         return post(step, context, Map.of(
-                "eodRunId", context.runId() + "-FD", "stepCode", step.code(),
+                "eodRunId", context.runId(), "stepCode", step.code(),
                 "commandReference", reference(context, step), "businessDate", context.businessDate(),
+                "journalCorrelationId", context.runId(),
                 "reconciledService", "DEPOSIT-ACCOUNT-SERVICE", "currencyCode", context.currency(),
-                "expectedJournalCount", count, "expectedTotalDebit", total));
+                "expectedJournalCount", count, "expectedTotalDebit", total,
+                "executionEpoch", context.executionEpoch()));
+    }
+
+    private Map<String, Object> closeAccountingPeriod(StepDefinition step, EodContext context,
+                                                       Map<String, Map<String, Object>> outputs,
+                                                       String barrierReference) {
+        StepDefinition fence = new StepDefinition("PAYMENTS_DRAIN", step.sequence(), "payments-service", "POST",
+                "/internal/v1/payments/eod/drain", List.of(), StepExecutionMode.REQUIRED,
+                StepAuthMode.SERVICE, step.maxAttempts(), step.retryBackoffMs(),
+                "PAYMENTS-EOD-V1", "PERIOD-CLOSE-FENCE");
+        Map<String, Object> fenceResult = post(fence, context, paymentCommand(context, barrierReference));
+        validate(fence, context, fenceResult, barrierReference, context.businessDate());
+        return period(step, context, context.businessDate());
+    }
+
+    private Map<String, Object> paymentCommand(EodContext context, String barrierReference) {
+        return Map.of("businessDate", context.businessDate(), "currencyCode", context.currency(),
+                "commandReference", barrierReference);
+    }
+
+    private Map<String, Object> paymentReopenCommand(EodContext context, String barrierReference,
+                                                      LocalDate nextBusinessDate) {
+        return Map.of("businessDate", context.businessDate(), "nextBusinessDate", nextBusinessDate,
+                "currencyCode", context.currency(), "commandReference", barrierReference);
     }
 
     private Map<String, Object> period(StepDefinition step, EodContext context, java.time.LocalDate date) {
         String path = step.path().replace("{businessDate}", date.toString());
         return post(step, context, path, Map.of("eodRunId", context.runId(), "stepCode", step.code(),
-                "commandReference", reference(context, step), "actorId", context.actorId()));
+                "commandReference", reference(context, step), "actorId", context.actorId(),
+                "executionEpoch", context.executionEpoch()));
     }
 
     @SuppressWarnings("unchecked")
@@ -132,8 +189,12 @@ class RealPeerOperations implements PeerOperations {
     private Map<String, Object> exchange(RestClient.RequestHeadersSpec<?> request, StepDefinition step,
                                          EodContext context, boolean mutation, Object body) {
         request.header("X-Correlation-Id", context.runId()).accept(MediaType.APPLICATION_JSON);
-        if (mutation) request.header("Idempotency-Key", reference(context, step));
-        String authorization = operatorEndpoint(step) ? context.operatorAuthorization() : serviceAuthorization();
+        if (mutation) request.header("Idempotency-Key", idempotencyKey(context, step));
+        String authorization = switch (step.authMode()) {
+            case SERVICE -> serviceAuthorization();
+            case OPERATOR -> context.operatorAuthorization();
+            case AUTO -> operatorEndpoint(step) ? context.operatorAuthorization() : serviceAuthorization();
+        };
         if (authorization != null && !authorization.isBlank())
             request.header(HttpHeaders.AUTHORIZATION, authorization);
         if (body != null && request instanceof RestClient.RequestBodySpec bodySpec)
@@ -143,12 +204,24 @@ class RealPeerOperations implements PeerOperations {
                 : Collections.unmodifiableMap(new LinkedHashMap<>(response));
     }
 
-    private RestClient client(String baseUrl) {
-        return RestClient.builder().baseUrl(baseUrl).defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE).build();
+    private RestClient client(String baseUrl, RestClient.Builder directClientBuilder,
+                              RestClient.Builder loadBalancedClientBuilder) {
+        RestClient.Builder builder = usesServiceDiscovery(baseUrl) ? loadBalancedClientBuilder : directClientBuilder;
+        return builder.clone().baseUrl(baseUrl).build();
+    }
+
+    static boolean usesServiceDiscovery(String baseUrl) {
+        try {
+            String host = java.net.URI.create(baseUrl).getHost();
+            return host != null && EUREKA_SERVICE_IDS.contains(host.toLowerCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private boolean operatorEndpoint(StepDefinition step) {
-        return Set.of("payments-service", "credit-card-service", "deposit-account-service")
+        boolean internal = step.path().startsWith("/internal/") || step.path().startsWith("/api/internal/");
+        return !internal && Set.of("payments-service", "credit-card-service", "deposit-account-service")
                 .contains(step.providerService());
     }
 
@@ -157,12 +230,33 @@ class RealPeerOperations implements PeerOperations {
         return token == null ? null : "Bearer " + token;
     }
 
-    private void validate(StepDefinition step, Map<String, Object> result) {
+    private void validate(StepDefinition step, EodContext context, Map<String, Object> result,
+                          String paymentBarrierReference, LocalDate paymentReopenDate) {
         switch (step.code()) {
-            case "PAYMENTS_DRAIN" -> require(result, longValue(result, "pendingPayments") == 0 && "DRAINED".equals(text(result, "status")), "PAYMENTS_NOT_DRAINED");
-            case "PAYMENTS_REOPEN" -> require(result, bool(result, "newPaymentIntake") && "OPEN".equals(text(result, "status")), "PAYMENTS_NOT_REOPENED");
+            case "PAYMENTS_CUTOFF" -> {
+                validatePaymentScope(result, context, paymentBarrierReference,
+                        context.businessDate());
+                require(result, "CUT_OFF".equals(text(result, "status"))
+                        && !requiredBoolean(result, "newPaymentIntake"), "PAYMENTS_NOT_CUT_OFF");
+            }
+            case "PAYMENTS_DRAIN" -> {
+                validatePaymentScope(result, context, paymentBarrierReference,
+                        context.businessDate());
+                require(result, longValue(result, "pendingPayments") == 0
+                        && "DRAINED".equals(text(result, "status"))
+                        && !requiredBoolean(result, "newPaymentIntake"), "PAYMENTS_NOT_DRAINED");
+            }
+            case "PAYMENTS_REOPEN" -> {
+                validatePaymentScope(result, context, paymentBarrierReference, paymentReopenDate);
+                require(result, requiredBoolean(result, "newPaymentIntake")
+                        && "OPEN".equals(text(result, "status")), "PAYMENTS_NOT_REOPENED");
+            }
             case "CREDIT_CARD_READINESS" -> require(result, bool(result, "readyForEod"), "CREDIT_CARD_NOT_READY");
             case "DEPOSIT_READINESS", "FIXED_DEPOSIT_READINESS" -> require(result, bool(result, "ready"), "DEPOSIT_NOT_READY");
+            case "DEPOSIT_ACCRUALS" -> require(result,
+                    longValue(result, "failedCount") == 0 && !hasFailures(result), "DEPOSIT_ACCRUAL_FAILED");
+            case "FIXED_DEPOSIT_ACCRUALS", "FIXED_DEPOSIT_MATURITIES" -> require(result,
+                    !hasFailures(result), "FIXED_DEPOSIT_POSTING_FAILED");
             case "BILLS_CLOSE" -> require(result, longValue(result, "failedCount") == 0, "BILL_CLOSE_FAILED");
             case "TRIAL_BALANCE" -> require(result, bool(result, "balanced"), "TRIAL_BALANCE_UNBALANCED");
             case "PAYMENTS_RECONCILIATION", "FIXED_DEPOSIT_RECONCILIATION" -> require(result,
@@ -176,11 +270,78 @@ class RealPeerOperations implements PeerOperations {
         }
     }
 
+    private void validatePaymentScope(Map<String, Object> result, EodContext context,
+                                      String paymentBarrierReference, LocalDate expectedBusinessDate) {
+        require(result, expectedBusinessDate.toString().equals(requiredText(result, "businessDate")),
+                "PAYMENTS_BUSINESS_DATE_MISMATCH");
+        require(result, context.currency().equalsIgnoreCase(requiredText(result, "currencyCode")),
+                "PAYMENTS_CURRENCY_MISMATCH");
+        require(result, paymentBarrierReference.equals(requiredText(result, "commandReference")),
+                "PAYMENTS_BARRIER_OWNER_MISMATCH");
+    }
+
     private void require(Map<String, Object> result, boolean condition, String code) {
         if (!condition) throw new PeerOperationException(code, "Upstream control check failed: " + code, result);
     }
 
-    private String reference(EodContext context, StepDefinition step) { return "EOD:" + context.runId() + ":" + step.code(); }
+    private String reference(EodContext context, StepDefinition step) {
+        String persisted = context.commandReference();
+        if (persisted == null || persisted.isBlank()) return "EOD:" + context.runId() + ":" + step.code();
+        return persisted.startsWith("EOD:") ? persisted : "EOD:" + persisted;
+    }
+    private String paymentBarrierReference(EodContext context,
+                                           Map<String, Map<String, Object>> outputs) {
+        for (String code : List.of("PAYMENTS_DRAIN", "PAYMENTS_CUTOFF")) {
+            Map<String, Object> output = outputs.get(code);
+            if (output != null && output.get("commandReference") != null
+                    && !output.get("commandReference").toString().isBlank()) {
+                return output.get("commandReference").toString();
+            }
+        }
+        return "EOD:" + context.runId() + ":PAYMENTS_BARRIER:EPOCH:"
+                + Math.max(context.executionEpoch(), 1);
+    }
+    private LocalDate paymentReopenDate(EodContext context,
+                                        Map<String, Map<String, Object>> outputs) {
+        Map<String, Object> rollover = outputs.get("ACCOUNTING_PERIOD_OPEN_NEXT");
+        boolean completedRollover = rollover != null
+                && "OPEN".equalsIgnoreCase(Objects.toString(rollover.get("status"), ""));
+        return completedRollover ? context.businessDate().plusDays(1) : context.businessDate();
+    }
+    private boolean hasFailures(Map<String, Object> result) {
+        Object failures = result.get("failures");
+        if (failures == null) return false;
+        if (failures instanceof Collection<?> collection) return !collection.isEmpty();
+        return !failures.toString().isBlank() && !"[]".equals(failures.toString());
+    }
+    private StepDefinition internalContract(StepDefinition step) {
+        String path = switch (step.code()) {
+            case "PAYMENTS_CUTOFF" -> "/internal/v1/payments/eod/cutoff";
+            case "PAYMENTS_DRAIN" -> "/internal/v1/payments/eod/drain";
+            case "PAYMENTS_REOPEN" -> "/internal/v1/payments/eod/reopen";
+            case "CREDIT_CARD_READINESS" -> "/internal/v1/credit-card-accounts/eod/readiness";
+            case "DEPOSIT_READINESS" -> "/internal/v1/deposit-accounts/eod/operations-readiness";
+            case "DEPOSIT_ACCRUALS" -> "/internal/v1/deposit-accounts/eod/accruals";
+            case "FIXED_DEPOSIT_READINESS" -> "/internal/v1/deposit-accounts/eod/fixed-deposit-readiness";
+            case "FIXED_DEPOSIT_ACCRUALS" -> "/internal/v1/deposit-accounts/eod/fixed-deposit-accruals";
+            case "FIXED_DEPOSIT_MATURITIES" -> "/internal/v1/deposit-accounts/eod/fixed-deposit-maturities";
+            default -> step.path();
+        };
+        StepAuthMode authMode = path.startsWith("/internal/") || path.startsWith("/api/internal/")
+                ? StepAuthMode.SERVICE : step.authMode();
+        return new StepDefinition(step.code(), step.sequence(), step.providerService(), step.method(),
+                path, step.dependencies(), step.executionMode(), authMode,
+                step.maxAttempts(), step.retryBackoffMs(), step.contractVersion(),
+                step.idempotencySuffix());
+    }
+    private String idempotencyKey(EodContext context, StepDefinition step) {
+        String reference = reference(context, step);
+        String suffix = step.idempotencySuffix();
+        if ((suffix == null || suffix.isBlank()) && "FIXED_DEPOSIT_RECONCILIATION".equals(step.code()))
+            suffix = "JOURNAL-CORRELATED-V2";
+        if (suffix != null && !suffix.isBlank()) reference += ":" + suffix;
+        return reference + ":EPOCH:" + Math.max(context.executionEpoch(), 1);
+    }
     private Map<String, Object> required(Map<String, Map<String, Object>> outputs, String key) {
         Map<String, Object> value = outputs.get(key);
         if (value == null) throw new PeerOperationException("MISSING_STEP_OUTPUT", "Missing output from " + key, Map.of());
@@ -193,11 +354,43 @@ class RealPeerOperations implements PeerOperations {
     }
     private String text(Map<String, Object> map, String key) { return Objects.toString(map.get(key), ""); }
     private boolean bool(Map<String, Object> map, String key) { return Boolean.parseBoolean(text(map, key)); }
+    private boolean requiredBoolean(Map<String, Object> map, String key) {
+        if (!map.containsKey(key) || map.get(key) == null)
+            throw new PeerOperationException("MISSING_STEP_OUTPUT_FIELD", "Missing required output field " + key,
+                    Map.of("field", key));
+        return bool(map, key);
+    }
     private long longValue(Map<String, Object> map, String key) {
         Object value = map.get(key); if (value == null) return 0; if (value instanceof Number number) return number.longValue();
         return Long.parseLong(value.toString());
     }
     private BigDecimal decimalValue(Map<String, Object> map, String key) {
         Object value = map.get(key); return value == null ? BigDecimal.ZERO : new BigDecimal(value.toString());
+    }
+    private long requiredLong(Map<String, Object> map, String key) {
+        if (!map.containsKey(key) || map.get(key) == null)
+            throw new PeerOperationException("MISSING_STEP_OUTPUT_FIELD", "Missing required output field " + key,
+                    Map.of("field", key));
+        return longValue(map, key);
+    }
+    private BigDecimal requiredDecimal(Map<String, Object> map, String key) {
+        if (!map.containsKey(key) || map.get(key) == null)
+            throw new PeerOperationException("MISSING_STEP_OUTPUT_FIELD", "Missing required output field " + key,
+                    Map.of("field", key));
+        return decimalValue(map, key);
+    }
+    private String requiredText(Map<String, Object> map, String key) {
+        if (!map.containsKey(key) || map.get(key) == null || map.get(key).toString().isBlank())
+            throw new PeerOperationException("MISSING_STEP_OUTPUT_FIELD", "Missing required output field " + key,
+                    Map.of("field", key));
+        return map.get(key).toString();
+    }
+    private long preferredLong(Map<String, Object> map, String preferred, String legacy) {
+        return map.containsKey(preferred) && map.get(preferred) != null
+                ? longValue(map, preferred) : requiredLong(map, legacy);
+    }
+    private BigDecimal preferredDecimal(Map<String, Object> map, String preferred, String legacy) {
+        return map.containsKey(preferred) && map.get(preferred) != null
+                ? decimalValue(map, preferred) : requiredDecimal(map, legacy);
     }
 }

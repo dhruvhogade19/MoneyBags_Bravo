@@ -47,16 +47,26 @@ public interface JournalRepository extends JpaRepository<Journal, String> {
     long countByBusinessDateAndCurrencyCodeAndSourceService(LocalDate businessDate, String currencyCode,
                                                              String sourceService);
 
+    long countByBusinessDateAndCurrencyCodeAndSourceServiceAndCorrelationId(LocalDate businessDate,
+            String currencyCode, String sourceService, String correlationId);
+
     @Query("select coalesce(sum(j.totalDebit),0) from Journal j where j.businessDate=:businessDate " +
             "and j.currencyCode=:currency and j.sourceService=:sourceService")
     BigDecimal totalDebit(@Param("businessDate") LocalDate businessDate, @Param("currency") String currency,
                           @Param("sourceService") String sourceService);
+
+    @Query("select coalesce(sum(j.totalDebit),0) from Journal j where j.businessDate=:businessDate " +
+            "and j.currencyCode=:currency and j.sourceService=:sourceService " +
+            "and j.correlationId=:correlationId")
+    BigDecimal totalDebitByCorrelationId(@Param("businessDate") LocalDate businessDate,
+            @Param("currency") String currency, @Param("sourceService") String sourceService,
+            @Param("correlationId") String correlationId);
 
     @Query("select coalesce(sum(j.totalDebit),0) from Journal j where j.reversesJournalNumber=:journalNumber")
     BigDecimal totalReversed(@Param("journalNumber") String journalNumber);
 
     Optional<Journal> findTopByOrderByPostingSequenceDesc();
 
-    @Query(value = "SELECT ACCOUNTING_JOURNAL_SEQ.NEXTVAL FROM DUAL", nativeQuery = true)
+    @Query(value = "SELECT ACCT_JOURNAL_SEQ.NEXTVAL FROM DUAL", nativeQuery = true)
     long nextPostingSequence();
 }

@@ -1,5 +1,6 @@
 package com.moneybags.accounting.repository;
 
+import com.moneybags.accounting.domain.DomainTypes.PeriodStatus;
 import com.moneybags.accounting.entity.AccountingPeriod;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +13,7 @@ import java.util.Optional;
 
 public interface AccountingPeriodRepository extends JpaRepository<AccountingPeriod, String> {
     Optional<AccountingPeriod> findByBusinessDate(LocalDate businessDate);
+    boolean existsByBusinessDateBeforeAndStatusNot(LocalDate businessDate, PeriodStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from AccountingPeriod p where p.businessDate=:businessDate")

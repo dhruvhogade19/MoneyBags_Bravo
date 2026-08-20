@@ -38,6 +38,11 @@ public class DepositOperationsController {
 
     @GetMapping("/readiness")
     public OperationsReadiness readiness() {
+        return operationsReadiness(deposits, fixedDeposits);
+    }
+
+    static OperationsReadiness operationsReadiness(DepositEodService deposits,
+                                                   FixedDepositEodService fixedDeposits) {
         ServiceReadinessResponse depositReadiness = deposits.readiness();
         ReadinessResponse fixedDepositReadiness = fixedDeposits.readiness();
         List<String> blockers = java.util.stream.Stream.concat(
@@ -54,14 +59,14 @@ public class DepositOperationsController {
     @PostMapping("/fixed-deposit-accruals")
     public EodResult fixedDepositAccruals(@RequestHeader("Idempotency-Key") String key,
                                           @Valid @RequestBody EodRequest request) {
-        return idempotency.execute("FD_ADMIN_EOD_ACCRUAL", key, request, EodResult.class,
+        return idempotency.execute("FD_ADMIN_EOD_ACCRUAL_ACCOUNTING_V3", key, request, EodResult.class,
                 () -> fixedDeposits.accrue(request));
     }
 
     @PostMapping("/fixed-deposit-maturities")
     public EodResult fixedDepositMaturities(@RequestHeader("Idempotency-Key") String key,
                                              @Valid @RequestBody EodRequest request) {
-        return idempotency.execute("FD_ADMIN_EOD_MATURITY", key, request, EodResult.class,
+        return idempotency.execute("FD_ADMIN_EOD_MATURITY_ACCOUNTING_V3", key, request, EodResult.class,
                 () -> fixedDeposits.mature(request));
     }
 

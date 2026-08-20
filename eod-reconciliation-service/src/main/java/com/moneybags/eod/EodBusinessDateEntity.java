@@ -61,11 +61,27 @@ class EodBusinessDateEntity {
 
     void markFailed() { status = "EOD_FAILED"; }
 
-    void advanceTo(LocalDate nextDate) {
+    /**
+     * Move the local date before releasing the remote payment fence. The date remains non-open
+     * until the finalizer response is durably checkpointed.
+     */
+    void prepareNextDate(LocalDate nextDate) {
         businessDate = nextDate;
-        status = "OPEN";
+        status = "EOD_IN_PROGRESS";
         openedAt = OffsetDateTime.now();
         cutoffAt = null;
         closedAt = null;
+    }
+
+    void openPreparedDate() {
+        status = "OPEN";
+        if (openedAt == null) openedAt = OffsetDateTime.now();
+        cutoffAt = null;
+        closedAt = null;
+    }
+
+    void advanceTo(LocalDate nextDate) {
+        prepareNextDate(nextDate);
+        openPreparedDate();
     }
 }

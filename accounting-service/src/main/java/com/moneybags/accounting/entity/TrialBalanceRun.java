@@ -26,17 +26,28 @@ public class TrialBalanceRun {
     @Column(name = "BALANCED_FLAG", nullable = false, columnDefinition = "NUMBER(1)") private boolean balanced;
     @Column(name = "GENERATED_BY", length = 100, nullable = false) private String generatedBy;
     @Column(name = "GENERATED_AT", nullable = false) private OffsetDateTime generatedAt;
+    @Column(name = "EXECUTION_EPOCH", nullable = false) private int executionEpoch;
+    @Convert(converter = NumericBooleanConverter.class)
+    @Column(name = "ACTIVE_FLAG", nullable = false, columnDefinition = "NUMBER(1)") private boolean active;
+    @Column(name = "REQUEST_HASH", length = 64) private String requestHash;
 
     @OneToMany(mappedBy = "run", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("glCode ASC") private List<TrialBalanceLine> lines = new ArrayList<>();
 
     public TrialBalanceRun(String id, LocalDate businessDate, String currencyCode, BigDecimal totalDebit,
                            BigDecimal totalCredit, String generatedBy) {
+        this(id, businessDate, currencyCode, totalDebit, totalCredit, generatedBy, 1, null);
+    }
+
+    public TrialBalanceRun(String id, LocalDate businessDate, String currencyCode, BigDecimal totalDebit,
+                           BigDecimal totalCredit, String generatedBy, int executionEpoch, String requestHash) {
         this.id = id; this.businessDate = businessDate; this.currencyCode = currencyCode;
         this.totalDebit = totalDebit; this.totalCredit = totalCredit;
         this.balanced = totalDebit.compareTo(totalCredit) == 0; this.generatedBy = generatedBy;
-        this.generatedAt = OffsetDateTime.now();
+        this.generatedAt = OffsetDateTime.now(); this.executionEpoch = executionEpoch;
+        this.active = true; this.requestHash = requestHash;
     }
 
     public void addLine(TrialBalanceLine line) { lines.add(line); line.attach(this); }
+    public void supersede() { this.active = false; }
 }

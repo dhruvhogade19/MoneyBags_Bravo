@@ -17,9 +17,8 @@
           H2 2.4.240 compiles CHECK ... IN (...) constraints against the
           Liquibase connection that created them. Once that connection is
           closed, writes from the application pool fail with error 23514 / "the
-          database has been closed". Accounting's local profile is the only
-          runtime H2 profile, so keep it on the last unaffected release until
-          the upstream fix is published.
+          database has been closed". H2 is test-only, but keeping the last
+          unaffected release makes the fast integration suite deterministic.
         -->
         <h2.version>2.3.232</h2.version>
     </properties>
@@ -41,7 +40,7 @@
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-webmvc-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-test</artifactId><scope>test</scope></dependency>
-        <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
     </dependencies>
 
     <build>

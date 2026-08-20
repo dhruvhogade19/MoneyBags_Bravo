@@ -12,7 +12,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "SUBLEDGER_ACCOUNT", uniqueConstraints = @UniqueConstraint(columnNames = {"ACCOUNT_TYPE", "ACCOUNT_REFERENCE"}))
+@Table(name = "ACCT_SUBLEDGER_ACCOUNT", uniqueConstraints = @UniqueConstraint(columnNames = {"ACCOUNT_TYPE", "ACCOUNT_REFERENCE"}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SubledgerAccount {

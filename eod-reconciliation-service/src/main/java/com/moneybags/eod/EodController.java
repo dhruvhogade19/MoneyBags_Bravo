@@ -2,6 +2,7 @@ package com.moneybags.eod;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.validation.annotation.Validated;
@@ -42,21 +43,27 @@ public class EodController {
     @PostMapping("/eod/runs/{runId}/resume")
     EodRunResponse resume(@PathVariable String runId,
                           @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+                          @RequestHeader(value = "Idempotency-Key", required = false)
+                          @Size(min = 1, max = 200) String idempotencyKey,
                           @RequestBody @Valid EodResumeRequest request) {
-        return service.resume(runId, authorization);
+        return service.resume(runId, request, authorization, idempotencyKey);
     }
 
     @PostMapping("/eod/runs/{runId}/steps/{stepCode}/retry")
     EodRunResponse retry(@PathVariable String runId, @PathVariable String stepCode,
                          @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+                         @RequestHeader(value = "Idempotency-Key", required = false)
+                         @Size(min = 1, max = 200) String idempotencyKey,
                          @RequestBody @Valid EodStepRetryRequest request) {
-        return service.retry(runId, stepCode, authorization);
+        return service.retry(runId, stepCode, request, authorization, idempotencyKey);
     }
 
     @PostMapping("/eod/exceptions/{exceptionId}/resolve")
     EodRunResponse resolve(@PathVariable String exceptionId,
+                           @RequestHeader(value = "Idempotency-Key", required = false)
+                           @Size(min = 1, max = 200) String idempotencyKey,
                            @RequestBody @Valid EodExceptionResolutionRequest request) {
-        return service.resolve(exceptionId, request);
+        return service.resolve(exceptionId, request, idempotencyKey);
     }
 
     @PostMapping("/business-date/open-next")

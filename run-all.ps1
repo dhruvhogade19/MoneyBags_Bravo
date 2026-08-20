@@ -107,10 +107,10 @@ $services = @(
     @{ Name = "payments-service"; Directory = "payments-service"; Port = 8085; DatabaseBacked = $true },
     @{ Name = "deposit-account-service"; Directory = "deposit-account-service"; Port = 8086; DatabaseBacked = $true },
     @{ Name = "credit-card-service"; Directory = "credit-card-service"; Port = 8084; DatabaseBacked = $true },
-    @{ Name = "eod-reconciliation-service"; Directory = "eod-reconciliation-service"; Port = 8091; DatabaseBacked = $true },
-    # The shared Oracle schema contains a legacy Accounting data model.  Until its
-    # dedicated conversion migration is applied, use the self-contained demo profile.
-    @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088; Profiles = "local" },
+    # The demo profile alone changes nothing; the local .env must also explicitly enable
+    # EOD demo mode and request the wildcard synthetic-success policy.
+    @{ Name = "eod-reconciliation-service"; Directory = "eod-reconciliation-service"; Port = 8091; Profiles = "demo"; DatabaseBacked = $true },
+    @{ Name = "accounting-service"; Directory = "accounting-service"; Port = 8088; DatabaseBacked = $true },
     @{ Name = "notification-service"; Directory = "notification-service"; Port = 8090; Profiles = "mock-mail"; DatabaseBacked = $true },
     @{ Name = "bill-generation-service"; Directory = "bill-generation-service"; Port = 8087; DatabaseBacked = $true },
     @{ Name = "statements-service"; Directory = "statements-service"; Port = 8089; Profiles = "local"; DatabaseBacked = $true },

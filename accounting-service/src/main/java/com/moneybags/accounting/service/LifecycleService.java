@@ -35,12 +35,18 @@ public class LifecycleService {
         validateEventType(request);
         String requestHash = hashing.requestHash(request);
         String keyHash = hashing.sha256(key);
-        Optional<AccountLifecycleEvent> existing = events.findByEventReference(request.eventReference());
-        if (existing.isEmpty()) existing = events.findByIdempotencyKeyHash(keyHash);
-        if (existing.isPresent()) {
-            AccountLifecycleEvent value = existing.get();
-            if (!value.getRequestHash().equals(requestHash)) throw new ApiException(HttpStatus.CONFLICT,
-                    "IDEMPOTENCY_KEY_REUSED", "Lifecycle reference or idempotency key was reused with different content");
+        Optional<AccountLifecycleEvent> byReference = events.findByEventReference(request.eventReference());
+        if (byReference.isPresent()) {
+            AccountLifecycleEvent value = byReference.get();
+            if (value.getRequestHash().equals(requestHash) || sameClosureTransition(value, request)) {
+                return response(value, true);
+            }
+            throw idempotencyConflict();
+        }
+        Optional<AccountLifecycleEvent> byKey = events.findByIdempotencyKeyHash(keyHash);
+        if (byKey.isPresent()) {
+            AccountLifecycleEvent value = byKey.get();
+            if (!value.getRequestHash().equals(requestHash)) throw idempotencyConflict();
             return response(value, true);
         }
 
@@ -103,6 +109,23 @@ public class LifecycleService {
         if (deposit != (request.accountType() == AccountType.DEPOSIT_ACCOUNT))
             throw new ApiException(HttpStatus.BAD_REQUEST, "EVENT_ACCOUNT_TYPE_MISMATCH",
                     "eventType and accountType do not describe the same account family");
+    }
+    private boolean sameClosureTransition(AccountLifecycleEvent value, AccountLifecycleEventRequest request) {
+        // The event reference identifies the one terminal closure transition. A caller can commit here and
+        // subsequently roll back locally, then regenerate temporal metadata while retrying that same transition.
+        return !isOpening(request.eventType())
+                && value.getEventType() == request.eventType()
+                && value.getAccountType() == request.accountType()
+                && value.getAccountReference().equals(request.accountReference())
+                && Objects.equals(value.getReasonCode(), request.reasonCode())
+                && (request.productCode() == null || request.productCode().isBlank())
+                && accounts.findByAccountTypeAndAccountReference(request.accountType(), request.accountReference())
+                        .map(account -> account.getCurrencyCode().trim().equals(request.currencyCode()))
+                        .orElse(false);
+    }
+    private ApiException idempotencyConflict() {
+        return new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED",
+                "Lifecycle reference or idempotency key was reused with different content");
     }
     private boolean isOpening(LifecycleEventType type) { return type.name().endsWith("_OPENED"); }
     private AccountLifecycleResponse response(AccountLifecycleEvent value, boolean replay) {

@@ -10,6 +10,8 @@ import com.moneybags.payments.dto.PaymentDtos.*;
 import com.moneybags.payments.exception.IdempotencyConflictException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +22,19 @@ import org.springframework.test.context.ActiveProfiles;
 class PaymentOrchestrationIntegrationTest {
   @Autowired PaymentOrchestrationService orchestration;
   @Autowired PaymentQueryService queries;
+  @Autowired EodControlService eod;
+
+  @BeforeEach
+  void establishAnOpenTestBusinessDate() {
+    EodControlResponse state = eod.drain();
+    if (state.newPaymentIntake()) return;
+    String owner = state.commandReference();
+    if (EodControlService.BOOTSTRAP_REFERENCE.equals(owner)) {
+      owner = "TEST-ORCHESTRATION:" + UUID.randomUUID();
+      eod.cutoff(state.businessDate(), state.currencyCode(), owner);
+    }
+    eod.reopen(state.businessDate(), state.businessDate(), state.currencyCode(), owner);
+  }
 
   @Test
   void settlesBookTransferAndReturnsSamePaymentForReplay() {

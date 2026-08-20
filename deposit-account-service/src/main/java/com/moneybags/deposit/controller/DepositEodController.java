@@ -3,6 +3,7 @@ package com.moneybags.deposit.controller;
 import com.moneybags.deposit.dto.EodRequests.DepositAccrualRequest;
 import com.moneybags.deposit.dto.EodResponses.DepositAccrualResponse;
 import com.moneybags.deposit.dto.EodResponses.ServiceReadinessResponse;
+import com.moneybags.deposit.fixeddeposit.service.FixedDepositEodService;
 import com.moneybags.deposit.service.DepositEodService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -11,8 +12,12 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/internal/v1/deposit-accounts/eod")
 public class DepositEodController {
     private final DepositEodService service;
+    private final FixedDepositEodService fixedDeposits;
 
-    public DepositEodController(DepositEodService service) { this.service = service; }
+    public DepositEodController(DepositEodService service, FixedDepositEodService fixedDeposits) {
+        this.service = service;
+        this.fixedDeposits = fixedDeposits;
+    }
 
     @PostMapping("/accruals")
     public DepositAccrualResponse accruals(@Valid @RequestBody DepositAccrualRequest request) {
@@ -21,4 +26,10 @@ public class DepositEodController {
 
     @GetMapping("/readiness")
     public ServiceReadinessResponse readiness() { return service.readiness(); }
+
+    /** Composite internal alias for service-to-service EOD orchestration. */
+    @GetMapping("/operations-readiness")
+    public DepositOperationsController.OperationsReadiness operationsReadiness() {
+        return DepositOperationsController.operationsReadiness(service, fixedDeposits);
+    }
 }

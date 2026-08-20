@@ -27,16 +27,17 @@ public class EodService {
     private final FinancialReconciliationItemRepository reconItems;
     private final AccountingPeriodRepository periods;
     private final IdempotencyService idempotency;
+    private final Hashing hashing;
     private final AuditService audit;
 
     public EodService(JournalLineRepository journalLines, JournalRepository journals,
                       GlAccountRepository glAccounts, TrialBalanceRunRepository trialRuns,
                       FinancialReconciliationRunRepository reconRuns,
                       FinancialReconciliationItemRepository reconItems, AccountingPeriodRepository periods,
-                      IdempotencyService idempotency, AuditService audit) {
+                      IdempotencyService idempotency, Hashing hashing, AuditService audit) {
         this.journalLines = journalLines; this.journals = journals; this.glAccounts = glAccounts;
         this.trialRuns = trialRuns; this.reconRuns = reconRuns; this.reconItems = reconItems;
-        this.periods = periods; this.idempotency = idempotency; this.audit = audit;
+        this.periods = periods; this.idempotency = idempotency; this.hashing = hashing; this.audit = audit;
     }
 
     public TrialBalanceResponse generateTrialBalance(TrialBalanceRequest request, String key) {
@@ -46,16 +47,35 @@ public class EodService {
 
     @Transactional
     TrialBalanceResponse generateTrialBalanceInternal(TrialBalanceRequest request) {
-        Optional<TrialBalanceRun> existing = trialRuns.findByBusinessDateAndCurrencyCode(request.businessDate(),
+        int requestedEpoch = request.executionEpoch();
+        String requestHash = hashing.requestHash(request);
+        List<TrialBalanceRun> snapshots = trialRuns.findLogicalRunsForUpdate(request.businessDate(),
                 request.currencyCode());
-        if (existing.isPresent()) return trial(existing.get());
+        Optional<TrialBalanceRun> exact = snapshots.stream()
+                .filter(value -> value.getExecutionEpoch() == requestedEpoch).findFirst();
+        if (exact.isPresent()) {
+            validateTrialReplay(exact.get(), request, requestHash);
+            return trial(exact.get());
+        }
+        int latestEpoch = snapshots.stream().mapToInt(TrialBalanceRun::getExecutionEpoch).max().orElse(0);
+        rejectStaleMissingAttempt("trial balance", requestedEpoch, latestEpoch);
+        List<TrialBalanceRun> activeSnapshots = snapshots.stream().filter(TrialBalanceRun::isActive).toList();
+        for (TrialBalanceRun prior : activeSnapshots) {
+            prior.supersede();
+            audit.record(prior.getId(), "SUPERSEDE_TRIAL_BALANCE", "SUCCESS", request.generatedBy(), "SERVICE",
+                    correlation());
+        }
+        // Hibernate normally flushes INSERT actions before dirty UPDATE actions. Flush the inactive marker first so
+        // Oracle's function-based unique index never observes two active snapshots for the same logical control.
+        if (!activeSnapshots.isEmpty()) trialRuns.flush();
         List<Object[]> totals = journalLines.trialBalanceTotals(request.businessDate(), request.currencyCode());
         BigDecimal totalDebit = BigDecimal.ZERO.setScale(4), totalCredit = BigDecimal.ZERO.setScale(4);
         for (Object[] row : totals) {
             totalDebit = totalDebit.add((BigDecimal) row[1]); totalCredit = totalCredit.add((BigDecimal) row[2]);
         }
         TrialBalanceRun run = new TrialBalanceRun(UUID.randomUUID().toString(), request.businessDate(),
-                request.currencyCode(), totalDebit.setScale(4), totalCredit.setScale(4), request.generatedBy());
+                request.currencyCode(), totalDebit.setScale(4), totalCredit.setScale(4), request.generatedBy(),
+                requestedEpoch, requestHash);
         for (Object[] row : totals) {
             String glCode = (String) row[0]; BigDecimal debit = ((BigDecimal) row[1]).setScale(4);
             BigDecimal credit = ((BigDecimal) row[2]).setScale(4);
@@ -66,7 +86,8 @@ public class EodService {
                     closing.setScale(4)));
         }
         trialRuns.save(run);
-        audit.record(run.getId(), "GENERATE_TRIAL_BALANCE", "SUCCESS", request.generatedBy(), "SERVICE",
+        audit.record(run.getId(), latestEpoch == 0 ? "GENERATE_TRIAL_BALANCE" : "REFRESH_TRIAL_BALANCE", "SUCCESS",
+                request.generatedBy(), "SERVICE",
                 correlation());
         return trial(run);
     }
@@ -80,32 +101,75 @@ public class EodService {
     @Transactional(readOnly = true)
     public TrialBalancePage listTrialBalances(LocalDate businessDate, int page, int size) {
         Page<TrialBalanceRun> values = businessDate == null
-                ? trialRuns.findAll(PageRequest.of(page, size, Sort.by("generatedAt").descending()))
-                : trialRuns.findByBusinessDate(businessDate,
+                ? trialRuns.findByActiveTrue(PageRequest.of(page, size, Sort.by("generatedAt").descending()))
+                : trialRuns.findByBusinessDateAndActiveTrue(businessDate,
                     PageRequest.of(page, size, Sort.by("generatedAt").descending()));
         return new TrialBalancePage(values.map(value -> getTrialBalance(value.getId())).getContent(), page, size,
                 values.getTotalElements(), values.getTotalPages());
     }
 
     public FinancialReconciliationResponse reconcile(FinancialReconciliationRequest request, String key) {
-        return idempotency.execute("FIN_RECON:" + request.eodRunId() + ":" + request.currencyCode(), key, request,
+        String controlDiscriminator = reconciliationControl(request);
+        FinancialReconciliationResponse accepted = idempotency.execute(
+                "FIN_RECON:" + request.eodRunId() + ":" + controlDiscriminator + ":" + request.currencyCode(),
+                key, request,
                 FinancialReconciliationResponse.class, () -> reconcileInternal(request));
+        // A reconciliation run is mutable through its audited item-resolution API. Keep the original
+        // request-hash validation and run identity from idempotency, but return the run's current state
+        // instead of replaying the response snapshot captured before those resolutions.
+        return getReconciliation(accepted.runId());
     }
 
     @Transactional
     FinancialReconciliationResponse reconcileInternal(FinancialReconciliationRequest request) {
-        Optional<FinancialReconciliationRun> existing = reconRuns.findByEodRunIdAndCurrencyCode(request.eodRunId(),
-                request.currencyCode());
-        if (existing.isPresent()) return reconciliation(existing.get());
+        int requestedEpoch = request.executionEpoch();
+        String requestHash = hashing.requestHash(request);
+        String controlDiscriminator = reconciliationControl(request);
+        List<FinancialReconciliationRun> snapshots = reconRuns.findLogicalRunsForUpdate(request.eodRunId(),
+                controlDiscriminator, request.currencyCode());
+        Optional<FinancialReconciliationRun> exact = snapshots.stream()
+                .filter(value -> value.getExecutionEpoch() == requestedEpoch).findFirst();
+        if (exact.isPresent()) {
+            validateReconciliationReplay(exact.get(), request, requestHash);
+            return reconciliation(exact.get());
+        }
+        int latestEpoch = snapshots.stream().mapToInt(FinancialReconciliationRun::getExecutionEpoch)
+                .max().orElse(0);
+        rejectStaleMissingAttempt("financial reconciliation", requestedEpoch, latestEpoch);
+        List<FinancialReconciliationRun> activeSnapshots = snapshots.stream()
+                .filter(FinancialReconciliationRun::isActive).toList();
+        for (FinancialReconciliationRun prior : activeSnapshots) {
+            for (FinancialReconciliationItem item : prior.getItems().stream()
+                    .filter(FinancialReconciliationItem::isOpen).toList()) {
+                item.resolve(ReconciliationItemStatus.RESOLVED,
+                        "Superseded by EOD refresh execution epoch " + requestedEpoch, "SYSTEM_EOD_REFRESH");
+                audit.record(item.getId(), "SUPERSEDE_RECONCILIATION_ITEM", "SUCCESS", "SYSTEM_EOD_REFRESH",
+                        "SERVICE", correlation());
+            }
+            prior.markResolvedIfComplete();
+            prior.supersede();
+            audit.record(prior.getId(), "SUPERSEDE_FINANCIAL_RECONCILIATION", "SUCCESS",
+                    "SYSTEM_EOD_REFRESH", "SERVICE", correlation());
+        }
+        if (!activeSnapshots.isEmpty()) reconRuns.flush();
         String source = request.reconciledService() == null || request.reconciledService().isBlank()
                 ? "PAYMENTS-SERVICE" : request.reconciledService();
-        long actualCount = journals.countByBusinessDateAndCurrencyCodeAndSourceService(request.businessDate(),
-                request.currencyCode(), source);
-        BigDecimal actualTotal = Optional.ofNullable(journals.totalDebit(request.businessDate(),
-                request.currencyCode(), source)).orElse(BigDecimal.ZERO).setScale(4);
+        boolean correlationScoped = request.journalCorrelationId() != null
+                && !request.journalCorrelationId().isBlank();
+        long actualCount = correlationScoped
+                ? journals.countByBusinessDateAndCurrencyCodeAndSourceServiceAndCorrelationId(
+                        request.businessDate(), request.currencyCode(), source, request.journalCorrelationId())
+                : journals.countByBusinessDateAndCurrencyCodeAndSourceService(
+                        request.businessDate(), request.currencyCode(), source);
+        BigDecimal queriedTotal = correlationScoped
+                ? journals.totalDebitByCorrelationId(request.businessDate(), request.currencyCode(), source,
+                        request.journalCorrelationId())
+                : journals.totalDebit(request.businessDate(), request.currencyCode(), source);
+        BigDecimal actualTotal = Optional.ofNullable(queriedTotal).orElse(BigDecimal.ZERO).setScale(4);
         FinancialReconciliationRun run = new FinancialReconciliationRun(UUID.randomUUID().toString(),
-                request.eodRunId(), request.businessDate(), request.currencyCode(), request.expectedJournalCount(),
-                actualCount, request.expectedTotalDebit().setScale(4), actualTotal);
+                request.eodRunId(), controlDiscriminator, request.businessDate(), request.currencyCode(),
+                request.expectedJournalCount(), actualCount, request.expectedTotalDebit().setScale(4), actualTotal,
+                requestedEpoch, requestHash);
         if (request.expectedJournalCount() != actualCount) run.addItem(new FinancialReconciliationItem(
                 UUID.randomUUID().toString(), "JOURNAL_COUNT", BigDecimal.valueOf(request.expectedJournalCount()),
                 BigDecimal.valueOf(actualCount), true));
@@ -113,7 +177,9 @@ public class EodService {
             run.addItem(new FinancialReconciliationItem(UUID.randomUUID().toString(), "TOTAL_DEBIT",
                     request.expectedTotalDebit().setScale(4), actualTotal, true));
         reconRuns.save(run);
-        audit.record(run.getId(), "RUN_FINANCIAL_RECONCILIATION", "SUCCESS", request.eodRunId(), "SERVICE",
+        audit.record(run.getId(), latestEpoch == 0 ? "RUN_FINANCIAL_RECONCILIATION"
+                        : "REFRESH_FINANCIAL_RECONCILIATION",
+                "SUCCESS", request.eodRunId(), "SERVICE",
                 correlation());
         return reconciliation(run);
     }
@@ -127,8 +193,8 @@ public class EodService {
     @Transactional(readOnly = true)
     public FinancialReconciliationPage listReconciliations(LocalDate businessDate, int page, int size) {
         Page<FinancialReconciliationRun> values = businessDate == null
-                ? reconRuns.findAll(PageRequest.of(page, size, Sort.by("createdAt").descending()))
-                : reconRuns.findByBusinessDate(businessDate,
+                ? reconRuns.findByActiveTrue(PageRequest.of(page, size, Sort.by("createdAt").descending()))
+                : reconRuns.findByBusinessDateAndActiveTrue(businessDate,
                     PageRequest.of(page, size, Sort.by("createdAt").descending()));
         return new FinancialReconciliationPage(values.map(value -> getReconciliation(value.getId())).getContent(),
                 page, size, values.getTotalElements(), values.getTotalPages());
@@ -172,8 +238,9 @@ public class EodService {
         if (existing.isPresent()) {
             if (existing.get().getStatus() == PeriodStatus.CLOSED) throw new ApiException(HttpStatus.CONFLICT,
                     "ACCOUNTING_PERIOD_ALREADY_CLOSED", "A closed period cannot be reopened in the current scope");
-            return period(existing.get());
         }
+        requireEarlierPeriodsClosed(date);
+        if (existing.isPresent()) return period(existing.get());
         AccountingPeriod value = periods.save(new AccountingPeriod(UUID.randomUUID().toString(), date,
                 request.actorId()));
         audit.record(value.getId(), "OPEN_ACCOUNTING_PERIOD", "SUCCESS", request.actorId(), "SERVICE", correlation());
@@ -190,11 +257,16 @@ public class EodService {
         AccountingPeriod value = periods.findByBusinessDateForUpdate(date).orElseThrow(() -> new ApiException(
                 HttpStatus.CONFLICT, "ACCOUNTING_PERIOD_NOT_OPEN", "The Accounting period must be opened first"));
         if (value.getStatus() == PeriodStatus.CLOSED) return period(value);
-        List<TrialBalanceRun> dateTrials = trialRuns.findByBusinessDate(date);
+        requireEarlierPeriodsClosed(date);
+        List<TrialBalanceRun> dateTrials = trialRuns.findByBusinessDateAndActiveTrue(date);
         if (dateTrials.isEmpty()) throw new ApiException(HttpStatus.CONFLICT, "TRIAL_BALANCE_REQUIRED",
                 "A trial balance must be generated before period closure");
         if (dateTrials.stream().anyMatch(run -> !run.isBalanced())) throw new ApiException(HttpStatus.CONFLICT,
                 "TRIAL_BALANCE_UNBALANCED", "An unbalanced trial balance blocks period closure");
+        List<FinancialReconciliationRun> closingControls =
+                reconRuns.findByEodRunIdAndBusinessDateAndActiveTrue(request.eodRunId(), date);
+        requireClosingControl(closingControls, "PAYMENTS_RECONCILIATION");
+        requireClosingControl(closingControls, "FIXED_DEPOSIT_RECONCILIATION");
         if (reconItems.countBlockingForDate(date, ReconciliationItemStatus.OPEN) > 0)
             throw new ApiException(HttpStatus.CONFLICT, "RECONCILIATION_BLOCKERS_OPEN",
                     "Unresolved blocking reconciliation items prevent period closure");
@@ -211,30 +283,40 @@ public class EodService {
 
     @Transactional(readOnly = true)
     public AccountingEodRunPage listEodRuns(int page, int size) {
-        Page<FinancialReconciliationRun> values = reconRuns.findAll(
-                PageRequest.of(page, size, Sort.by("createdAt").descending()));
-        return new AccountingEodRunPage(values.map(this::eodRun).getContent(), page, size,
-                values.getTotalElements(), values.getTotalPages());
+        Page<String> runIds = reconRuns.findActiveEodRunIds(PageRequest.of(page, size));
+        return new AccountingEodRunPage(runIds.getContent().stream().map(this::eodRun).toList(), page, size,
+                runIds.getTotalElements(), runIds.getTotalPages());
     }
 
     @Transactional(readOnly = true)
     public AccountingEodRunResponse getEodRun(String runId) {
-        return eodRun(reconRuns.findTopByEodRunIdOrderByCreatedAtDesc(runId).orElseThrow(() -> new ApiException(
-                HttpStatus.NOT_FOUND, "EOD_RUN_NOT_FOUND", "Accounting EOD run not found")));
+        return eodRun(runId);
     }
 
-    private AccountingEodRunResponse eodRun(FinancialReconciliationRun run) {
-        List<TrialBalanceRun> trials = trialRuns.findByBusinessDate(run.getBusinessDate());
-        PeriodStatus periodStatus = periods.findByBusinessDate(run.getBusinessDate())
+    private AccountingEodRunResponse eodRun(String runId) {
+        List<FinancialReconciliationRun> controls =
+                reconRuns.findByEodRunIdAndActiveTrueOrderByControlDiscriminatorAsc(runId);
+        if (controls.isEmpty()) throw new ApiException(HttpStatus.NOT_FOUND,
+                "EOD_RUN_NOT_FOUND", "Accounting EOD run not found");
+        FinancialReconciliationRun representative = controls.getFirst();
+        List<TrialBalanceRun> trials = trialRuns.findByBusinessDateAndActiveTrue(representative.getBusinessDate());
+        PeriodStatus periodStatus = periods.findByBusinessDate(representative.getBusinessDate())
                 .map(AccountingPeriod::getStatus).orElse(null);
+        ReconciliationStatus reconciliationStatus = controls.stream()
+                .anyMatch(value -> value.getStatus() == ReconciliationStatus.EXCEPTION)
+                ? ReconciliationStatus.EXCEPTION
+                : controls.stream().allMatch(value -> value.getStatus() == ReconciliationStatus.MATCHED)
+                    ? ReconciliationStatus.MATCHED : ReconciliationStatus.RESOLVED;
         List<String> blockers = new ArrayList<>();
         if (trials.isEmpty()) blockers.add("Trial balance has not been generated");
         if (trials.stream().anyMatch(value -> !value.isBalanced())) blockers.add("Trial balance is unbalanced");
-        if (run.getStatus() == ReconciliationStatus.EXCEPTION) blockers.add("Reconciliation exceptions are open");
+        if (reconciliationStatus == ReconciliationStatus.EXCEPTION)
+            blockers.add("Reconciliation exceptions are open");
         String status = periodStatus == PeriodStatus.CLOSED ? "COMPLETED"
                 : blockers.isEmpty() ? "READY_TO_CLOSE" : "BLOCKED";
-        return new AccountingEodRunResponse(run.getEodRunId(), run.getBusinessDate(), run.getCurrencyCode(),
-                status, trials.size(), run.getStatus(), periodStatus, blockers);
+        return new AccountingEodRunResponse(runId, representative.getBusinessDate(),
+                representative.getCurrencyCode(), status, trials.size(), reconciliationStatus, periodStatus,
+                blockers);
     }
 
     private TrialBalanceResponse trial(TrialBalanceRun value) {
@@ -255,4 +337,68 @@ public class EodService {
             value.getBusinessDate(), value.getStatus(), value.getOpenedAt(), value.getClosedAt(), value.getOpenedBy(),
             value.getClosedBy(), value.getVersion()); }
     private String correlation() { return MDC.get("correlationId") == null ? "unknown" : MDC.get("correlationId"); }
+
+    private void validateTrialReplay(TrialBalanceRun run, TrialBalanceRequest request, String requestHash) {
+        boolean matches = run.getRequestHash() != null
+                ? run.getRequestHash().equals(requestHash)
+                : run.getGeneratedBy().equals(request.generatedBy());
+        if (!matches) throw attemptConflict("trial balance", request.executionEpoch());
+    }
+
+    private void validateReconciliationReplay(FinancialReconciliationRun run,
+                                              FinancialReconciliationRequest request, String requestHash) {
+        boolean matches = run.getRequestHash() != null
+                ? run.getRequestHash().equals(requestHash)
+                : run.getBusinessDate().equals(request.businessDate())
+                    && run.getExpectedCount() == request.expectedJournalCount()
+                    && run.getExpectedTotal().compareTo(request.expectedTotalDebit()) == 0;
+        if (!matches) throw attemptConflict("financial reconciliation", request.executionEpoch());
+    }
+
+    private void rejectStaleMissingAttempt(String control, int requestedEpoch, int latestEpoch) {
+        if (requestedEpoch <= latestEpoch) throw new ApiException(HttpStatus.CONFLICT,
+                "STALE_EOD_CONTROL_ATTEMPT", "The requested " + control + " execution epoch " + requestedEpoch
+                + " is older than the latest persisted epoch " + latestEpoch);
+    }
+
+    private ApiException attemptConflict(String control, int executionEpoch) {
+        return new ApiException(HttpStatus.CONFLICT, "EOD_CONTROL_ATTEMPT_CONFLICT",
+                "Execution epoch " + executionEpoch + " for " + control
+                        + " was already used with different request content");
+    }
+
+    private void requireEarlierPeriodsClosed(LocalDate date) {
+        if (periods.existsByBusinessDateBeforeAndStatusNot(date, PeriodStatus.CLOSED))
+            throw new ApiException(HttpStatus.CONFLICT, "EARLIER_ACCOUNTING_PERIOD_NOT_CLOSED",
+                    "Every earlier Accounting period must be closed before processing " + date);
+    }
+
+    private void requireClosingControl(List<FinancialReconciliationRun> controls, String discriminator) {
+        List<FinancialReconciliationRun> matching = controls.stream()
+                .filter(run -> discriminator.equals(run.getControlDiscriminator()))
+                .toList();
+        if (matching.isEmpty()) throw new ApiException(HttpStatus.CONFLICT,
+                discriminator + "_REQUIRED",
+                "An active " + discriminator + " control for this EOD run and business date is required");
+        if (matching.stream().anyMatch(run -> run.getStatus() != ReconciliationStatus.MATCHED
+                && run.getStatus() != ReconciliationStatus.RESOLVED))
+            throw new ApiException(HttpStatus.CONFLICT, discriminator + "_NOT_CLEARED",
+                    "Every active " + discriminator + " control must be MATCHED or RESOLVED");
+        if (matching.stream().flatMap(run -> run.getItems().stream())
+                .anyMatch(item -> item.isBlocking() && item.getStatus() == ReconciliationItemStatus.OPEN))
+            throw new ApiException(HttpStatus.CONFLICT, discriminator + "_BLOCKERS_OPEN",
+                    "Open blocking items remain for " + discriminator);
+    }
+
+    private String reconciliationControl(FinancialReconciliationRequest request) {
+        if (request.stepCode() != null && !request.stepCode().isBlank())
+            return request.stepCode().trim().toUpperCase(Locale.ROOT);
+        String source = request.reconciledService() == null || request.reconciledService().isBlank()
+                ? "PAYMENTS-SERVICE" : request.reconciledService().trim().toUpperCase(Locale.ROOT);
+        return switch (source) {
+            case "PAYMENTS-SERVICE" -> "PAYMENTS_RECONCILIATION";
+            case "DEPOSIT-ACCOUNT-SERVICE" -> "FIXED_DEPOSIT_RECONCILIATION";
+            default -> source;
+        };
+    }
 }

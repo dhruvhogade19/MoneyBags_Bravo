@@ -197,6 +197,9 @@ public class AuthorizationServerConfig {
                 "product:validate", "card:billing", "accounting:service", "notification:service"));
         clients.add(serviceClient("statements-service", serviceSecret, encoder, serviceTokens,
                 "account:service", "accounting:service"));
+        clients.add(serviceClient("eod-reconciliation-service", serviceSecret, encoder, serviceTokens,
+                "account:service", "accounting:service", "billing:service", "payment:service",
+                "statements:service", "notification:service", "card:eod"));
         return new InMemoryRegisteredClientRepository(clients);
     }
 

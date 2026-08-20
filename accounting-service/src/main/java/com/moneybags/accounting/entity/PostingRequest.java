@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "POSTING_REQUEST")
+@Table(name = "ACCT_POSTING_REQUEST")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PostingRequest {

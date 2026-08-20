@@ -12,6 +12,7 @@ financial reconciliation, and Accounting-period controls.
 - Direct port: `8088`
 - Eureka name: `accounting-service`
 - Oracle schema/user: `MONEYBAGS_ACCOUNTING`
+- Runtime database: Oracle only (there is no runtime H2 profile)
 - Swagger: `http://localhost:8088/swagger-ui.html`
 - Health: `http://localhost:8088/actuator/health`
 
@@ -79,6 +80,17 @@ Accounting controls only its subledger projection and Accounting clearance.
 `CREDIT_CARD_RECEIVABLE` for the source card account and credits `MERCHANT_PAYABLE` for the required `merchantId`.
 This journal creates a payable; actual merchant settlement is a separate future workflow.
 
+## EOD control refresh
+
+Trial-balance and financial-reconciliation requests accept an optional positive `executionEpoch` (default `1`).
+An exact epoch is an idempotent, request-validated replay. A higher epoch creates a fresh immutable snapshot and
+audits the supersession of the prior active snapshot; stale attempts with changed content return `409`. Period-close
+and dashboard blockers evaluate only the active snapshot. Payment and fixed-deposit reconciliation controls share
+the real EOD run ID and are isolated by their `stepCode` (or a service-derived discriminator for legacy requests),
+so refreshing one control never supersedes the other. EOD can read period state through
+`GET /internal/v1/accounting-periods/{businessDate}` with `SCOPE_accounting:service`; the existing public inquiry
+route and the invariant that a closed period cannot be reopened are unchanged.
+
 ## Build and test
 
 From the repository root:
@@ -93,10 +105,23 @@ To run only this service after configuring Oracle:
 mvn -pl accounting-service spring-boot:run
 ```
 
-The integration tests use H2 in Oracle compatibility mode. They verify Liquibase startup, Hibernate validation,
-balanced posting, idempotent replay/key-conflict protection, original-journal refunds, lifecycle closure protection,
-trial balance, and period closure. A final deployment should also apply the changelog and boot against Oracle
-19c/26ai.
+The fast integration tests use test-scoped H2 in Oracle compatibility mode. H2 is not packaged into or used by the
+running Accounting service. The tests verify Liquibase startup, balanced posting, idempotent replay/key-conflict
+protection, original-journal refunds, lifecycle closure protection, trial balance, and period closure.
+
+To run the same integration suite against a disposable Oracle test schema, set the following variables before the
+test command. Never point this test path at a production schema because the suite creates persistent Accounting data.
+
+```powershell
+$env:ACCOUNTING_TEST_DB_URL = "jdbc:oracle:thin:@//localhost:1522/FREEPDB1"
+$env:ACCOUNTING_TEST_DB_USERNAME = "MONEYBAGS_ACCOUNTING_TEST"
+$env:ACCOUNTING_TEST_DB_PASSWORD = "<test-schema-password>"
+$env:ACCOUNTING_TEST_DB_DRIVER = "oracle.jdbc.OracleDriver"
+mvn -pl accounting-service -am test
+```
+
+Oracle 19c is the compatibility baseline; the Oracle test run must apply Liquibase successfully and pass Hibernate
+schema validation before deployment.
 
 ## Postman
 

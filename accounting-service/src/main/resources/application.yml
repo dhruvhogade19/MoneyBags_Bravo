@@ -24,11 +24,17 @@ spring:
       connection-timeout: ${DB_CONNECTION_TIMEOUT:15000}
       validation-timeout: 1000
   jpa:
+    database-platform: ${ACCOUNTING_HIBERNATE_DIALECT:com.moneybags.accounting.config.MoneybagsOracleDialect}
     open-in-view: false
     hibernate:
       ddl-auto: validate
     properties:
       hibernate:
+        # The shared Oracle schema contains many service tables. Query only the
+        # mapped Accounting tables during ddl-auto validation instead of
+        # loading every table and column through one grouped metadata scan.
+        hbm2ddl:
+          jdbc_metadata_extraction_strategy: individually
         jdbc:
           time_zone: UTC
         order_inserts: true
@@ -47,7 +53,7 @@ eureka:
 
 moneybags:
   security:
-    enabled: ${SECURITY_ENABLED:false}
+    enabled: ${SECURITY_ENABLED:true}
   accounting:
     enforce-account-registration: ${ACCOUNTING_ENFORCE_ACCOUNT_REGISTRATION:false}
 

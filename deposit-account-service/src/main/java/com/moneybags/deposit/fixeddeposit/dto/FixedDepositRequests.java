@@ -24,6 +24,6 @@ public final class FixedDepositRequests {
         @NotBlank String payoutAccountId, @NotBlank String servicingBranchId,
         List<@Valid NomineeRequest> nominees, @NotBlank String channel, @Size(max=64) String externalReference) {}
 
-    public record EodRequest(@NotBlank String eodRunId, @NotNull LocalDate businessDate,
-                             @NotBlank String commandReference) {}
+    public record EodRequest(@NotBlank @Size(max=64) String eodRunId, @NotNull LocalDate businessDate,
+                             @NotBlank @Size(max=100) String commandReference) {}
 }

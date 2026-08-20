@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "JOURNAL")
+@Table(name = "ACCT_JOURNAL")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Journal {

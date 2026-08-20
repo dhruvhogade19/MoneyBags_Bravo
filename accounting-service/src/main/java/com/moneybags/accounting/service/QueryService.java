@@ -87,7 +87,7 @@ public class QueryService {
         return new AccountingDashboardResponse(date, journals.countByBusinessDate(date), debit, credit,
                 journals.countUnbalanced(date), 0,
                 periods.findByBusinessDate(date).map(value -> value.getStatus()).orElse(null),
-                reconciliations.countByBusinessDateAndStatus(date, ReconciliationStatus.EXCEPTION),
+                reconciliations.countByBusinessDateAndStatusAndActiveTrue(date, ReconciliationStatus.EXCEPTION),
                 recent.map(value -> mapper.toResponse(value, false)).getContent());
     }
 

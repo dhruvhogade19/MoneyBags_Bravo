@@ -32,13 +32,14 @@ public class MaturityClosureRecorder {
     }
 
     public void recordCompleted(FixedDeposit fd, BigDecimal interest, BigDecimal netAmount,
-                                String destinationAccountId, String reference, LocalDate businessDate) {
+                                String destinationAccountId, String transactionReference,
+                                String correlationId, LocalDate businessDate) {
         String accountId = fd.getAccount().getId();
         if (requests.existsByAccountIdAndClosureType(accountId, ClosureType.FD_MATURITY)) return;
 
         AccountClosureRequest request = requests.save(new AccountClosureRequest(
                 UUID.randomUUID().toString(), accountId, ClosureType.FD_MATURITY, "eod", "EOD",
-                businessDate, "FD_MATURITY_PAID", null, destinationAccountId, POLICY, reference));
+                businessDate, "FD_MATURITY_PAID", null, destinationAccountId, POLICY, correlationId));
         request.transition(ClosureRequestStatus.VALIDATING);
         checks.save(new AccountClosureCheck(UUID.randomUUID().toString(), request.getId(),
                 "FD_MATURITY_ELIGIBILITY", true, "Maturity date reached and accrual is complete"));
@@ -46,7 +47,8 @@ public class MaturityClosureRecorder {
 
         AccountClosureSettlement settlement = settlements.save(new AccountClosureSettlement(
                 UUID.randomUUID().toString(), request.getId(), fd.getPrincipal(), interest, interest,
-                zero(), zero(), zero(), netAmount, fd.getCurrencyCode(), destinationAccountId, reference));
+                zero(), zero(), zero(), netAmount, fd.getCurrencyCode(), destinationAccountId,
+                transactionReference));
         settlement.complete();
         request.transition(ClosureRequestStatus.CLOSED);
     }

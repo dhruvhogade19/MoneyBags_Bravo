@@ -8,6 +8,7 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -33,6 +34,12 @@ public class ApiExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .toList();
         return response(HttpStatus.BAD_REQUEST, "Request validation failed", request, messages);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ApiError> unreadable(HttpMessageNotReadableException exception, HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, "Request body contains an unsupported or malformed value",
+                request, List.of());
     }
 
     private ResponseEntity<ApiError> response(HttpStatus status, String message,

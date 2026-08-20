@@ -2,6 +2,10 @@ databaseChangeLog:
   - changeSet:
       id: 001-create-accounting-schema
       author: moneybags
+      # The first Oracle deployment used the original generic operational
+      # table names. The forward-only 001a changeset repairs that deployment
+      # with Accounting-owned names, so retain its recorded checksum.
+      validCheckSum: "9:fafb30849720b97604435bd173afb42e"
       preConditions:
         - onFail: MARK_RAN
         - not:
@@ -49,6 +53,9 @@ databaseChangeLog:
   - changeSet:
       id: 003-enable-credit-card-merchant-payment
       author: moneybags
+      # The deployed SQL omitted explicit INSERT column lists. The current SQL
+      # is semantically identical and safer for future schema evolution.
+      validCheckSum: "9:895dc8e790d8d894c3270b607d4202c7"
       preConditions:
         - onFail: MARK_RAN
         - tableExists:
@@ -61,3 +68,479 @@ databaseChangeLog:
             path: db/changelog/changes/003-enable-credit-card-merchant-payment.sql
             splitStatements: true
             stripComments: true
+
+  # Some shared Oracle schemas recorded 001 after encountering an existing
+  # legacy GL_ACCOUNT table. Repair each absent core table independently so a
+  # partially provisioned schema can converge without touching existing data.
+  - changeSet:
+      id: 004-repair-missing-subledger-account
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: SUBLEDGER_ACCOUNT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/004-repair-missing-subledger-account.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 005-repair-missing-account-lifecycle-event
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: ACCOUNT_LIFECYCLE_EVENT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/005-repair-missing-account-lifecycle-event.sql
+            splitStatements: true
+            stripComments: true
+
+  # ACCOUNTING_PERIOD is a legacy generic name and can belong to another
+  # application in a shared schema. Preserve an existing Accounting-shaped
+  # table by renaming it; otherwise leave the foreign table untouched.
+  - changeSet:
+      id: 006-own-accounting-period-table-name
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: ACCOUNTING_PERIOD
+        - columnExists:
+            tableName: ACCOUNTING_PERIOD
+            columnName: PERIOD_ID
+        - columnExists:
+            tableName: ACCOUNTING_PERIOD
+            columnName: BUSINESS_DATE
+        - columnExists:
+            tableName: ACCOUNTING_PERIOD
+            columnName: VERSION_NO
+        - not:
+            - tableExists:
+                tableName: ACCT_ACCOUNTING_PERIOD
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/006-own-accounting-period-table-name.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 007-repair-missing-accounting-period
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: ACCT_ACCOUNTING_PERIOD
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/007-repair-missing-accounting-period.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 008-create-owned-journal-sequence
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - sequenceExists:
+                sequenceName: ACCT_JOURNAL_SEQ
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/008-create-owned-journal-sequence.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 009-create-owned-accounting-core
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: ACCT_GL_ACCOUNT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/009-create-owned-accounting-core.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 010-seed-owned-accounting-core
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: ACCT_GL_ACCOUNT
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM ACCT_GL_ACCOUNT
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/010-seed-owned-accounting-core.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 011-enable-owned-credit-card-merchant-payment
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: ACCT_ACCOUNTING_RULE
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM ACCT_ACCOUNTING_RULE WHERE RULE_CODE = 'CREDIT_CARD_MERCHANT_PAYMENT_PRINCIPAL'
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/011-enable-owned-credit-card-merchant-payment.sql
+            splitStatements: true
+            stripComments: true
+
+  # EOD financial controls are immutable per execution epoch. Each DDL action
+  # is isolated because Oracle commits DDL statement-by-statement, allowing a
+  # partially applied deployment to converge safely on the next boot.
+  - changeSet:
+      id: 012a-add-trial-execution-epoch
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: ACCT_TRIAL_BALANCE_RUN
+                columnName: EXECUTION_EPOCH
+      changes:
+        - addColumn:
+            tableName: ACCT_TRIAL_BALANCE_RUN
+            columns:
+              - column:
+                  name: EXECUTION_EPOCH
+                  type: NUMBER(10)
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 012b-add-trial-active-flag
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: ACCT_TRIAL_BALANCE_RUN
+                columnName: ACTIVE_FLAG
+      changes:
+        - addColumn:
+            tableName: ACCT_TRIAL_BALANCE_RUN
+            columns:
+              - column:
+                  name: ACTIVE_FLAG
+                  type: NUMBER(1)
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 012c-add-trial-request-hash
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: ACCT_TRIAL_BALANCE_RUN
+                columnName: REQUEST_HASH
+      changes:
+        - addColumn:
+            tableName: ACCT_TRIAL_BALANCE_RUN
+            columns:
+              - column:
+                  name: REQUEST_HASH
+                  type: VARCHAR2(64)
+
+  - changeSet:
+      id: 012d-add-recon-execution-epoch
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: ACCT_FIN_RECON_RUN
+                columnName: EXECUTION_EPOCH
+      changes:
+        - addColumn:
+            tableName: ACCT_FIN_RECON_RUN
+            columns:
+              - column:
+                  name: EXECUTION_EPOCH
+                  type: NUMBER(10)
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 012e-add-recon-active-flag
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: ACCT_FIN_RECON_RUN
+                columnName: ACTIVE_FLAG
+      changes:
+        - addColumn:
+            tableName: ACCT_FIN_RECON_RUN
+            columns:
+              - column:
+                  name: ACTIVE_FLAG
+                  type: NUMBER(1)
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 012f-add-recon-request-hash
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: ACCT_FIN_RECON_RUN
+                columnName: REQUEST_HASH
+      changes:
+        - addColumn:
+            tableName: ACCT_FIN_RECON_RUN
+            columns:
+              - column:
+                  name: REQUEST_HASH
+                  type: VARCHAR2(64)
+
+  - changeSet:
+      id: 012g-drop-legacy-trial-unique
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - uniqueConstraintExists:
+            tableName: ACCT_TRIAL_BALANCE_RUN
+            constraintName: UQ_ACCT_TRIAL_DATE
+      changes:
+        - dropUniqueConstraint:
+            tableName: ACCT_TRIAL_BALANCE_RUN
+            constraintName: UQ_ACCT_TRIAL_DATE
+
+  - changeSet:
+      id: 012h-add-trial-epoch-unique
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - uniqueConstraintExists:
+                tableName: ACCT_TRIAL_BALANCE_RUN
+                constraintName: UQ_ACCT_TRIAL_DATE_EPOCH
+      changes:
+        - addUniqueConstraint:
+            tableName: ACCT_TRIAL_BALANCE_RUN
+            columnNames: BUSINESS_DATE, CURRENCY_CODE, EXECUTION_EPOCH
+            constraintName: UQ_ACCT_TRIAL_DATE_EPOCH
+
+  - changeSet:
+      id: 012i-drop-legacy-recon-unique
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - uniqueConstraintExists:
+            tableName: ACCT_FIN_RECON_RUN
+            constraintName: UQ_ACCT_FIN_RECON_RUN
+      changes:
+        - dropUniqueConstraint:
+            tableName: ACCT_FIN_RECON_RUN
+            constraintName: UQ_ACCT_FIN_RECON_RUN
+
+  - changeSet:
+      id: 012j-add-recon-epoch-unique
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - uniqueConstraintExists:
+                tableName: ACCT_FIN_RECON_RUN
+                constraintName: UQ_ACCT_RECON_RUN_EPOCH
+      changes:
+        - addUniqueConstraint:
+            tableName: ACCT_FIN_RECON_RUN
+            columnNames: EOD_RUN_ID, CURRENCY_CODE, EXECUTION_EPOCH
+            constraintName: UQ_ACCT_RECON_RUN_EPOCH
+
+  - changeSet:
+      id: 012k-add-oracle-active-trial-unique
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms:
+            type: oracle
+        - not:
+            - indexExists:
+                tableName: ACCT_TRIAL_BALANCE_RUN
+                indexName: UX_ACCT_TRIAL_ACTIVE
+      changes:
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX UX_ACCT_TRIAL_ACTIVE ON ACCT_TRIAL_BALANCE_RUN
+              (CASE WHEN ACTIVE_FLAG = 1 THEN BUSINESS_DATE ELSE NULL END,
+               CASE WHEN ACTIVE_FLAG = 1 THEN CURRENCY_CODE ELSE NULL END)
+
+  - changeSet:
+      id: 012l-add-oracle-active-recon-unique
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms:
+            type: oracle
+        - not:
+            - indexExists:
+                tableName: ACCT_FIN_RECON_RUN
+                indexName: UX_ACCT_RECON_ACTIVE
+      changes:
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX UX_ACCT_RECON_ACTIVE ON ACCT_FIN_RECON_RUN
+              (CASE WHEN ACTIVE_FLAG = 1 THEN EOD_RUN_ID ELSE NULL END,
+               CASE WHEN ACTIVE_FLAG = 1 THEN CURRENCY_CODE ELSE NULL END)
+
+  # A real EOD run owns more than one reconciliation control. Persist the
+  # discriminator instead of encoding a control in a synthetic EOD_RUN_ID.
+  - changeSet:
+      id: 012m-add-recon-control-discriminator
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: ACCT_FIN_RECON_RUN
+                columnName: CONTROL_DISCRIMINATOR
+      changes:
+        - addColumn:
+            tableName: ACCT_FIN_RECON_RUN
+            columns:
+              - column:
+                  name: CONTROL_DISCRIMINATOR
+                  type: VARCHAR2(80)
+                  defaultValue: PAYMENTS_RECONCILIATION
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 012n-classify-legacy-fd-reconciliation
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - columnExists:
+            tableName: ACCT_FIN_RECON_RUN
+            columnName: CONTROL_DISCRIMINATOR
+      changes:
+        - sql:
+            sql: >-
+              UPDATE ACCT_FIN_RECON_RUN
+              SET CONTROL_DISCRIMINATOR = 'FIXED_DEPOSIT_RECONCILIATION'
+              WHERE EOD_RUN_ID LIKE '%-FD'
+
+  - changeSet:
+      id: 012o-drop-oracle-recon-active-v1
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms:
+            type: oracle
+        - indexExists:
+            tableName: ACCT_FIN_RECON_RUN
+            indexName: UX_ACCT_RECON_ACTIVE
+      changes:
+        - dropIndex:
+            tableName: ACCT_FIN_RECON_RUN
+            indexName: UX_ACCT_RECON_ACTIVE
+
+  - changeSet:
+      id: 012p-drop-recon-epoch-unique-v1
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - uniqueConstraintExists:
+            tableName: ACCT_FIN_RECON_RUN
+            constraintName: UQ_ACCT_RECON_RUN_EPOCH
+      changes:
+        - dropUniqueConstraint:
+            tableName: ACCT_FIN_RECON_RUN
+            constraintName: UQ_ACCT_RECON_RUN_EPOCH
+
+  - changeSet:
+      id: 012q-add-recon-control-epoch-unique
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - uniqueConstraintExists:
+                tableName: ACCT_FIN_RECON_RUN
+                constraintName: UQ_ACCT_RECON_CTRL_EPOCH
+      changes:
+        - addUniqueConstraint:
+            tableName: ACCT_FIN_RECON_RUN
+            columnNames: EOD_RUN_ID, CONTROL_DISCRIMINATOR, CURRENCY_CODE, EXECUTION_EPOCH
+            constraintName: UQ_ACCT_RECON_CTRL_EPOCH
+
+  - changeSet:
+      id: 012r-add-oracle-recon-active-v2
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - dbms:
+            type: oracle
+        - not:
+            - indexExists:
+                tableName: ACCT_FIN_RECON_RUN
+                indexName: UX_ACCT_RECON_ACTIVE
+      changes:
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX UX_ACCT_RECON_ACTIVE ON ACCT_FIN_RECON_RUN
+              (CASE WHEN ACTIVE_FLAG = 1 THEN EOD_RUN_ID ELSE NULL END,
+               CASE WHEN ACTIVE_FLAG = 1 THEN CONTROL_DISCRIMINATOR ELSE NULL END,
+               CASE WHEN ACTIVE_FLAG = 1 THEN CURRENCY_CODE ELSE NULL END)
+
+  - changeSet:
+      id: 012s-clear-legacy-fd-request-hash
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - columnExists:
+            tableName: ACCT_FIN_RECON_RUN
+            columnName: CONTROL_DISCRIMINATOR
+        - columnExists:
+            tableName: ACCT_FIN_RECON_RUN
+            columnName: REQUEST_HASH
+      changes:
+        - sql:
+            sql: >-
+              UPDATE ACCT_FIN_RECON_RUN
+              SET REQUEST_HASH = NULL
+              WHERE CONTROL_DISCRIMINATOR = 'FIXED_DEPOSIT_RECONCILIATION'
+              AND EOD_RUN_ID LIKE '%-FD'
+
+  - changeSet:
+      id: 012t-normalize-legacy-fd-eod-run-id
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - columnExists:
+            tableName: ACCT_FIN_RECON_RUN
+            columnName: CONTROL_DISCRIMINATOR
+      changes:
+        - sql:
+            sql: >-
+              UPDATE ACCT_FIN_RECON_RUN
+              SET EOD_RUN_ID = SUBSTR(EOD_RUN_ID, 1, LENGTH(EOD_RUN_ID) - 3)
+              WHERE CONTROL_DISCRIMINATOR = 'FIXED_DEPOSIT_RECONCILIATION'
+              AND EOD_RUN_ID LIKE '%-FD'

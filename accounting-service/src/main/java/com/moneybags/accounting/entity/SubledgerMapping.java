@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "SUBLEDGER_MAPPING")
+@Table(name = "ACCT_SUBLEDGER_MAPPING")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SubledgerMapping {

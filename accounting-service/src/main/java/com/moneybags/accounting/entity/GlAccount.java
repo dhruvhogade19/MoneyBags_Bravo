@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "GL_ACCOUNT")
+@Table(name = "ACCT_GL_ACCOUNT")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class GlAccount {

@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.type.NumericBooleanConverter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,6 +20,7 @@ import java.util.List;
 public class FinancialReconciliationRun {
     @Id @Column(name = "RUN_ID", length = 36) private String id;
     @Column(name = "EOD_RUN_ID", length = 80, nullable = false) private String eodRunId;
+    @Column(name = "CONTROL_DISCRIMINATOR", length = 80, nullable = false) private String controlDiscriminator;
     @Column(name = "BUSINESS_DATE", nullable = false) private LocalDate businessDate;
     @Column(name = "CURRENCY_CODE", length = 3, columnDefinition = "CHAR(3)", nullable = false) private String currencyCode;
     @Column(name = "EXPECTED_COUNT", nullable = false) private long expectedCount;
@@ -27,6 +29,10 @@ public class FinancialReconciliationRun {
     @Column(name = "ACTUAL_TOTAL", precision = 19, scale = 4, nullable = false) private BigDecimal actualTotal;
     @Enumerated(EnumType.STRING) @Column(name = "STATUS", length = 20, nullable = false) private ReconciliationStatus status;
     @Column(name = "CREATED_AT", nullable = false) private OffsetDateTime createdAt;
+    @Column(name = "EXECUTION_EPOCH", nullable = false) private int executionEpoch;
+    @Convert(converter = NumericBooleanConverter.class)
+    @Column(name = "ACTIVE_FLAG", nullable = false, columnDefinition = "NUMBER(1)") private boolean active;
+    @Column(name = "REQUEST_HASH", length = 64) private String requestHash;
     @Version @Column(name = "VERSION_NO", nullable = false) private long version;
 
     @OneToMany(mappedBy = "run", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -35,11 +41,28 @@ public class FinancialReconciliationRun {
     public FinancialReconciliationRun(String id, String eodRunId, LocalDate businessDate, String currencyCode,
                                       long expectedCount, long actualCount, BigDecimal expectedTotal,
                                       BigDecimal actualTotal) {
-        this.id = id; this.eodRunId = eodRunId; this.businessDate = businessDate; this.currencyCode = currencyCode;
+        this(id, eodRunId, "PAYMENTS_RECONCILIATION", businessDate, currencyCode, expectedCount, actualCount,
+                expectedTotal, actualTotal, 1, null);
+    }
+
+    public FinancialReconciliationRun(String id, String eodRunId, LocalDate businessDate, String currencyCode,
+                                      long expectedCount, long actualCount, BigDecimal expectedTotal,
+                                      BigDecimal actualTotal, int executionEpoch, String requestHash) {
+        this(id, eodRunId, "PAYMENTS_RECONCILIATION", businessDate, currencyCode, expectedCount, actualCount,
+                expectedTotal, actualTotal, executionEpoch, requestHash);
+    }
+
+    public FinancialReconciliationRun(String id, String eodRunId, String controlDiscriminator,
+                                      LocalDate businessDate, String currencyCode, long expectedCount,
+                                      long actualCount, BigDecimal expectedTotal, BigDecimal actualTotal,
+                                      int executionEpoch, String requestHash) {
+        this.id = id; this.eodRunId = eodRunId; this.controlDiscriminator = controlDiscriminator;
+        this.businessDate = businessDate; this.currencyCode = currencyCode;
         this.expectedCount = expectedCount; this.actualCount = actualCount; this.expectedTotal = expectedTotal;
         this.actualTotal = actualTotal; this.status = expectedCount == actualCount && expectedTotal.compareTo(actualTotal) == 0
                 ? ReconciliationStatus.MATCHED : ReconciliationStatus.EXCEPTION;
-        this.createdAt = OffsetDateTime.now();
+        this.createdAt = OffsetDateTime.now(); this.executionEpoch = executionEpoch;
+        this.active = true; this.requestHash = requestHash;
     }
 
     public void addItem(FinancialReconciliationItem item) { items.add(item); item.attach(this); }
@@ -48,4 +71,5 @@ public class FinancialReconciliationRun {
             status = ReconciliationStatus.RESOLVED;
         }
     }
+    public void supersede() { this.active = false; }
 }

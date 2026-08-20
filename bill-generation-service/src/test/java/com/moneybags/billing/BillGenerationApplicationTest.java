@@ -1,21 +1,28 @@
 package com.moneybags.billing;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @ActiveProfiles("test")
 class BillGenerationApplicationTest {
     @Autowired BillGenerationApplication.BillingService service;
     @Autowired StatementPdfRenderer pdfRenderer;
+    @PersistenceContext EntityManager em;
 
     @Test
     void generatesAndReplaysAnIdempotentBill() {
@@ -119,5 +126,40 @@ class BillGenerationApplicationTest {
                 .extracting(BillGenerationApplication.BillResponse::billId).contains(generated.billId());
         assertThat(service.searchForCustomer(999L, generated.accountId(), null, null, 0, 20).content())
                 .extracting(BillGenerationApplication.BillResponse::billId).doesNotContain(generated.billId());
+    }
+
+    @Test
+    @Transactional
+    void eodClosePersistsOverdueStateAndReplaysWithoutDuplicateHistory() {
+        LocalDate businessDate = LocalDate.of(2043, 2, 18);
+        String billId = UUID.randomUUID().toString();
+        em.persist(new BillGenerationApplication.Bill(billId, "CC-EOD-TEST", 101L,
+                "CARD-GOLD", "2043-02", businessDate, "INR", BigDecimal.ZERO,
+                new BigDecimal("250.0000"), new BigDecimal("25.0000"),
+                businessDate.minusDays(1)));
+        em.flush();
+
+        var request = new BillGenerationApplication.CloseRequest(
+                UUID.randomUUID().toString(), businessDate, "EOD:BILLS_CLOSE");
+        var first = service.close("billing-eod-close-key", request);
+        var replay = service.close("billing-eod-close-key", request);
+
+        em.flush();
+        em.clear();
+        var stored = em.find(BillGenerationApplication.Bill.class, billId);
+        Long transitions = em.createQuery(
+                        "select count(h) from BillHistory h where h.billId=:billId "
+                                + "and h.toStatus='OVERDUE'", Long.class)
+                .setParameter("billId", billId)
+                .getSingleResult();
+        assertThat(stored.status).isEqualTo("OVERDUE");
+        assertThat(transitions).isEqualTo(1);
+        assertThat(replay).isEqualTo(first);
+
+        var changed = new BillGenerationApplication.CloseRequest(
+                request.eodRunId(), businessDate.plusDays(1), request.commandReference());
+        assertThatThrownBy(() -> service.close("billing-eod-close-key", changed))
+                .isInstanceOfSatisfying(BillGenerationApplication.ApiException.class,
+                        error -> assertThat(error.code).isEqualTo("IDEMPOTENCY_CONFLICT"));
     }
 }

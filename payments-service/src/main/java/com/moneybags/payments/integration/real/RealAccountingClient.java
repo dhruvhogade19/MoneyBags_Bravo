@@ -49,6 +49,18 @@ public class RealAccountingClient implements AccountingClient {
   }
 
   @Override
+  public AccountingAccountClearanceResponse depositAccountClearance(
+      String accountReference, String currencyCode, String correlationId) {
+    return RealClientSupport.errors(client.get()
+        .uri(uriBuilder -> uriBuilder
+            .path("/internal/v1/account-clearances/DEPOSIT_ACCOUNT/{accountReference}")
+            .queryParam("currencyCode", currencyCode)
+            .build(accountReference))
+        .header("X-Correlation-Id", correlationId).retrieve(), "ACCOUNTING-SERVICE")
+        .body(AccountingAccountClearanceResponse.class);
+  }
+
+  @Override
   public AccountingResponse reverse(String journalNumber, AccountingReversalRequest request,
                                     String idempotencyKey, String correlationId) {
     return post("/internal/v1/journals/" + journalNumber + "/reversals", request,

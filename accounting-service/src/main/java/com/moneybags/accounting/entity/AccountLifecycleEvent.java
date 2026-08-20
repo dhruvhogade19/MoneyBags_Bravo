@@ -11,7 +11,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "ACCOUNT_LIFECYCLE_EVENT")
+@Table(name = "ACCT_ACCOUNT_LIFECYCLE_EVENT")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AccountLifecycleEvent {

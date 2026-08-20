@@ -23,3 +23,12 @@ moneybags:
     enabled: false
   eod:
     initial-business-date: 2026-08-13
+    recovery:
+      initial-delay-ms: 3600000
+      fixed-delay-ms: 3600000
+    retry:
+      backoff-enabled: false
+    demo:
+      enabled: false
+      skipped-steps: ""
+      auto-resume-run-id: ""

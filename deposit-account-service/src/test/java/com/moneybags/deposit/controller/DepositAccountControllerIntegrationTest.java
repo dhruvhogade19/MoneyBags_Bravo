@@ -69,6 +69,12 @@ class DepositAccountControllerIntegrationTest {
         mockMvc.perform(get("/internal/v1/deposit-accounts/eod/readiness"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.service").value("deposit-account-service"));
+        mockMvc.perform(get("/internal/v1/deposit-accounts/eod/operations-readiness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ready").isBoolean())
+                .andExpect(jsonPath("$.blockers").isArray())
+                .andExpect(jsonPath("$.depositAccounts.service").value("deposit-account-service"))
+                .andExpect(jsonPath("$.fixedDeposits.pendingFunding").isNumber());
     }
 
     @Test

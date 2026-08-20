@@ -117,3 +117,103 @@ databaseChangeLog:
             path: db/changelog/changes/009-add-notification-outbox.sql
             splitStatements: true
             stripComments: true
+
+  - changeSet:
+      id: 010-add-fd-accounting-posting-state
+      author: moneybags
+      # Oracle commits DDL. If an older launch stopped between statements, mark
+      # the original changeset and let the guarded repairs below add only what
+      # is still absent. ANY also accepts the checksum already deployed locally.
+      validCheckSum: ANY
+      preConditions:
+        - onFail: MARK_RAN
+        - and:
+            - not:
+                - columnExists:
+                    tableName: FD_INTEREST_ACCRUAL
+                    columnName: ACCOUNTING_JOURNAL_NUMBER
+            - not:
+                - columnExists:
+                    tableName: FD_INTEREST_ACCRUAL
+                    columnName: ACCOUNTING_POSTING_STATUS
+            - not:
+                - columnExists:
+                    tableName: FD_PAYOUT
+                    columnName: ACCOUNTING_JOURNAL_NUMBER
+            - not:
+                - columnExists:
+                    tableName: FD_PAYOUT
+                    columnName: ACCOUNTING_POSTING_STATUS
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/010-add-fd-accounting-posting-state.sql
+            splitStatements: true
+            stripComments: true
+
+  - changeSet:
+      id: 010a-repair-fd-accrual-accounting-journal
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: FD_INTEREST_ACCRUAL
+                columnName: ACCOUNTING_JOURNAL_NUMBER
+      changes:
+        - addColumn:
+            tableName: FD_INTEREST_ACCRUAL
+            columns:
+              - column:
+                  name: ACCOUNTING_JOURNAL_NUMBER
+                  type: VARCHAR2(100)
+
+  - changeSet:
+      id: 010b-repair-fd-accrual-accounting-status
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: FD_INTEREST_ACCRUAL
+                columnName: ACCOUNTING_POSTING_STATUS
+      changes:
+        - addColumn:
+            tableName: FD_INTEREST_ACCRUAL
+            columns:
+              - column:
+                  name: ACCOUNTING_POSTING_STATUS
+                  type: VARCHAR2(20)
+
+  - changeSet:
+      id: 010c-repair-fd-payout-accounting-journal
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: FD_PAYOUT
+                columnName: ACCOUNTING_JOURNAL_NUMBER
+      changes:
+        - addColumn:
+            tableName: FD_PAYOUT
+            columns:
+              - column:
+                  name: ACCOUNTING_JOURNAL_NUMBER
+                  type: VARCHAR2(100)
+
+  - changeSet:
+      id: 010d-repair-fd-payout-accounting-status
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: FD_PAYOUT
+                columnName: ACCOUNTING_POSTING_STATUS
+      changes:
+        - addColumn:
+            tableName: FD_PAYOUT
+            columns:
+              - column:
+                  name: ACCOUNTING_POSTING_STATUS
+                  type: VARCHAR2(20)

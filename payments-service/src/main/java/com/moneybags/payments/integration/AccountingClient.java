@@ -10,6 +10,8 @@ public interface AccountingClient {
   AccountingLookupResponse findByReference(String externalReference, String correlationId);
   AccountingLookupResponse findFixedDepositByReference(String externalReference,
                                                        String correlationId);
+  AccountingAccountClearanceResponse depositAccountClearance(
+      String accountReference, String currencyCode, String correlationId);
   AccountingResponse reverse(String journalNumber, AccountingReversalRequest request,
                              String idempotencyKey, String correlationId);
 }

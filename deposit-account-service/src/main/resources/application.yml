@@ -24,11 +24,16 @@ spring:
       connection-timeout: ${DB_CONNECTION_TIMEOUT:15000}
       validation-timeout: 1000
   jpa:
+    database-platform: ${DEPOSIT_HIBERNATE_DIALECT:com.moneybags.deposit.config.MoneybagsOracleDialect}
     open-in-view: false
     hibernate:
       ddl-auto: validate
     properties:
       hibernate:
+        # The shared Oracle schema contains tables owned by every service.
+        # Validate only Deposit's mapped tables instead of scanning all metadata.
+        hbm2ddl:
+          jdbc_metadata_extraction_strategy: individually
         jdbc:
           time_zone: UTC
         order_inserts: true

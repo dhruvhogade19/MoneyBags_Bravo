@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "JOURNAL_LINE")
+@Table(name = "ACCT_JOURNAL_LINE")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class JournalLine {

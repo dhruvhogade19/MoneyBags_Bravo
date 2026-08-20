@@ -57,7 +57,7 @@ public class PaymentOrchestrationService {
 
   public PaymentResponse bookTransfer(BookTransferRequest request, String key,
                                       String correlationId) {
-    eod.assertOpen();
+    LocalDate businessDate = eod.acquireOpenBusinessDate();
     if (request.sourceAccountId().equals(request.targetAccountId())) {
       throw new BusinessValidationException("Source and target accounts must be different");
     }
@@ -69,7 +69,7 @@ public class PaymentOrchestrationService {
     Payment payment = newPayment(request.requestorCustomerId(), key, fingerprint,
         PaymentType.BOOK_TRANSFER, InstrumentType.DEPOSIT_ACCOUNT, request.sourceAccountId(),
         InstrumentType.DEPOSIT_ACCOUNT, request.targetAccountId(), null, null,
-        request.amount(), request.currencyCode(), request.reference(), correlationId);
+        request.amount(), request.currencyCode(), request.reference(), correlationId, businessDate);
     support.initial(payment);
 
     try {
@@ -112,7 +112,7 @@ public class PaymentOrchestrationService {
 
   public PaymentResponse fixedDepositFunding(FixedDepositFundingRequest request, String key,
                                               String correlationId) {
-    eod.assertOpen();
+    LocalDate businessDate = eod.acquireOpenBusinessDate();
     String fingerprint = PaymentSupportService.fingerprint("FIXED_DEPOSIT_FUNDING", request);
     Optional<PaymentResponse> existing = support.existing(request.requestorCustomerId(), key,
         fingerprint);
@@ -122,7 +122,7 @@ public class PaymentOrchestrationService {
         PaymentType.FIXED_DEPOSIT_FUNDING, InstrumentType.DEPOSIT_ACCOUNT,
         request.sourceAccountId(), InstrumentType.FIXED_DEPOSIT_ACCOUNT,
         request.fixedDepositId(), null, null, request.amount(), request.currencyCode(),
-        request.reference(), correlationId);
+        request.reference(), correlationId, businessDate);
     payment.setFixedDepositId(request.fixedDepositId());
     payment.setPrincipalAmount(request.amount());
     payment.setInterestAmount(BigDecimal.ZERO);
@@ -172,6 +172,7 @@ public class PaymentOrchestrationService {
 
   public PaymentResponse fixedDepositPayout(FixedDepositPayoutRequest request, String key,
                                             String correlationId) {
+    LocalDate businessDate = eod.acquireBusinessDate();
     String fingerprint = PaymentSupportService.fingerprint("FIXED_DEPOSIT_PAYOUT", request);
     Optional<PaymentResponse> existing = support.existing(request.requestorCustomerId(), key,
         fingerprint);
@@ -180,7 +181,7 @@ public class PaymentOrchestrationService {
     Payment payment = newPayment(request.requestorCustomerId(), key, fingerprint,
         request.paymentType(), InstrumentType.FIXED_DEPOSIT_ACCOUNT, request.sourceAccountId(),
         request.destinationType(), request.destinationAccountId(), null, null, request.amount(),
-        request.currencyCode(), request.reference(), correlationId);
+        request.currencyCode(), request.reference(), correlationId, businessDate);
     payment.setFixedDepositId(request.fixedDepositId());
     payment.setPrincipalAmount(request.principalAmount());
     payment.setInterestAmount(request.interestAmount());
@@ -220,7 +221,7 @@ public class PaymentOrchestrationService {
 
   public PaymentResponse merchantPayment(MerchantPaymentRequest request, String key,
                                          String correlationId) {
-    eod.assertOpen();
+    LocalDate businessDate = eod.acquireOpenBusinessDate();
     String cardReference = CreditCardAccountReference.canonical(request.creditCardAccountId());
     MerchantPaymentRequest normalizedRequest = new MerchantPaymentRequest(
         request.requestorCustomerId(), cardReference, request.merchantId(), request.amount(),
@@ -234,7 +235,7 @@ public class PaymentOrchestrationService {
         PaymentType.CREDIT_CARD_MERCHANT_PAYMENT, InstrumentType.CREDIT_CARD_ACCOUNT,
         cardReference, InstrumentType.MERCHANT, request.merchantId(),
         request.merchantId(), null, request.amount(), request.currencyCode(), request.reference(),
-        correlationId);
+        correlationId, businessDate);
     support.initial(payment);
 
     try {
@@ -268,7 +269,7 @@ public class PaymentOrchestrationService {
 
   public PaymentResponse cardRepayment(CardRepaymentRequest request, String key,
                                        String correlationId) {
-    eod.assertOpen();
+    LocalDate businessDate = eod.acquireOpenBusinessDate();
     String cardReference = CreditCardAccountReference.canonical(request.creditCardAccountId());
     CardRepaymentRequest normalizedRequest = new CardRepaymentRequest(
         request.requestorCustomerId(), request.billId(), request.sourceDepositAccountId(),
@@ -282,7 +283,7 @@ public class PaymentOrchestrationService {
         PaymentType.CREDIT_CARD_REPAYMENT, InstrumentType.DEPOSIT_ACCOUNT,
         request.sourceDepositAccountId(), InstrumentType.CREDIT_CARD_ACCOUNT,
         cardReference, null, request.billId(), request.amount(),
-        request.currencyCode(), request.reference(), correlationId);
+        request.currencyCode(), request.reference(), correlationId, businessDate);
     support.initial(payment);
     boolean depositCaptured = false;
 
@@ -491,6 +492,7 @@ public class PaymentOrchestrationService {
                   Instant.now(), safe(reason)),
               "PAYMENT:" + payment.getPaymentId() + ":REVERSAL", payment.getCorrelationId()));
       payment.setReversalJournalNumber(reversal.journalNumber());
+      payment.setReversalBusinessDate(reversal.businessDate());
       payments.save(payment);
       return true;
     } catch (RuntimeException reversalFailure) {
@@ -654,7 +656,7 @@ public class PaymentOrchestrationService {
   private Payment newPayment(Long cifId, String key, String fingerprint, PaymentType type,
       InstrumentType sourceType, String sourceId, InstrumentType destinationType,
       String destinationId, String merchantId, String billId, BigDecimal amount, String currency,
-      String reference, String correlationId) {
+      String reference, String correlationId, LocalDate businessDate) {
     Payment payment = new Payment();
     payment.setPaymentId(PaymentSupportService.newPaymentId());
     payment.setRequestorCifId(cifId);
@@ -672,7 +674,7 @@ public class PaymentOrchestrationService {
     payment.setStatus(PaymentStatus.PENDING_VALIDATION);
     payment.setReference(reference);
     payment.setCorrelationId(correlationId);
-    payment.setBusinessDate(LocalDate.now(ZoneOffset.UTC));
+    payment.setBusinessDate(businessDate);
     return payment;
   }
 

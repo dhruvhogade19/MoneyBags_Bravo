@@ -99,6 +99,12 @@ public class EodController {
         return eod.getPeriod(businessDate);
     }
 
+    @GetMapping("/internal/v1/accounting-periods/{businessDate}")
+    AccountingPeriodResponse internalPeriod(@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                                             LocalDate businessDate) {
+        return eod.getPeriod(businessDate);
+    }
+
     @GetMapping("/api/v1/accounting/eod-runs")
     AccountingEodRunPage eodRuns(
             @RequestParam(defaultValue = "0") @jakarta.validation.constraints.Min(0) int page,

@@ -54,3 +54,349 @@ databaseChangeLog:
             path: db/changelog/changes/004-create-eod-exception.sql
             splitStatements: true
             stripComments: true
+
+  # Each Oracle DDL change is independently guarded because Oracle commits DDL.
+  # A restart after partial application can therefore continue safely.
+  - changeSet:
+      id: 005a-add-eod-workflow-version
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN
+                columnName: WORKFLOW_VERSION
+      changes:
+        - addColumn:
+            tableName: EOD_RUN
+            columns:
+              - column:
+                  name: WORKFLOW_VERSION
+                  type: VARCHAR2(40)
+                  defaultValue: LEGACY-V1
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 005b-add-eod-step-dependencies
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: DEPENDENCY_CODES
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column: { name: DEPENDENCY_CODES, type: VARCHAR2(1000) }
+
+  - changeSet:
+      id: 005c-add-eod-step-execution-mode
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: EXECUTION_MODE
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column:
+                  name: EXECUTION_MODE
+                  type: VARCHAR2(20)
+                  defaultValue: REQUIRED
+                  constraints: { nullable: false }
+
+  - changeSet:
+      id: 005d-add-eod-step-auth-mode
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: AUTH_MODE
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column:
+                  name: AUTH_MODE
+                  type: VARCHAR2(20)
+                  defaultValue: AUTO
+                  constraints: { nullable: false }
+
+  - changeSet:
+      id: 005e-add-eod-step-max-attempts
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: MAX_ATTEMPTS
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column:
+                  name: MAX_ATTEMPTS
+                  type: NUMBER(3)
+                  defaultValueNumeric: 1
+                  constraints: { nullable: false }
+
+  - changeSet:
+      id: 005f-add-eod-step-retry-backoff
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: RETRY_BACKOFF_MS
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column:
+                  name: RETRY_BACKOFF_MS
+                  type: NUMBER(10)
+                  defaultValueNumeric: 0
+                  constraints: { nullable: false }
+
+  - changeSet:
+      id: 005g-add-eod-step-contract-version
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: CONTRACT_VERSION
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column:
+                  name: CONTRACT_VERSION
+                  type: VARCHAR2(60)
+                  defaultValue: LEGACY-V1
+                  constraints: { nullable: false }
+
+  - changeSet:
+      id: 005h-add-eod-step-idempotency-suffix
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: IDEMPOTENCY_SUFFIX
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column: { name: IDEMPOTENCY_SUFFIX, type: VARCHAR2(100) }
+
+  - changeSet:
+      id: 005i-add-eod-step-execution-epoch
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: EXECUTION_EPOCH
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column:
+                  name: EXECUTION_EPOCH
+                  type: NUMBER(10)
+                  defaultValueNumeric: 1
+                  constraints: { nullable: false }
+
+  - changeSet:
+      id: 005j-add-eod-step-execution-token
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: EXECUTION_TOKEN
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column: { name: EXECUTION_TOKEN, type: VARCHAR2(36) }
+
+  - changeSet:
+      id: 005k-add-eod-step-lease
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: LEASE_UNTIL
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column: { name: LEASE_UNTIL, type: "TIMESTAMP(6) WITH TIME ZONE" }
+
+  - changeSet:
+      id: 005l-add-eod-step-failure-class
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_STEP
+                columnName: FAILURE_CLASS
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column: { name: FAILURE_CLASS, type: VARCHAR2(20) }
+
+  - changeSet:
+      id: 005m-backfill-eod-step-policy
+      author: moneybags
+      changes:
+        - update:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column: { name: EXECUTION_MODE, value: ALWAYS_RUN }
+            where: STEP_CODE = 'PAYMENTS_REOPEN'
+        - update:
+            tableName: EOD_RUN_STEP
+            columns:
+              - column: { name: IDEMPOTENCY_SUFFIX, value: JOURNAL-CORRELATED-V2 }
+            where: STEP_CODE = 'FIXED_DEPOSIT_RECONCILIATION'
+
+  - changeSet:
+      id: 005n-create-eod-run-action
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: EOD_RUN_ACTION
+      changes:
+        - createTable:
+            tableName: EOD_RUN_ACTION
+            columns:
+              - column:
+                  name: ACTION_ID
+                  type: VARCHAR2(36)
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: RUN_ID
+                  type: VARCHAR2(36)
+                  constraints: { nullable: false }
+              - column: { name: ACTION_TYPE, type: VARCHAR2(40), constraints: { nullable: false } }
+              - column: { name: STEP_CODE, type: VARCHAR2(60) }
+              - column: { name: REQUESTED_BY, type: VARCHAR2(120), constraints: { nullable: false } }
+              - column: { name: REASON, type: VARCHAR2(1000) }
+              - column: { name: DETAILS_JSON, type: CLOB, constraints: { nullable: false } }
+              - column: { name: CREATED_AT, type: "TIMESTAMP(6) WITH TIME ZONE", constraints: { nullable: false } }
+  - changeSet:
+      id: 005o-foreign-key-eod-run-action
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - foreignKeyConstraintExists:
+                foreignKeyName: FK_EOD_RUN_ACTION_RUN
+                foreignKeyTableName: EOD_RUN_ACTION
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: EOD_RUN_ACTION
+            baseColumnNames: RUN_ID
+            referencedTableName: EOD_RUN
+            referencedColumnNames: RUN_ID
+            constraintName: FK_EOD_RUN_ACTION_RUN
+            onDelete: CASCADE
+
+  - changeSet:
+      id: 005p-index-eod-run-action
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - indexExists:
+                indexName: IX_EOD_RUN_ACTION_RUN
+      changes:
+        - createIndex:
+            tableName: EOD_RUN_ACTION
+            indexName: IX_EOD_RUN_ACTION_RUN
+            columns:
+              - column: { name: RUN_ID }
+              - column: { name: CREATED_AT }
+
+  - changeSet:
+      id: 005q-add-eod-action-request-kind
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_ACTION
+                columnName: REQUEST_KIND
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_ACTION
+            columns:
+              - column: { name: REQUEST_KIND, type: VARCHAR2(40) }
+
+  - changeSet:
+      id: 005r-add-eod-action-request-key
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_ACTION
+                columnName: REQUEST_KEY
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_ACTION
+            columns:
+              - column: { name: REQUEST_KEY, type: VARCHAR2(200) }
+
+  - changeSet:
+      id: 005s-add-eod-action-request-hash
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: EOD_RUN_ACTION
+                columnName: REQUEST_HASH
+      changes:
+        - addColumn:
+            tableName: EOD_RUN_ACTION
+            columns:
+              - column: { name: REQUEST_HASH, type: VARCHAR2(64) }
+
+  - changeSet:
+      id: 005t-unique-eod-action-request
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - uniqueConstraintExists:
+                tableName: EOD_RUN_ACTION
+                constraintName: UQ_EOD_RUN_ACTION_REQUEST
+      changes:
+        - addUniqueConstraint:
+            tableName: EOD_RUN_ACTION
+            columnNames: RUN_ID, REQUEST_KIND, REQUEST_KEY
+            constraintName: UQ_EOD_RUN_ACTION_REQUEST

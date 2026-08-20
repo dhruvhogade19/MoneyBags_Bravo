@@ -12,3 +12,183 @@ databaseChangeLog:
             path: db/changelog/changes/001-create-payments-schema.sql
             splitStatements: true
             stripComments: true
+  - changeSet:
+      id: 002-create-fd-accounting-recovery
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: PAYMENT_FD_ACCOUNTING_RECOVERY
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/002-create-fd-accounting-recovery.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 002a-create-fd-accounting-recovery-index
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - tableExists:
+            tableName: PAYMENT_FD_ACCOUNTING_RECOVERY
+        - not:
+            - indexExists:
+                tableName: PAYMENT_FD_ACCOUNTING_RECOVERY
+                indexName: IDX_PAY_FD_REC_STATUS
+      changes:
+        - createIndex:
+            tableName: PAYMENT_FD_ACCOUNTING_RECOVERY
+            indexName: IDX_PAY_FD_REC_STATUS
+            columns:
+              - column:
+                  name: STATUS
+              - column:
+                  name: CREATED_AT
+  - changeSet:
+      id: 003-add-payment-reversal-business-date
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: PAYMENT
+                columnName: REVERSAL_BUSINESS_DATE
+      changes:
+        - addColumn:
+            tableName: PAYMENT
+            columns:
+              - column:
+                  name: REVERSAL_BUSINESS_DATE
+                  type: DATE
+  - changeSet:
+      id: 004-backfill-payment-reversal-business-date
+      author: moneybags
+      preConditions:
+        - onFail: HALT
+        - columnExists:
+            tableName: PAYMENT
+            columnName: REVERSAL_BUSINESS_DATE
+      changes:
+        - sql:
+            sql: >-
+              UPDATE PAYMENT
+              SET REVERSAL_BUSINESS_DATE = BUSINESS_DATE
+              WHERE REVERSAL_JOURNAL_NUMBER IS NOT NULL
+                AND REVERSAL_BUSINESS_DATE IS NULL
+  - changeSet:
+      id: 005-create-payment-eod-control
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - tableExists:
+                tableName: PAYMENT_EOD_CONTROL
+      changes:
+        - sqlFile:
+            path: db/changelog/changes/003-create-payment-eod-control.sql
+            splitStatements: true
+            stripComments: true
+  - changeSet:
+      id: 006-seed-payment-eod-control
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT COUNT(*) FROM PAYMENT_EOD_CONTROL WHERE CONTROL_ID = 'PAYMENTS'
+      changes:
+        - insert:
+            tableName: PAYMENT_EOD_CONTROL
+            columns:
+              - column:
+                  name: CONTROL_ID
+                  value: PAYMENTS
+              - column:
+                  name: INTAKE_OPEN
+                  valueNumeric: 1
+              - column:
+                  name: REOPENED_AT
+                  valueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: UPDATED_AT
+                  valueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: VERSION_NO
+                  valueNumeric: 0
+  - changeSet:
+      id: 007-add-payment-eod-command-reference
+      author: moneybags
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            - columnExists:
+                tableName: PAYMENT_EOD_CONTROL
+                columnName: COMMAND_REFERENCE
+      changes:
+        - addColumn:
+            tableName: PAYMENT_EOD_CONTROL
+            columns:
+              - column:
+                  name: COMMAND_REFERENCE
+                  type: VARCHAR2(100 CHAR)
+  - changeSet:
+      id: 008-initialize-payment-eod-business-date
+      author: moneybags
+      preConditions:
+        - onFail: HALT
+        - tableExists:
+            tableName: PAYMENT_EOD_CONTROL
+        - columnExists:
+            tableName: PAYMENT_EOD_CONTROL
+            columnName: BUSINESS_DATE
+      changes:
+        - update:
+            tableName: PAYMENT_EOD_CONTROL
+            columns:
+              - column:
+                  name: BUSINESS_DATE
+                  valueComputed: CURRENT_DATE
+            where: BUSINESS_DATE IS NULL
+        - update:
+            tableName: PAYMENT_EOD_CONTROL
+            columns:
+              - column:
+                  name: CURRENCY_CODE
+                  value: INR
+            where: CURRENCY_CODE IS NULL
+  - changeSet:
+      id: 009-require-payment-eod-business-date
+      author: moneybags
+      preConditions:
+        - onFail: HALT
+        - tableExists:
+            tableName: PAYMENT_EOD_CONTROL
+        - columnExists:
+            tableName: PAYMENT_EOD_CONTROL
+            columnName: BUSINESS_DATE
+      changes:
+        - addNotNullConstraint:
+            tableName: PAYMENT_EOD_CONTROL
+            columnName: BUSINESS_DATE
+            columnDataType: DATE
+  - changeSet:
+      id: 010-fail-closed-payment-eod-bootstrap
+      author: moneybags
+      preConditions:
+        - onFail: HALT
+        - tableExists:
+            tableName: PAYMENT_EOD_CONTROL
+        - columnExists:
+            tableName: PAYMENT_EOD_CONTROL
+            columnName: COMMAND_REFERENCE
+      changes:
+        - sql:
+            sql: >-
+              UPDATE PAYMENT_EOD_CONTROL
+              SET INTAKE_OPEN = 0,
+                  COMMAND_REFERENCE = 'SYSTEM:BOOTSTRAP:CLOSED',
+                  CUTOFF_AT = COALESCE(CUTOFF_AT, CURRENT_TIMESTAMP),
+                  UPDATED_AT = CURRENT_TIMESTAMP
+              WHERE CONTROL_ID = 'PAYMENTS'
+                AND (COMMAND_REFERENCE IS NULL OR TRIM(COMMAND_REFERENCE) IS NULL)

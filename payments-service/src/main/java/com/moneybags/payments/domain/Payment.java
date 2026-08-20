@@ -96,6 +96,9 @@ public class Payment {
   @Column(name = "REVERSAL_JOURNAL_NUMBER", length = 100)
   private String reversalJournalNumber;
 
+  @Column(name = "REVERSAL_BUSINESS_DATE")
+  private LocalDate reversalBusinessDate;
+
   @Column(name = "BILLING_SETTLEMENT_AT")
   private Instant billingSettlementAt;
 

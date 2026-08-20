@@ -40,6 +40,9 @@ class EodRunEntity {
     @Column(name = "COMPLETED_AT")
     private OffsetDateTime completedAt;
 
+    @Column(name = "WORKFLOW_VERSION", length = 40, nullable = false)
+    private String workflowVersion;
+
     @Version
     @Column(name = "VERSION_NO", nullable = false, columnDefinition = "NUMBER(19)")
     private long version;
@@ -56,12 +59,18 @@ class EodRunEntity {
 
     EodRunEntity(String id, String idempotencyKey, LocalDate businessDate, String startedBy,
                  List<StepDefinition> definitions) {
+        this(id, idempotencyKey, businessDate, startedBy, "LEGACY-V1", definitions);
+    }
+
+    EodRunEntity(String id, String idempotencyKey, LocalDate businessDate, String startedBy,
+                 String workflowVersion, List<StepDefinition> definitions) {
         this.id = id;
         this.idempotencyKey = idempotencyKey;
         this.businessDate = businessDate;
         this.status = "PENDING";
         this.startedBy = startedBy;
         this.startedAt = OffsetDateTime.now();
+        this.workflowVersion = workflowVersion;
         definitions.forEach(definition -> steps.add(new EodRunStepEntity(this, definition)));
     }
 
@@ -71,6 +80,7 @@ class EodRunEntity {
     String startedBy() { return startedBy; }
     OffsetDateTime startedAt() { return startedAt; }
     OffsetDateTime completedAt() { return completedAt; }
+    String workflowVersion() { return workflowVersion; }
     long apiVersion() { return version + 1; }
     List<EodRunStepEntity> steps() { return steps; }
     List<EodExceptionEntity> exceptions() { return exceptions; }
@@ -86,9 +96,31 @@ class EodRunEntity {
     }
 
     void markFailed(EodRunStepEntity step, String errorCode, String message, String detailsJson) {
+        markFailed(step, errorCode, message, detailsJson, FailureClass.BUSINESS);
+    }
+
+    void markFailed(EodRunStepEntity step, String errorCode, String message, String detailsJson,
+                    FailureClass classification) {
         status = "FAILED";
-        step.markFailed(errorCode, message);
+        step.markFailed(errorCode, message, classification);
         exceptions.add(new EodExceptionEntity(this, step.code(), errorCode, detailsJson));
+    }
+
+    boolean markWorkflowFailed(String stepCode, String errorCode, String detailsJson) {
+        status = "FAILED";
+        boolean alreadyRecorded = exceptions.stream().anyMatch(value -> value.stepCode().equals(stepCode)
+                && value.errorCode().equals(errorCode) && "OPEN".equals(value.status()));
+        if (alreadyRecorded) return false;
+        exceptions.add(new EodExceptionEntity(this, stepCode, errorCode, detailsJson));
+        return true;
+    }
+
+    EodExceptionEntity recordSkippedException(EodRunStepEntity step, String errorCode, String detailsJson,
+                                              String resolution, String resolvedBy) {
+        EodExceptionEntity exception = new EodExceptionEntity(this, step.code(), errorCode, detailsJson);
+        exception.resolve(resolution, resolvedBy, true);
+        exceptions.add(exception);
+        return exception;
     }
 
     void markCompleted() {

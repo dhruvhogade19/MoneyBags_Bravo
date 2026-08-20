@@ -5,6 +5,7 @@ import com.moneybags.creditcard.dto.CreditCardDtos.BillingChargeRequest;
 import com.moneybags.creditcard.dto.CreditCardDtos.BillingChargeResponse;
 import com.moneybags.creditcard.dto.CreditCardDtos.StatementAccountContext;
 import com.moneybags.creditcard.dto.CreditCardDtos.CreditCardStatementSource;
+import com.moneybags.creditcard.dto.CreditCardDtos.EodReadinessResponse;
 import jakarta.validation.Valid;
 import com.moneybags.creditcard.service.CreditCardService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +23,11 @@ import java.time.LocalDate;
 public class InternalCreditCardController {
     private final CreditCardService service;
     public InternalCreditCardController(CreditCardService service) { this.service = service; }
+
+    @GetMapping("/eod/readiness")
+    EodReadinessResponse eodReadiness() {
+        return service.eod();
+    }
 
     @GetMapping("/{accountId}/billing-details")
     BillingAccountDetails billingDetails(@PathVariable Long accountId) {

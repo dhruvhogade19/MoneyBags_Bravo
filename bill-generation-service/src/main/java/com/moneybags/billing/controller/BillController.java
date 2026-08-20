@@ -158,9 +158,9 @@ public class BillController {
     }
 
     @PostMapping("/internal/v1/bills/eod/close")
-    CloseResponse close(@RequestHeader("Idempotency-Key") @NotBlank String ignored,
+    CloseResponse close(@RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
                         @Valid @RequestBody CloseRequest request) {
-        return service.close(request);
+        return service.close(idempotencyKey, request);
     }
 
     private static void validatePage(int page, int size) {

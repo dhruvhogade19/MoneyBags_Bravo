@@ -90,6 +90,14 @@ public final class IntegrationDtos {
       Instant receivedAt, Instant completedAt, String rejectionCode,
       String rejectionMessage, AccountingResponse journal) { }
 
+  public record AccountingClearanceBalance(
+      String currencyCode, String logicalRole, BigDecimal amount) { }
+
+  public record AccountingAccountClearanceResponse(
+      String accountType, String accountReference, boolean accountingCleared,
+      List<AccountingClearanceBalance> balances, List<String> blockers,
+      long lastPostingSequence, OffsetDateTime checkedAt) { }
+
   public record AccountingReversalRequest(
       String paymentId, LocalDate businessDate, Instant occurredAt, String reason) { }
 

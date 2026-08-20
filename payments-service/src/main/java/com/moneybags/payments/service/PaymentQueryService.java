@@ -36,17 +36,20 @@ public class PaymentQueryService {
   private final PaymentRepository payments;
   private final PaymentStatusHistoryRepository history;
   private final PaymentSupportService support;
+  private final EodControlService eod;
   private final DepositAccountClient deposit;
   private final CreditCardClient cards;
   private final AccountingClient accounting;
   private final NotificationClient notifications;
 
   public PaymentQueryService(PaymentRepository payments, PaymentStatusHistoryRepository history,
-      PaymentSupportService support, DepositAccountClient deposit, CreditCardClient cards,
+      PaymentSupportService support, EodControlService eod,
+      DepositAccountClient deposit, CreditCardClient cards,
       AccountingClient accounting, NotificationClient notifications) {
     this.payments = payments;
     this.history = history;
     this.support = support;
+    this.eod = eod;
     this.deposit = deposit;
     this.cards = cards;
     this.accounting = accounting;
@@ -102,6 +105,7 @@ public class PaymentQueryService {
   }
 
   public PaymentResponse completePendingReversal(String paymentId, String reason) {
+    LocalDate reversalBusinessDate = eod.acquireBusinessDate();
     Payment payment = require(paymentId);
     if (payment.getStatus() == PaymentStatus.REVERSED) return PaymentSupportService.response(payment);
     if (payment.getStatus() != PaymentStatus.REVERSAL_PENDING
@@ -111,9 +115,10 @@ public class PaymentQueryService {
     }
     AccountingResponse response = support.attempt(payment, "ACCOUNTING_REVERSAL",
         "ACCOUNTING-SERVICE", () -> accounting.reverse(payment.getAccountingJournalNumber(),
-            new AccountingReversalRequest(paymentId, LocalDate.now(ZoneOffset.UTC), Instant.now(),
+            new AccountingReversalRequest(paymentId, reversalBusinessDate, Instant.now(),
                 reason), "PAYMENT:" + paymentId + ":REVERSAL", payment.getCorrelationId()));
     payment.setReversalJournalNumber(response.journalNumber());
+    payment.setReversalBusinessDate(response.businessDate());
     support.transition(payment, PaymentStatus.REVERSED, "ACCOUNTING_REVERSED", reason);
     notifyReversed(payment, reason);
     return PaymentSupportService.response(payment);

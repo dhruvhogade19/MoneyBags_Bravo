@@ -4,6 +4,8 @@ import com.moneybags.payments.dto.IntegrationDtos.*;
 import com.moneybags.payments.exception.PeerServiceException;
 import com.moneybags.payments.integration.AccountingClient;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -40,7 +42,7 @@ public class DemoAccountingClient implements AccountingClient {
           .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
       return new AccountingResponse(
           "JRN-DEMO-FD-" + String.format("%06d", sequence.getAndIncrement()), sequence.get(),
-          request.postingReference(), "PAYMENTS-SERVICE", "FD_" + request.postingType(),
+          request.postingReference(), "DEPOSIT-ACCOUNT-SERVICE", "FD_" + request.postingType(),
           request.occurredAt().toInstant(), request.businessDate(), request.currencyCode(),
           "POSTED", total, total, correlationId, Instant.now(), false, null);
     });
@@ -62,6 +64,17 @@ public class DemoAccountingClient implements AccountingClient {
   public AccountingLookupResponse findFixedDepositByReference(String externalReference,
                                                               String correlationId) {
     return findByReference(externalReference, correlationId);
+  }
+
+  @Override
+  public AccountingAccountClearanceResponse depositAccountClearance(
+      String accountReference, String currencyCode, String correlationId) {
+    if (accountReference.startsWith("unregistered-")) {
+      throw new PeerServiceException("ACCOUNTING-SERVICE", 404,
+          "ACCOUNT_NOT_REGISTERED", "The demo account is not registered in Accounting");
+    }
+    return new AccountingAccountClearanceResponse("DEPOSIT_ACCOUNT", accountReference,
+        true, List.of(), List.of(), 0, OffsetDateTime.now());
   }
 
   @Override
